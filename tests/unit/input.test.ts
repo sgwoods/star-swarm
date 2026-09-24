@@ -249,6 +249,16 @@ describe('keyboard input', () => {
     expect(DEFAULT_BINDINGS.Space).toBe('fire');
     expect(DEFAULT_BINDINGS.Enter).toBe('start');
   });
+
+  it('binds only real KeyboardEvent.code values', () => {
+    // A typo like `KeyReturn` is not a code any browser emits, so the binding
+    // would silently never fire.
+    const CODE =
+      /^(?:Key[A-Z]|Digit[0-9]|Numpad[A-Za-z0-9]+|Arrow(?:Left|Right|Up|Down)|Space|Enter|Escape|Shift(?:Left|Right)|Control(?:Left|Right)|Alt(?:Left|Right)|Tab|Backspace)$/;
+    for (const code of Object.keys(DEFAULT_BINDINGS)) {
+      expect(code).toMatch(CODE);
+    }
+  });
 });
 
 describe('constantInput', () => {

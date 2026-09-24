@@ -40,7 +40,7 @@ export const DEFAULT_BINDINGS: Readonly<Record<string, Action>> = Object.freeze(
   Space: 'fire',
   KeyZ: 'fire',
   Enter: 'start',
-  KeyReturn: 'start',
+  NumpadEnter: 'start',
   Digit1: 'start',
 });
 
