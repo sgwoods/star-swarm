@@ -1,3 +1,10 @@
 node_modules/
 dist/
 .DS_Store
+/playwright-report/
+/test-results/
+/coverage/
+*.local
+
+# Written and removed by tests/unit/sim-boundary.test.ts
+/src/sim/__boundary_probe__.ts
