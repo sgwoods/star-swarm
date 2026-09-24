@@ -5,7 +5,7 @@ playwright-report/
 test-results/
 package-lock.json
 
-# A verbatim copy of the source plan. Reformatting it would break that.
+# Hand-authored tables and line breaks; reformatting would churn the whole file.
 docs/DESIGN.md
 
 # Generated pointer file; its exact shape belongs to the tool that writes it.

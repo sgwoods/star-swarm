@@ -45,50 +45,59 @@ Game mechanics are fair to recreate; the original's **art, audio, name and logo 
 
 ## 4. Arcade-faithful core spec
 
-Values marked **(verify)** are from memory; the Milestone 0 scout task confirms or corrects them and writes `docs/reference/arcade-reference.md` with sources.
+The values in this section have been verified against the original's 1981 operator manual and a byte-exact ROM disassembly. `docs/reference/arcade-reference.md` is the verification record: it carries the source, the ROM routine or data table, and a confidence note behind every number here, plus four items that remain unresolved. Change a number here and the reference changes with it, or the two drift apart silently.
 
 **Screen and timing**
-- 224×288 logical playfield, 60 fps fixed-step simulation, rendering decoupled.
-- Scrolling multi-colour starfield background that pauses/changes speed during certain transitions.
+- 224×288 logical playfield, fixed-step simulation, rendering decoupled. The arcade original runs at 60.6061 Hz (6.144 MHz pixel clock / 384 × 264); we run a fixed 60 Hz step and accept the 0.6% difference. Enemy object state in the original advances on a four-frame round robin (15 Hz) with objects split across frames, so the sim exposes a frame counter and a four-phase enemy update rather than updating every enemy every frame.
+- Scrolling multi-colour starfield background that pauses during certain transitions, and whose scroll speed rises with stage number: the original sets the speed register to `0x40 + 0x10 × min(⌊stage / 4⌋, 4)`, giving five discrete speeds that plateau from stage 16.
 
 **Player**
-- Horizontal movement only, along the bottom row; constant speed, no acceleration.
-- **At most 2 player shots on screen** at once — this cap defines the game's rhythm.
-- 3 lives by default; extra lives at 20,000 and 70,000, then every 70,000 **(verify; configurable)**.
+- Horizontal movement only, along the bottom row; no acceleration. The original steps alternately 1 and 2 pixels per frame while the stick is held — 1.5 px/frame average, ≈ 91 px/s — and the first frame of any new movement is always a 1-pixel step. X limits are `0x12`…`0xE1` for a single fighter and `0x12`…`0xD1` for a dual fighter, whose second ship is drawn at X + 15.
+- **At most 2 player shots on screen** at once — this cap defines the game's rhythm, and it is 2 in total, *not* 2 per ship. A dual fighter still has only 2 shots in flight; each one becomes a two-bullet spread (the original draws one rocket object with the hardware double-width flag). Hit detection follows: a single fighter's shot has one hit window, Δx ∈ [−5, +5]; a dual fighter's shot has two, Δx ∈ [−6, +4] and Δx ∈ [+9, +19], with Δx ∈ [+5, +8] deliberately dead.
+- Holding the fire button fires continuously — the original has no edge detection, so the fire rate is set entirely by the 2-shot cap and how fast shots leave the screen. This is inherent behaviour, not an option.
+- 3 lives by default (switch-selectable 2/3/4/5); extra lives at 20,000 and 70,000, then every 70,000 — confirmed as the factory default. Configurable: the original offers eight threshold settings, and the available set depends on the starting-ship count (a 5-ship cabinet gets 30,000 / 120,000 / every 120,000 as its default). The rules layer models this as first threshold, second threshold, repeat interval, plus a `none` option. Extra-life awards stop after 1,000,000 points.
 
 **Enemies and formation**
 - 40 enemies per normal stage: 4 bosses (2 hits: first hit changes colour), 16 butterfly-role, 20 bee-role.
-- Formation grid: bosses top row, then 2 rows of 8, then 2 rows of 10.
-- Enemies **enter in scripted waves** along curved paths (pairs/groups, often mirrored), then settle into slots.
+- Formation grid, confirmed against the original's home-slot table: 4 bosses in the top row at column positions 6, 8, 10, 12; two rows of 8 butterfly-role aliens at columns 2, 4, 6, 8, 10, 12, 14, 16; two rows of 10 bee-role aliens at columns 0, 2, 4 … 18. The butterfly rows are inset one column position on each side relative to the bee rows. Four further slots, one per boss, sit one row above the boss row in the bosses' own columns and hold captured fighters.
+- Enemies **enter in five scripted waves of eight** along curved paths, then settle into slots. Waves are mixed-type and identity-addressed — wave 1 is 4 butterfly-role + 4 bee-role, wave 2 is all 4 bosses + 4 butterfly-role, wave 3 is 8 butterfly-role, waves 4 and 5 are 8 bee-role each. Each wave launches aliens in pairs; per-alien flags select a mirrored path and whether the second of a pair is delayed into a trailing single file. The original holds 13 distinct combat wave scripts and 8 challenge scripts, selects a combat script per stage through a 17-entry sequence that depends on the difficulty rank, and plateaus from stage 24 by cycling its last three. Players perceive three broad shapes: entry from both sides at once in short single-file rows; entry from one side at a time in double-width rows; entry from one side at a time in a single long row. The shapes recur on a four-stage period. See `docs/reference/arcade-reference.md` section 5 for the selection rule and the per-stage script table.
 - While filling, the formation **sways side to side**; once full it **"breathes"** (expands and contracts).
 - From the formation, enemies peel off in **dive attacks**: bees swoop and loop, butterflies dive in arcs, bosses dive with up to 2 escorts.
-- Enemies fire during entry and dives; bullet count/rate scales with stage.
+- Enemies fire during dives, and during entry from stage 2 onward — there is no entry bombing on stage 1. **At most 8 enemy bullets exist on screen at once, globally**, and each enemy carries its own inter-shot delay. Bullet enable flags and per-type launch rates come from the per-stage difficulty table.
 - Divers that leave the bottom re-enter from the top and rejoin the formation.
 
 **Capture and rescue**
 - A boss may dive partway and emit a **tractor beam**; if it catches the player, that ship becomes a captured (red) fighter sitting beside the boss in formation.
-- Destroying that boss while it is **diving** releases the captured ship, which docks beside the player → **dual fighter** (two ships, double shots, double hitbox).
-- Destroying the boss while it's in formation turns the captured ship hostile **(verify exact behaviour)**. Shooting a captured ship destroys it.
-- One capture at a time; a hit on either half of a dual fighter leaves a single ship.
+- Destroying that boss while both it and the captured ship are attacking releases the captured ship, which docks beside the player → **dual fighter** (two ships, a two-bullet spread per shot, and two separate hitboxes). Killing the boss *before* it has finished pulling the ship in does not trigger a rescue. On rescue, enemies already in mid-dive return to formation, and the freed ship is invulnerable to the player's own shots while it spins into place. A green boss needs two hits; a blue one needs one.
+- Destroying the boss while it is in formation turns the captured ship into a hostile *rogue fighter*: it dives at the player once, exits the bottom of the screen, and does not return during that stage. It re-enters as the last ship of the next stage's entry wave and takes its place at the top of the formation — which players use deliberately to park a captured fighter until a boss can claim it again. Shooting a captured ship destroys it, scoring 500 while it sits in formation and 1,000 while it is attacking.
+- A hit on either half of a dual fighter leaves a single ship. **Being captured while playing your last fighter ends the game.** A captured fighter stays with the boss that took it for the rest of the game — it is not released at stage end. The original has one captured-fighter slot per boss (four), so the data model is per-boss rather than a single global capture; whether two can be held at once is unresolved (see `docs/reference/arcade-reference.md` section 11) and the schema should allow it.
+- While a boss has connected with the player's ship, the player's fire is disabled.
 
 **Challenge stages**
 - Stage 3, then every 4th stage (7, 11, 15…).
 - 40 enemies in 5 groups of 8 fly scripted patterns and **never shoot or attack**.
-- 100 points each; per-group bonus for clearing a whole group **(verify values)**; **10,000 for all 40**.
+- The original holds 8 distinct challenge-stage scripts, cycling every 8 challenge stages, with the enemy sprite set cycling on the same index. The first two are clearable from a stationary centre position; later ones need up to five firing positions, one per group — a useful acceptance test for the paths.
+- A group bonus for clearing a whole group of 8: 1,000 on the first two challenge stages, 1,500 on the third and fourth, 2,000 on the fifth and sixth, 3,000 on the seventh and all later ones. At the end of the stage, a bonus of 100 × number of hits — **or**, if all 40 were destroyed, a flat **10,000 that replaces it** rather than adding to it. So a perfect first challenge stage pays 5 × 1,000 + 10,000 = 15,000.
 - Results screen shows the number hit.
 
-**Scoring (verify all)**
+**Scoring**
 
 | Target | In formation | Diving |
 |---|---|---|
 | Bee-role | 50 | 100 |
 | Butterfly-role | 80 | 160 |
 | Boss | 150 | 400 alone · 800 with 1 escort · 1,600 with 2 escorts |
-| Transformed-enemy trio (later stages) | — | bonus for destroying all 3 (verify) |
+| Transformed-enemy, individually | — | 160 |
+| Transformed-enemy trio, all 3 (later stages) | — | 1,000, then 2,000, then 3,000, cycling on a four-stage period |
+| Your own captured fighter | 500 | 1,000 |
+| Challenge-stage group of 8 | — | 1,000 · 1,500 · 2,000 · 3,000 by challenge-stage index |
+| Challenge stage, at stage end | — | 100 × hits, or a flat 10,000 for all 40 (replacing it) |
+
+The table is the output of a rule, and the **rule** is what to build: a base value, **doubled when the target is moving**, plus a bonus. Base values are bee-role 50, butterfly-role 80, transform 80, boss 150 (on the hit that destroys it) and captured fighter 500. A diving boss then adds 100, 500 or 1,300 for 0, 1 or 2 escorts, giving 400 / 800 / 1,600. That escort bonus is **latched when the boss launches**, so destroying its escorts first does not reduce the boss's value — a flat lookup table would get that case wrong.
 
 **Difficulty ramp and later stages**
-- Dive frequency, speed and bullets increase by stage; the last few enemies of a stage get more aggressive.
-- From about stage 4, some bees **transform** mid-dive into a trio of a different enemy type **(verify stage and scoring)**.
+- Dive frequency, bullet enables and simultaneous-diver limits come from a per-stage table, not a curve: 26 stages × 4 difficulty ranks, ten small integers per stage (bomb-drop enables, per-type launch rates for bee/butterfly/boss roles, max simultaneous divers and a later bump to it, a capture-rate parameter, the remaining-enemy threshold at which continuous bombing starts, and two flight-vector reload flags). The table is **not monotonic** — several stages are deliberately easier than the one before — and it plateaus from stage 27 by cycling rows 23–26 forever. “The last few enemies get more aggressive” is that continuous-bombing threshold, which rises from 6 remaining enemies at stage 1 to 12 by stage 22. The full table is reproduced in `docs/reference/arcade-reference.md` section 6.
+- From stage 4, **once per stage**, one bee-role alien — or a butterfly-role one if no bees remain — **transforms** mid-dive into a trio of a different enemy type. The trio dives, fires on the way down, loops once and exits; unlike bees it does not re-enter from the top. The trio type cycles on a four-stage period through three distinct types, and so does the all-three bonus: 1,000, then 2,000, then 3,000. Each transform destroyed individually is worth 160. (Star Swarm names its three types itself; the original's are recorded in `docs/reference/arcade-reference.md` section 6.)
 - Stage-number badges shown bottom-right in denominations 1, 5, 10, 20, 30, 50.
 
 **Game flow**
@@ -107,9 +116,13 @@ Values marked **(verify)** are from memory; the Milestone 0 scout task confirms 
 
 Three layers, applied in order and overridable per stage:
 
-1. **Engine rules** (`rules.json`): lives, extra-life thresholds, shot cap, player speed, difficulty curves, challenge-stage cadence, capture enabled, dual-fighter enabled, score table.
+1. **Engine rules** (`rules.json`): lives, extra-life thresholds, shot cap, player speed, the **difficulty rank** and the per-rank difficulty tables it selects, challenge-stage cadence, capture enabled, dual-fighter enabled, score table.
 2. **Content packs** (`packs/<name>/`): aliens, paths, stages, sprites, sounds, a stage sequence.
 3. **Player settings** (in-game menu): volume, CRT filter, controls, difficulty preset, active packs.
+
+**Difficulty rank is a rules-layer selector, not a player-settings scalar.** The original's rank (A/B/C/D, factory default A) does not scale anything: it chooses *which* per-stage difficulty table is in force **and** which entry-wave script sequence is used, and the two even plateau at different stages. Modelling it as a multiplier applied on top of one data set cannot reproduce that, so rank lives in layer 1 as a name that selects whole data sets. The player-settings difficulty preset stays in layer 3, but all it does is choose the rank the rules layer then resolves.
+
+The Classic rules therefore ship **all four rank tables**, not one table plus three multipliers.
 
 A **"Classic" pack plus classic rules** reproduces the arcade game. Other packs can extend or replace it (e.g. a "Classic + Weird" mix that inserts new stages every 5th level).
 
@@ -161,8 +174,12 @@ Segment types: `line`, `bezier`, `arc`, `loop`, `lissajous`, `sine`, `wait`, `ai
   "kind": "normal",
   "formation": "classic40",
   "waves": [
-    { "at": 0,   "aliens": ["jellyfish", "jellyfish"], "count": 8, "entryPath": "swirl8", "spacing": 10 },
-    { "at": 150, "aliens": ["drone"], "count": 8, "entryPath": "classicLeftHook", "spacing": 8 }
+    { "at": 0, "entryPath": "swirl8", "spacing": 10, "slots": [
+      { "alien": "jellyfish", "mirror": false, "trailing": false },
+      { "alien": "jellyfish", "mirror": true,  "trailing": false },
+      { "alien": "drone",     "mirror": false, "trailing": true  }
+    ] },
+    { "at": 150, "entryPath": "classicLeftHook", "spacing": 8, "slots": [ "…8 slots…" ] }
   ],
   "diveRules": { "maxConcurrent": 3, "intervalFrames": [60, 180] },
   "modifiers": { "enemyBulletSpeed": 1.1 }
@@ -170,6 +187,10 @@ Segment types: `line`, `bezier`, `arc`, `loop`, `lissajous`, `sine`, `wait`, `ai
 ```
 
 `kind` is `normal`, `challenge`, or `boss` (later).
+
+**A wave is an ordered list of slots, not a type plus a count.** The original's waves are mixed — wave 1 is 4 butterfly-role + 4 bee-role, wave 2 is all 4 bosses + 4 butterfly-role — and each alien in an entry pair carries its own **mirror** flag (does it fly the mirrored variant of the path) and its own **trailing** flag (does it follow the first of the pair rather than launching alongside it). A `{ "aliens": [...], "count": 8 }` shape cannot express either, so a wave carries a per-slot array of `{ alien, path, mirror, trailing }`, with `entryPath` and `spacing` as wave-level defaults each slot may override. Milestone 1 settles the exact field names and which defaults are required; the shape above is the constraint it has to satisfy.
+
+**Per-stage difficulty is a rank-keyed table, not a curve.** The Classic rules carry four tables — one per rank — of 26 stage rows each, every row holding the same handful of small integers (bomb-drop enables, per-type launch rates for the bee, butterfly and boss roles, max simultaneous divers and a later bump to it, a capture-rate parameter, the continuous-bombing threshold, and the flight-vector reload flags). The tables are **not monotonic**: individual rows are deliberately easier than the row before, so a schema that interpolates or extrapolates a curve cannot hold them, and they must be stored as literal rows. **Plateau behaviour is part of the data, not a fallback:** past the last row the original does not freeze at maximum difficulty and does not keep climbing — it cycles the last four rows forever (stage 27 replays row 23, stage 28 row 24, and so on). The entry-wave script sequence plateaus the same way but on a different period, cycling its last three from stage 24, so the schema states each table's plateau independently rather than assuming one global end-of-ramp rule. See `docs/reference/arcade-reference.md` sections 5 and 6 for the tables themselves.
 
 ### 7.4 Sprite and sound
 
@@ -263,6 +284,8 @@ Tasks in the same milestone can run in parallel. **Ship** tasks change code; **s
 - `npm run validate-packs` must pass in CI; a pack that fails validation never loads.
 - Each PR touching visuals or audio includes a short GIF or clip from `/lab`.
 - Performance: steady 60 fps with 40 enemies, 20 bullets and effects on a mid-range laptop.
+- A perfect run of the first two challenge stages must be achievable **without moving**, from the exact centre of the screen.
+- A boss that launched with two escorts must still score 1,600 when the escorts are destroyed before it.
 
 ## 12. Open decisions for the captain
 
