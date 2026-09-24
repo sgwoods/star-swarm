@@ -5,10 +5,19 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 ## The authoritative plan
 
 `docs/DESIGN.md` is the design and build plan, and it is the source of truth for
-scope, architecture and milestones. It is a **verbatim copy** of the source
-plan: Prettier is configured to ignore it (`.prettierignore`) so it stays
-byte-for-byte identical. Do not reformat or edit it to record project changes —
-corrections belong in `docs/reference/`.
+scope, architecture and milestones. It started as a verbatim copy of the
+captain's plan; it is now a living document and is edited when a verified
+finding changes the spec. Prettier still ignores it (`.prettierignore`) so its
+hand-authored tables and line breaks survive, which means edits keep the diff
+small and stay in the surrounding style. Do not reformat it wholesale.
+
+`docs/reference/arcade-reference.md` is the verification record behind section 4:
+the source, ROM routine and confidence note for every arcade value the plan
+states, plus the items still unresolved. The two are a pair — change a number in
+section 4 and the reference changes with it, or they drift apart silently. It
+names the original game and its enemy types so sources stay checkable; that
+licence does not extend to `docs/DESIGN.md`, which uses the project's own naming
+per section 2 of the plan.
 
 ## The one rule that shapes the codebase
 
