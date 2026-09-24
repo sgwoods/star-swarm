@@ -1,8 +1,11 @@
 name: CI
 
+# Pull requests cover feature branches; the push trigger covers main after a
+# merge. Running push on every branch as well would double every PR's CI, and
+# the loser of the resulting race shows up as a cancelled check.
 on:
   push:
-    branches: ['**']
+    branches: [main]
   pull_request:
 
 # A new push to the same branch supersedes the run in flight.
