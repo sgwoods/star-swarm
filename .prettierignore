@@ -5,7 +5,7 @@ playwright-report/
 test-results/
 package-lock.json
 
-# A verbatim copy of the captain's plan. Reformatting it would break that.
+# A verbatim copy of the source plan. Reformatting it would break that.
 docs/DESIGN.md
 
 # Generated pointer file; its exact shape belongs to the tool that writes it.

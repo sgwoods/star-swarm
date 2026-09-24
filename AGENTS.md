@@ -5,7 +5,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 ## The authoritative plan
 
 `docs/DESIGN.md` is the design and build plan, and it is the source of truth for
-scope, architecture and milestones. It is a **verbatim copy** of the captain's
+scope, architecture and milestones. It is a **verbatim copy** of the source
 plan: Prettier is configured to ignore it (`.prettierignore`) so it stays
 byte-for-byte identical. Do not reformat or edit it to record project changes —
 corrections belong in `docs/reference/`.
