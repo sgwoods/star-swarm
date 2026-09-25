@@ -1,0 +1,10 @@
+{
+  "id": "entry-long-row",
+  "mirror": true,
+  "start": [-16, 232],
+  "segments": [
+    { "type": "bezier", "to": [192, 216], "c1": [56, 248], "c2": [152, 248], "speed": 1.8 },
+    { "type": "bezier", "to": [112, 96], "c1": [216, 152], "c2": [144, 96], "speed": 1.8 },
+    { "type": "toSlot", "speed": 1.8 }
+  ]
+}

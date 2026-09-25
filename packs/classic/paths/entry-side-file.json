@@ -1,0 +1,9 @@
+{
+  "id": "entry-side-file",
+  "mirror": true,
+  "start": [-16, 176],
+  "segments": [
+    { "type": "bezier", "to": [136, 112], "c1": [40, 184], "c2": [104, 160], "speed": 1.6 },
+    { "type": "toSlot", "speed": 1.6 }
+  ]
+}
