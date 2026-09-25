@@ -384,6 +384,28 @@ export const alienSchema = z.strictObject({
   hp: z.number().int().positive().default(1),
   sprite: refSchema,
   /**
+   * What a damaged alien looks like, one entry per hit already taken:
+   * `hitSprites[0]` replaces `sprite` once it has survived one hit. Fewer
+   * entries than `hp − 1` is fine — the last one holds. The arcade boss turning
+   * from green to blue on its first hit is exactly this field, and it is data
+   * rather than a branch in the renderer because a two-hit enemy is one pack's
+   * idea, not the platform's.
+   */
+  hitSprites: z.array(refSchema).default([]),
+  /**
+   * How much this alien widens the hit window tested against it, per side.
+   *
+   * Zero — the default — is the arcade's own behaviour: the original bakes enemy
+   * size into the single window it tests and has no per-enemy hitbox
+   * (`src/sim/collision.ts`). A pack that wants a fatter alien says so here.
+   */
+  hitPadding: z
+    .strictObject({
+      x: z.number().nonnegative().default(0),
+      y: z.number().nonnegative().default(0),
+    })
+    .prefault({}),
+  /**
    * Scoring is a *rule*, not a table: the base value, doubled when the target
    * is moving, plus any bonus (`docs/DESIGN.md` section 4). Storing 50/100 as
    * two independent numbers loses the rule and gets latched bonuses wrong.
@@ -474,6 +496,7 @@ export const waveSchema = z
 export type Wave = z.infer<typeof waveSchema>;
 
 export const STAGE_KINDS = ['normal', 'challenge', 'boss'] as const;
+export type StageKind = (typeof STAGE_KINDS)[number];
 
 export const stageSchema = z.strictObject({
   id: idSchema,
@@ -545,6 +568,50 @@ export const formationSchema = z.strictObject({
 });
 
 export type Formation = z.infer<typeof formationSchema>;
+
+/** The pixel mapping a formation gets if it states none: index *is* the pixel. */
+export const DEFAULT_FORMATION_GRID = Object.freeze({
+  originX: 0,
+  originY: 0,
+  columnSpacing: 1,
+  rowSpacing: 1,
+});
+
+/**
+ * A formation's coordinate axes: the distinct column and row indices its slots
+ * use, in screen order (left to right, top to bottom).
+ *
+ * This is the platform's model of a formation — *N* column coordinates and *M*
+ * row coordinates, with every slot addressing them by index rather than owning a
+ * position of its own. It is what makes animating a whole formation cost `N + M`
+ * numbers instead of one per enemy, and it is why the arcade's sway and breathe
+ * are cheap enough to run at all (`docs/reference/arcade-reference.md` section
+ * 5). Captive slots count: the arcade's captured-fighter row is one of its six.
+ *
+ * The rules layer's breathe displacements are indexed by position in these two
+ * arrays, which is the one thing that ties a `rules.json` to a formation. A
+ * displacement table shorter than an axis simply leaves the remaining
+ * coordinates still, so a pack carrying formations of different widths is not a
+ * load error; `tests/unit/classic-pack.test.ts` is what holds the shipped pair
+ * to each other.
+ */
+export function formationAxes(formation: Formation): {
+  readonly columns: readonly number[];
+  readonly rows: readonly number[];
+} {
+  const columns = new Set<number>();
+  const rows = new Set<number>();
+  for (const slot of formation.slots) {
+    columns.add(slot.column);
+    rows.add(slot.row);
+  }
+  for (const slot of formation.captiveSlots) {
+    columns.add(slot.column);
+    rows.add(slot.row);
+  }
+  const ascending = (a: number, b: number): number => a - b;
+  return { columns: [...columns].sort(ascending), rows: [...rows].sort(ascending) };
+}
 
 /* -------------------------------------------------------------------------- */
 /* Stage sequence                                                               */
@@ -793,6 +860,21 @@ export const rulesSchema = z.strictObject({
     /** Global cap across every enemy, not per enemy. */
     maxBullets: z.number().int().nonnegative(),
     /**
+     * How many frames one full pass over the enemy population takes.
+     *
+     * The arcade original does **not** advance every enemy every frame: object
+     * state runs on a four-frame round robin at 15 Hz, with the objects split
+     * across the four frames (`docs/DESIGN.md` section 4). That cadence is what
+     * paces launches and, later, dives — a game that steps every enemy every
+     * frame launches things four times too eagerly and cannot be retro-fitted
+     * without redoing the dive work. `1` means "every enemy, every frame", which
+     * is what a game without the round robin says.
+     *
+     * Positions still advance every frame; it is the state machine that takes
+     * turns. See `src/sim/enemies.ts`.
+     */
+    updatePhases: z.number().int().positive().default(1),
+    /**
      * Role id → the bomb timer that role starts every stage with. Loaded
      * unconditionally at stage start, independent of the difficulty table.
      */
@@ -809,6 +891,67 @@ export const rulesSchema = z.strictObject({
     .strictObject({
       /** The stage number a new game starts on. */
       firstStage: z.number().int().positive().default(1),
+    })
+    .prefault({}),
+
+  /**
+   * How the settled formation moves.
+   *
+   * Both motions animate the formation's **coordinate axes** — the `N` column X
+   * values and `M` row Y values of {@link formationAxes} — and never individual
+   * enemies, which is the whole reason they are cheap and the reason a
+   * differently shaped formation inherits them for free. Which axis is which is
+   * the formation's business; how far and how fast they move is this pack's.
+   */
+  formation: z
+    .strictObject({
+      /**
+       * Rigid side-to-side travel while the entry waves are still arriving: every
+       * column coordinate moves together, the rows do not move at all, and the
+       * direction reverses at ±`amplitude`, making a triangle wave.
+       *
+       * It ends when the last wave has arrived **and** the offset passes back
+       * through zero, so whatever comes next starts from an exactly centred
+       * formation. Omitted means a formation that does not sway.
+       */
+      sway: z
+        .strictObject({
+          amplitude: z.number().nonnegative(),
+          /** Pixels moved per step. */
+          stepPixels: z.number().positive(),
+          /** Frames between steps. The arcade's 4 is its 15 Hz task rate. */
+          stepFrames: z.number().int().positive(),
+        })
+        .optional(),
+      /**
+       * The accordion the formation breathes once it is full: an expansion and a
+       * contraction, moving each coordinate by its own amount.
+       *
+       * `columns` and `rows` are **signed displacements at full expansion**, one
+       * per entry of {@link formationAxes} in the same order, so a negative
+       * column value moves that column left. Per-coordinate rather than a single
+       * amplitude because the arcade's displacements differ per coordinate by a
+       * uniform step, which is what keeps the expanded formation evenly spaced
+       * rather than merely wider (`docs/reference/arcade-reference.md` section 5).
+       */
+      breathe: z
+        .strictObject({
+          /** Steps from rest to full expansion; the contraction takes as many. */
+          steps: z.number().int().positive(),
+          stepFrames: z.number().int().positive(),
+          columns: z.array(z.number()).default([]),
+          rows: z.array(z.number()).default([]),
+        })
+        .optional(),
+      /**
+       * The stage kinds on which either motion runs at all. The arcade runs
+       * neither on a challenge stage, because nothing settles into formation
+       * there, so Classic leaves `challenge` out.
+       */
+      animatedStageKinds: z
+        .array(z.enum(STAGE_KINDS))
+        .default([...STAGE_KINDS])
+        .describe('stage kinds whose formation sways and breathes'),
     })
     .prefault({}),
 

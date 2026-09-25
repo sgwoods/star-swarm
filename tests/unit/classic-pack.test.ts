@@ -17,7 +17,7 @@ import {
   unknownProvenancePaths,
 } from '../../src/content/rules.js';
 import type { Rules } from '../../src/content/schema.js';
-import { resolveRow } from '../../src/content/schema.js';
+import { formationAxes, resolveRow } from '../../src/content/schema.js';
 import { windowGapsX } from '../../src/sim/collision.js';
 
 /**
@@ -56,38 +56,42 @@ beforeAll(() => {
 describe('the pack itself', () => {
   it('loads with its rules', () => {
     expect(pack.id).toBe('classic');
-    expect(pack.aliens.size).toBe(0);
-    expect(pack.stages.size).toBe(0);
     expect(rules.id).toBe('classic');
+    // The three roles, and one authored stage. `tests/unit/classic-content.test.ts`
+    // checks what is in them; here it is only that they are there.
+    expect(pack.aliens.size).toBe(3);
+    expect(pack.stages.size).toBe(1);
   });
 
   it('holds exactly the content its landed tasks put there, and loads all of it', () => {
-    // Two things at once, because the directories fill one Milestone 1 task at a
-    // time and each answer goes stale on its own schedule:
+    // Two things at once, because the directories fill one task at a time and
+    // each answer goes stale on its own schedule:
     //
-    //  - *which* directories have landed — sounds with the synth task and paths
-    //    with the path task; aliens, stages and sprites are still to come. Their
-    //    own tests are `tests/unit/classic-sounds.test.ts` and
-    //    `tests/unit/classic-paths.test.ts`.
+    //  - *which* directories have landed. All five now have content; what is in
+    //    each has its own test — `classic-sounds.test.ts`, `classic-paths.test.ts`,
+    //    `sprites.test.ts` and `classic-content.test.ts`.
     //  - that nothing on disk is silently dropped on the way in, which a list of
     //    kinds cannot see. The empty-tree case is covered by
     //    `tests/unit/validate-packs.test.ts`.
     const { source } = readPackSource(PACK_DIR);
     if (source === undefined) throw new Error('classic pack could not be read');
     const kinds = new Set(source.documents.map((document) => document.kind));
-    expect([...kinds].sort()).toEqual(['paths', 'sounds', 'sprites']);
+    expect([...kinds].sort()).toEqual(['aliens', 'paths', 'sounds', 'sprites', 'stages']);
 
     const onDisk = source.documents.length;
     const loaded =
       pack.aliens.size + pack.paths.size + pack.stages.size + pack.sprites.size + pack.sounds.size;
     expect(loaded).toBe(onDisk);
 
-    // A directory nothing references yet is not a broken pack: drop `sprites/`
-    // and the pack still loads. `sounds/` is not droppable the same way — the
-    // manifest's `sounds` map names every one of those ids, so the reference
-    // pass needs the documents there.
-    const withoutSprites = source.documents.filter((document) => document.kind !== 'sprites');
-    expect(loadPack({ ...source, documents: withoutSprites }).ok).toBe(true);
+    // Every remaining directory is now referenced by something — the manifest's
+    // `sounds` map, the aliens' sprites, the stage's paths and the sequence's
+    // stage — so dropping any one of them is a load failure rather than a shrug.
+    // That is the reference pass doing its job; `content-loader.test.ts` covers
+    // the individual messages.
+    for (const kind of ['aliens', 'paths', 'sounds', 'sprites', 'stages'] as const) {
+      const without = source.documents.filter((document) => document.kind !== kind);
+      expect(loadPack({ ...source, documents: without }).ok, kind).toBe(false);
+    }
   });
 
   it('declares its own role vocabulary rather than borrowing the engine’s', () => {
@@ -120,17 +124,42 @@ describe('the pack itself', () => {
   it('gives each captor its own captive slot, one row above it', () => {
     const formation = pack.formations.get('classic40');
     expect(formation?.captiveSlots).toHaveLength(4);
+    const rowSpacing = formation?.grid?.rowSpacing ?? 1;
     for (const captive of formation?.captiveSlots ?? []) {
       const captor = formation?.slots[captive.captor];
       expect(captor?.role).toBe('warden');
-      expect(captive.row).toBe((captor?.row ?? 0) - 1);
+      // One row step above the warden row, in the same column. Row indices are in
+      // a 4 px unit rather than one-per-row, because the verified resting row gaps
+      // are not uniform — see `packs/classic/README.md`.
+      expect(captive.row).toBeLessThan(captor?.row ?? 0);
+      expect((captor?.row ?? 0) - captive.row).toBe(16 / rowSpacing);
       expect(captive.column).toBe(captor?.column);
     }
   });
 
-  it('states the two sequence plateau periods, which differ on purpose', () => {
-    expect(pack.manifest.stageSequence.normal.repeatLast).toBe(3);
+  it('maps the formation onto the verified column positions', () => {
+    const formation = pack.formations.get('classic40');
+    const grid = formation?.grid;
+    expect(grid).toBeDefined();
+    const columns = formationAxes(formation!).columns.map(
+      (column) => (grid?.originX ?? 0) + column * (grid?.columnSpacing ?? 0),
+    );
+    // Reference section 5: ten column origins landing at screen x 32…176, pitch
+    // 16 — a 160 px formation with 32 px of margin each side, which is exactly
+    // the sway's amplitude and the breathe's outermost displacement.
+    expect(columns).toEqual([32, 48, 64, 80, 96, 112, 128, 144, 160, 176]);
+    expect(rules.formation.sway?.amplitude).toBe(32);
+  });
+
+  it('states each sequence plateau period on its own terms', () => {
+    // The two halves fold at different stages — the entry choreography cycles its
+    // last three from stage 24, the challenge scripts cycle all eight — so the
+    // periods are stated per table and never derived from one another.
     expect(pack.manifest.stageSequence.challenge.repeatLast).toBe(8);
+    // The normal half holds stage 1 alone so far, and a plateau cannot cycle more
+    // rows than a table has; it returns to 3 with stages 2–8.
+    expect(pack.manifest.stageSequence.normal.rows).toHaveLength(1);
+    expect(pack.manifest.stageSequence.normal.repeatLast).toBe(1);
   });
 });
 

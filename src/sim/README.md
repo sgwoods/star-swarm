@@ -5,16 +5,28 @@ Pure game simulation: `world.ts`, `player.ts`, `shots.ts`, `enemies.ts`,
 `abilities/` (one file per ability), `scoring.ts`, `stages.ts`.
 
 Milestone 1 landed the player half: `world.ts`, `player.ts`, `shots.ts`,
-`collision.ts`, `lives.ts`, `events.ts` and `targets.ts` — the last being a
-static stand-in that Milestone 2's real enemies replace.
+`collision.ts`, `lives.ts` and `events.ts`. Milestone 2's first task replaced
+the static stand-in with real enemies: `enemies.ts` (entry waves, the four-phase
+update, slot homing) and `formation.ts` (the coordinate axes, sway and breathe).
+Dive attacks, enemy fire, the capture beam and challenge stages are the sibling
+tasks that build on those two.
 
 **The simulation has no rules of its own.** Every policy number it steps — the
 movement cadence, the travel limits, the shot cap, the hit windows, the
-extra-life thresholds, the playfield — arrives as one resolved `Rules` value
-from `src/content/`, which `createWorld` requires. Nothing here loads a pack:
+extra-life thresholds, the formation's sway and breathe, the enemy update
+cadence, the playfield — arrives as one resolved `Rules` value from
+`src/content/`, which `createWorld` requires. The same is true of content: a
+stage arrives as a resolved `StageContent` through a `StageSource`
+(`src/content/stages.ts`), never as a pack. Nothing here loads anything:
 `src/content/fs.ts` is Node-only and off limits, so a caller hands the
-simulation a value that has already been validated. `src/content/rules.ts` is
-the only place that interprets one.
+simulation values that have already been validated. `src/content/rules.ts` is
+the only place that interprets a rules value.
+
+**Enemies address the formation; they do not carry positions of their own.** An
+enemy at home _is_ its slot, and only the formation's `N` column and `M` row
+coordinates animate. That is what makes sway and breathe cost sixteen numbers
+instead of forty, and it is why a differently shaped formation inherits both
+motions for free.
 
 **Key rule:** nothing here may touch the DOM, Canvas or Web Audio. The sim emits
 events; `render/` and `audio/` subscribe. That is what makes headless tests and

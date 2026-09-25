@@ -12,3 +12,4 @@ export * from './errors.js';
 export * from './loader.js';
 export * from './registry.js';
 export * from './rules.js';
+export * from './stages.js';

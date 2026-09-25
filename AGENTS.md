@@ -61,10 +61,12 @@ schema is a number no pack can change, which is the failure this arrangement
 exists to prevent — so adding one means adding it to `src/content/schema.ts` and
 to the pack, not defaulting it in the sim.
 
-The sim may import `src/content/schema.ts` and `src/content/rules.ts`; it may
-**not** import `src/content/fs.ts`, which is Node-only. The sim receives a
-loaded rules value, it never loads one. `src/main.ts` is where the loader runs
-for the browser.
+The same is true of content: a stage arrives as a resolved `StageContent`
+through a `StageSource` (`src/content/stages.ts`), never as a pack or a
+registry. The sim may import `src/content/schema.ts`, `src/content/rules.ts` and
+`src/content/stages.ts`; it may **not** import `src/content/fs.ts`, which is
+Node-only. The sim receives loaded values, it never loads one. `src/main.ts` is
+where the loader runs for the browser.
 
 ## Determinism is a hard requirement
 
@@ -83,7 +85,10 @@ Practical consequences:
 - Golden replays live in `tests/sim/golden/`, written by
   `npx tsx scripts/record-replay.ts` and compared byte for byte (so the
   directory is in `.prettierignore`). A PR that changes one either meant to or
-  broke something — say which. `--check` fails instead of rewriting.
+  broke something — say which. `--check` fails instead of rewriting. One of them
+  (`stage-entry`) records an **empty** input log on purpose: entry choreography
+  is scripted, so a golden with no input is a record of the fleet and the
+  formation alone.
 
 ## The second rule: content is a platform, not this game
 
@@ -108,6 +113,32 @@ Two consequences worth knowing before editing either:
   otherwise a pack can load from disk, pass every unit test and the validation
   gate, and still leave the game a blank page. Bundle the whole tree; never a
   list of the files someone remembered.
+
+## Enemies address the formation; the formation is sixteen numbers
+
+A formation is `N` column X coordinates and `M` row Y coordinates —
+`formationAxes` derives them from the distinct slot indices — and every enemy
+holds an _index_ into them rather than a position. Sway and breathe move only
+those `N + M` values, so forty enemies follow for free and a differently shaped
+formation inherits both motions without new code. An enemy at home _is_ its
+slot. Per-enemy offsets are the mistake this exists to prevent; they cost forty
+times as much and drift apart.
+
+Two consequences when editing `src/sim/formation.ts` or `src/sim/enemies.ts`:
+
+- **The sway's exit is two-part.** It does not stop when the last wave arrives;
+  it stops the next time the offset passes through zero, which is what makes the
+  formation exactly centred before anything dives. `formation-settled` is raised
+  on that frame.
+- **Enemy state advances on a round robin, positions do not.**
+  `rules.enemies.updatePhases` is 4 for Classic: each enemy's state machine runs
+  on one frame in four, while every enemy's position moves every frame. A launch
+  therefore lands within `updatePhases` frames of when it was due, on purpose.
+
+Slot homing is `toSlot` and nothing else. It resolves its target when the path
+compiles, so an enemy entering a _swaying_ formation is handed where its slot
+**will be** on arrival (`slotPositionAhead`, solved as a fixed point), not where
+it is now. Writing a second homing routine is the wrong fix.
 
 ## Audio is the other side of that boundary
 
@@ -166,10 +197,12 @@ and font through the real pipeline into `docs/media/`, which is the contact shee
 - `tests/unit/classic-pack.test.ts` checks `packs/classic/` against
   `docs/reference/arcade-reference.md`. Plan, reference and data are three legs
   of one stool: change a number in any of them and that test is the third voice.
-- `tests/helpers/rules.ts` holds the two rules fixtures: `classicRules()` reads
-  the shipped pack through the real loader, and `minimalRules()` is the smallest
-  document the schema accepts. Tests use them rather than writing rules inline,
-  so a new required field is one edit.
+- `tests/helpers/rules.ts` holds the content fixtures, not only the rules ones:
+  `classicPack`, `classicRules`, `classicStages` and `classicFormation` read the
+  shipped pack through the real loader, `stageSourceOf` wraps a hand-written
+  stage for a shape the pack does not ship, and `minimalRules` is the smallest
+  document the schema accepts. Tests use them rather than writing content
+  inline, so a new required field is one edit.
 - Art is original by rule, not by preference: `docs/DESIGN.md` section 2 bars
   ripped sprites, traced art, ROM data and the original's names. Enemy roles are
   `drone`, `wing` and `warden` everywhere outside
@@ -185,6 +218,10 @@ and font through the real pipeline into `docs/media/`, which is the contact shee
   out, and arcs reverse their handedness because the reflection says so. A pack
   that ships a hand-mirrored twin of a path is working against
   `src/sim/paths.ts`.
+- Vite's port is shared between checkouts, and `playwright.config.ts` reuses an
+  existing dev server outside CI — so a second worktree's Playwright run
+  silently tests the _first_ one's build: green, and meaningless. Set
+  `STAR_SWARM_PORT` to give a worktree its own.
 
 ## Maintaining this file
 

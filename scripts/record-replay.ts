@@ -17,8 +17,11 @@ import { dirname, join, resolve } from 'node:path';
 
 import { readPackSource } from '../src/content/fs.js';
 import { loadPackOrThrow } from '../src/content/loader.js';
+import { createRegistry } from '../src/content/registry.js';
 import type { Rules } from '../src/content/schema.js';
-import { frameOf, type InputFrame, type InputSource } from '../src/engine/input.js';
+import type { StageSource } from '../src/content/stages.js';
+import { createStageSource } from '../src/content/stages.js';
+import { constantInput, frameOf, type InputFrame, type InputSource } from '../src/engine/input.js';
 import { createLoop, STEP_MS } from '../src/engine/loop.js';
 import { recordInput, serializeReplay } from '../src/engine/replay.js';
 import { createRng } from '../src/engine/rng.js';
@@ -27,22 +30,30 @@ import { createWorld, fingerprintWorld, stepWorld } from '../src/sim/world.js';
 const GOLDEN_DIR = resolve(import.meta.dirname, '..', 'tests', 'sim', 'golden');
 
 /**
- * The rules a golden is recorded against: the shipped Classic pack, read
- * through the real loader. A golden proved against rules the game does not use
- * proves nothing, so this is the same path `src/main.ts` takes.
+ * The pack a golden is recorded against: the shipped Classic pack, read through
+ * the real loader. A golden proved against content the game does not use proves
+ * nothing, so this is the same path `src/main.ts` takes — rules *and* stages.
  */
-export function classicRules(): Rules {
+function classicPack() {
   const packDir = resolve(import.meta.dirname, '..', 'packs', 'classic');
   const { source, errors } = readPackSource(packDir);
   if (source === undefined) {
     throw new Error(`could not read ${packDir}: ${JSON.stringify(errors)}`);
   }
-  const rules = loadPackOrThrow(source).rules;
-  if (rules === undefined) throw new Error(`${packDir} has no rules.json`);
-  return rules;
+  const pack = loadPackOrThrow(source);
+  if (pack.rules === undefined) throw new Error(`${packDir} has no rules.json`);
+  return { rules: pack.rules, stages: createStageSource(createRegistry([pack])) };
 }
 
-const CLASSIC_RULES = classicRules();
+const CLASSIC = classicPack();
+
+export function classicRules(): Rules {
+  return CLASSIC.rules;
+}
+
+export function classicStages(): StageSource {
+  return CLASSIC.stages;
+}
 
 /**
  * A scripted pilot: seeded, so the log is reproducible, and varied enough to
@@ -85,13 +96,10 @@ export function runWorld(
   seed: string,
   input: InputSource,
   steps: number,
-  rules: Rules = CLASSIC_RULES,
-  standInFireRate?: number,
+  rules: Rules = CLASSIC.rules,
+  stages: StageSource = CLASSIC.stages,
 ): { readonly fingerprint: string; readonly trace: string[] } {
-  const world =
-    standInFireRate === undefined
-      ? createWorld({ seed, rules })
-      : createWorld({ seed, rules, standInFireRate });
+  const world = createWorld({ seed, rules, stages });
   const trace: string[] = [];
 
   const loop = createLoop({
@@ -115,26 +123,36 @@ export interface GoldenSpec {
   readonly steps: number;
   readonly rules?: Rules;
   /**
-   * The stand-in formation's fire rate. `0` turns its guns off, so a run reaches
-   * the end of a stage instead of ending in a game over — which is how a golden
-   * covers the stage roll while the stand-in still exists.
+   * `true` records with the sticks and the button untouched. A golden of the
+   * entry choreography wants exactly that: nothing the player does can change
+   * where a wave flies, so an empty log makes the file a record of the fleet and
+   * the formation alone.
    */
-  readonly standInFireRate?: number;
+  readonly idle?: boolean;
 }
 
 export const GOLDENS: readonly GoldenSpec[] = [
-  // Three minutes of ordinary play, ending the way ordinary play ends: three
-  // fighters lost. Covers movement, the shot cap, both collision directions,
-  // the respawn and game over.
+  // A whole stage-1 entry with the controls untouched: five waves of eight along
+  // the entry paths, forty enemies taking their own slots, the sway running
+  // throughout and ending centred, and the breathe starting. The formation settles
+  // on frame 1024, so 1,400 steps carry it past a further full breathe cycle.
+  {
+    name: 'stage-entry',
+    seed: 'golden-stage-entry',
+    inputSeed: 'idle',
+    steps: 1_400,
+    idle: true,
+  },
+  // Three minutes of ordinary play. Covers movement, the shot cap, collisions,
+  // the score rule against enemy state, clearing a stage and rolling on.
   { name: 'player-core', seed: 'golden-player-core', inputSeed: 'pilot-1', steps: 10_800 },
-  // Four minutes against a formation that does not shoot back, which is long
-  // enough to clear one and roll on to the next stage.
+  // Four minutes, another pilot: a second, longer path through the same code,
+  // far enough in to clear more than one stage.
   {
     name: 'player-survival',
     seed: 'golden-player-survival',
     inputSeed: 'pilot-2',
     steps: 14_400,
-    standInFireRate: 0,
   },
 ];
 
@@ -142,15 +160,14 @@ export function goldenPath(name: string): string {
   return join(GOLDEN_DIR, `${name}.replay.json`);
 }
 
+/** The input a golden is recorded with: a scripted pilot, or nothing at all. */
+export function pilotFor(spec: GoldenSpec): InputSource {
+  return spec.idle === true ? constantInput(0) : scriptedPilot(spec.inputSeed);
+}
+
 export function recordGolden(spec: GoldenSpec): string {
-  const recorder = recordInput(scriptedPilot(spec.inputSeed), spec.seed);
-  const run = runWorld(
-    spec.seed,
-    recorder.source,
-    spec.steps,
-    spec.rules ?? CLASSIC_RULES,
-    spec.standInFireRate,
-  );
+  const recorder = recordInput(pilotFor(spec), spec.seed);
+  const run = runWorld(spec.seed, recorder.source, spec.steps, spec.rules ?? CLASSIC.rules);
   return `${serializeReplay(recorder.finish(run.fingerprint))}\n`;
 }
 

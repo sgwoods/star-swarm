@@ -1,38 +1,87 @@
 /**
- * Rules fixtures for the tests.
+ * Content fixtures for the tests.
  *
- * Two of them, and the difference matters:
+ * Three kinds, and the differences matter:
  *
- * - {@link classicRules} is the *shipped* pack, read off disk through the real
- *   loader. Anything asserting arcade behaviour uses it, because a test that
- *   builds its own rules object proves the test's numbers rather than the
- *   pack's.
+ * - {@link classicRules} and {@link classicStages} are the *shipped* pack, read
+ *   off disk through the real loader. Anything asserting arcade behaviour uses
+ *   them, because a test that builds its own rules object proves the test's
+ *   numbers rather than the pack's.
  * - {@link minimalRules} is the least a `rules.json` can say and still load. It
  *   exists so a schema or loader test can state one field and leave everything
  *   else alone, and so adding a required field is one edit rather than five.
+ * - {@link stageSourceOf} wraps a hand-written stage in a {@link StageSource}, for
+ *   a test that needs a shape the Classic pack does not ship — a challenge stage,
+ *   a one-enemy wave, a formation with no grid.
  */
 
 import { resolve } from 'node:path';
 
 import { readPackSource } from '../../src/content/fs.js';
+import type { LoadedPack } from '../../src/content/loader.js';
 import { loadPackOrThrow } from '../../src/content/loader.js';
-import type { Rules } from '../../src/content/schema.js';
+import { createRegistry } from '../../src/content/registry.js';
+import type { Formation, Rules, Stage } from '../../src/content/schema.js';
+import { formationSchema, stageSchema } from '../../src/content/schema.js';
+import type { StageSource } from '../../src/content/stages.js';
+import { createStageSource, resolveStageContent } from '../../src/content/stages.js';
 
 const CLASSIC_DIR = resolve(import.meta.dirname, '..', '..', 'packs', 'classic');
 
-let cached: Rules | undefined;
+let cachedPack: LoadedPack | undefined;
 
-/** The shipped Classic rules, loaded once per test process. */
-export function classicRules(): Rules {
-  if (cached !== undefined) return cached;
+/** The shipped Classic pack, loaded once per test process. */
+export function classicPack(): LoadedPack {
+  if (cachedPack !== undefined) return cachedPack;
   const { source, errors } = readPackSource(CLASSIC_DIR);
   if (source === undefined) {
     throw new Error(`could not read ${CLASSIC_DIR}: ${JSON.stringify(errors)}`);
   }
-  const rules = loadPackOrThrow(source).rules;
+  cachedPack = loadPackOrThrow(source);
+  return cachedPack;
+}
+
+/** The shipped Classic rules. */
+export function classicRules(): Rules {
+  const rules = classicPack().rules;
   if (rules === undefined) throw new Error('the classic pack has no rules.json');
-  cached = rules;
   return rules;
+}
+
+/** What plays as each stage in the shipped Classic pack. */
+export function classicStages(): StageSource {
+  return createStageSource(createRegistry([classicPack()]));
+}
+
+/** The shipped `classic40` formation. */
+export function classicFormation(): Formation {
+  const formation = classicPack().formations.get('classic40');
+  if (formation === undefined) throw new Error('the classic pack has no classic40 formation');
+  return formation;
+}
+
+/**
+ * A stage source over one hand-written stage, using the Classic pack's aliens and
+ * paths unless the caller supplies its own.
+ *
+ * Takes the documents as plain JSON and parses them, so a fixture states only the
+ * fields it cares about and picks up every schema default — the same reason
+ * {@link minimalRules} is JSON rather than a parsed value.
+ */
+export function stageSourceOf(
+  stage: Record<string, unknown>,
+  formation?: Record<string, unknown>,
+): StageSource {
+  const pack = classicPack();
+  const parsed: Stage = stageSchema.parse(stage);
+  const formations = new Map(pack.formations);
+  if (formation !== undefined) {
+    const value = formationSchema.parse(formation);
+    formations.set(value.id, value);
+  }
+  const content = resolveStageContent({ ...pack, formations }, parsed);
+  if (content === undefined) throw new Error(`no formation "${parsed.formation}"`);
+  return { stageFor: () => content };
 }
 
 /**

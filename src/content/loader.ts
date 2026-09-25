@@ -244,6 +244,9 @@ export function loadPack(source: PackSource): LoadResult {
     const file = fileOf('aliens', id);
     requireRole(file, 'role', alien.role);
     requireRef(file, 'sprite', 'sprites', alien.sprite);
+    alien.hitSprites.forEach((sprite, index) => {
+      requireRef(file, `hitSprites[${String(index)}]`, 'sprites', sprite);
+    });
     for (const [event, sound] of Object.entries(alien.sounds)) {
       requireRef(file, `sounds.${event}`, 'sounds', sound);
     }
