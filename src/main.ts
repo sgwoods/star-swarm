@@ -1,17 +1,21 @@
 /**
  * Browser entry point.
  *
- * Wires the Milestone 0 pieces together and nothing more: the display, the
- * keyboard, and the fixed-step loop. There is no simulation yet — `src/sim/`
- * arrives in Milestone 1 — so `update` only samples input and `render` draws the
- * placeholder test pattern.
+ * The three layers meet here and nowhere else: the fixed-step loop drives
+ * `src/sim/`, and the events the sim raises are handed to `src/render/` and
+ * `src/ui/`. The sim itself has no idea any of this exists — it cannot import a
+ * canvas, and lint would stop it trying (see `eslint.config.js`).
  */
 
-import { createKeyboardInput, EMPTY_FRAME, type InputFrame } from './engine/input.js';
+import { createKeyboardInput, type InputFrame } from './engine/input.js';
 import { createLoop, STEP_HZ } from './engine/loop.js';
 import { createRng } from './engine/rng.js';
-import { createDisplay } from './render/canvas.js';
-import { drawTestPattern } from './render/testpattern.js';
+import { createDisplay, LOGICAL_HEIGHT, LOGICAL_WIDTH } from './render/canvas.js';
+import { drawScene } from './render/scene.js';
+import { createStarfield } from './render/starfield.js';
+import type { SimEvent } from './sim/events.js';
+import { createWorld, stepWorld } from './sim/world.js';
+import { drawHud } from './ui/hud.js';
 
 const container = document.getElementById('app');
 if (container === null) throw new Error('Missing #app container');
@@ -20,44 +24,63 @@ const display = createDisplay({ container });
 const input = createKeyboardInput();
 input.attach(window);
 
-// Seeded from a constant for now: every run of Milestone 0 is identical, which
-// is the property Milestone 1 onwards depends on. A real run seeds from the
-// start-of-game state and records the seed into the replay.
-const rng = createRng('star-swarm-m0');
-const starterDraw = rng.nextUint32();
+// Seeded from a constant so a session is reproducible and a recorded replay
+// means something. A real game seeds from the start-of-game state and records
+// the seed alongside the input log (`src/engine/replay.ts`).
+const SEED = 'star-swarm-m1';
+const world = createWorld({ seed: SEED });
 
-let sampledInput: InputFrame = EMPTY_FRAME;
-let frame = 0;
-let fps = 0;
-let fpsWindowStart = 0;
-let fpsWindowFrames = 0;
+// The starfield gets its own generator: it is presentation, and pulling draws
+// from the simulation's stream would make what the sim computes depend on how
+// many stars happen to be on screen.
+const starfield = createStarfield(createRng(`${SEED}:stars`));
+
+let highScore = 0;
+
+/** Render and UI subscribe to the sim; they never call back into it. */
+function applyEvents(events: readonly SimEvent[]): void {
+  for (const event of events) {
+    switch (event.type) {
+      case 'stage-started':
+        starfield.setSpeedByte(event.starfieldSpeed);
+        break;
+      case 'score-changed':
+        if (event.score > highScore) highScore = event.score;
+        break;
+      case 'game-over':
+        starfield.paused = true;
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+applyEvents(world.events);
 
 const loop = createLoop({
   update() {
     // Exactly one input sample per simulation step (docs/DESIGN.md pillar 4).
-    sampledInput = input.sample();
+    const frame: InputFrame = input.sample();
+    applyEvents(stepWorld(world, frame));
   },
   render() {
-    frame += 1;
+    starfield.advance();
 
-    // FPS is a render-side diagnostic, so reading the clock here is fine; the
-    // simulation never does (see eslint.config.js).
-    const now = performance.now();
-    if (fpsWindowStart === 0) fpsWindowStart = now;
-    fpsWindowFrames += 1;
-    if (now - fpsWindowStart >= 500) {
-      fps = (fpsWindowFrames * 1000) / (now - fpsWindowStart);
-      fpsWindowStart = now;
-      fpsWindowFrames = 0;
-    }
+    const { ctx } = display;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 
-    drawTestPattern(display.ctx, {
-      step: loop.step,
-      frame,
-      fps,
-      input: sampledInput,
-      layout: display.layout,
+    starfield.draw(ctx);
+    drawScene(ctx, world);
+    drawHud(ctx, {
+      score: world.score,
+      highScore,
+      lives: world.lives.reserve,
+      stage: world.stage,
+      gameOver: world.status === 'game-over',
     });
+
     display.present();
   },
 });
@@ -71,8 +94,10 @@ declare global {
     starSwarm?: {
       readonly stepHz: number;
       readonly step: number;
-      readonly frame: number;
-      readonly seedDraw: number;
+      readonly score: number;
+      readonly stage: number;
+      readonly lives: number;
+      readonly playerX: number;
       readonly layout: ReturnType<typeof createDisplay>['layout'];
     };
   }
@@ -81,12 +106,20 @@ declare global {
 window.starSwarm = {
   stepHz: STEP_HZ,
   get step(): number {
-    return loop.step;
+    return world.step;
   },
-  get frame(): number {
-    return frame;
+  get score(): number {
+    return world.score;
   },
-  seedDraw: starterDraw,
+  get stage(): number {
+    return world.stage;
+  },
+  get lives(): number {
+    return world.lives.reserve;
+  },
+  get playerX(): number {
+    return world.player.x;
+  },
   get layout(): ReturnType<typeof createDisplay>['layout'] {
     return display.layout;
   },

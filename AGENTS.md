@@ -30,6 +30,25 @@ and `Math.random` inside `src/sim/`, and `tests/unit/sim-boundary.test.ts` both
 scans the tree and runs ESLint against a deliberately illegal probe file so the
 rules cannot be quietly deleted. Both run in CI.
 
+That scan is textual, so inside `src/sim/` an identifier spelled exactly
+`window` fails even as a local variable or parameter. Name it `hitWindow`.
+
+## Arcade numbers say how far to trust themselves
+
+Anywhere an arcade value is written down in code, it is commented **verified** or
+**provisional**. Verified means `docs/reference/arcade-reference.md` carries the
+ROM routine behind it, and changing it means changing the reference too.
+Provisional means it is ours — the reference does not cover it, or lists it
+unresolved. Keep new values labelled; the distinction is the difference between
+a number that may not be changed and one that may. `src/sim/rules.ts` is the
+worked example.
+
+That module is **interim**: it holds the playable core's rules and predates
+`src/content/` by one PR. The real rules layer is `packs/classic/rules.json` read
+through `src/content/rules.ts`, and a filed follow-up rewires the sim to it.
+Until then both exist and both export a type named `Rules` — `src/content/`'s is
+the canonical one, and a module needing both must alias.
+
 ## Determinism is a hard requirement
 
 Fixed 60 Hz steps, seeded RNG, replayable input logs (`docs/DESIGN.md` pillar 4).
@@ -44,6 +63,10 @@ Practical consequences:
 - `1/60` is not representable in binary floating point. `src/engine/loop.ts`
   accumulates in _steps_ and carries a tolerance for exactly this reason; naive
   millisecond subtraction silently loses a step per burst.
+- Golden replays live in `tests/sim/golden/`, written by
+  `npx tsx scripts/record-replay.ts` and compared byte for byte (so the
+  directory is in `.prettierignore`). A PR that changes one either meant to or
+  broke something — say which. `--check` fails instead of rewriting.
 
 ## The second rule: content is a platform, not this game
 
@@ -65,7 +88,8 @@ Two consequences worth knowing before editing either:
 ## Layout
 
 `docs/DESIGN.md` section 9 fixes the source layout, and each directory carries a
-short README saying what lands there and when. Milestone 1 tasks fill them in.
+short README saying what lands there and when, updated as each milestone fills
+it in.
 
 ## Sharp edges
 
