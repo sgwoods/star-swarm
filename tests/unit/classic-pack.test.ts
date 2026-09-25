@@ -28,8 +28,9 @@ import { windowGapsX } from '../../src/sim/collision.js';
  *
  * The content directories fill one Milestone 1 task at a time; what is checked
  * here is the shape, the formation and the four rank tables. The content itself
- * has its own tests — `tests/unit/classic-sounds.test.ts` for `sounds/` and
- * `tests/unit/classic-paths.test.ts` for `paths/`.
+ * has its own tests — `tests/unit/classic-sounds.test.ts` for `sounds/`,
+ * `tests/unit/classic-paths.test.ts` for `paths/` and
+ * `tests/unit/sprites.test.ts` for `sprites/`.
  */
 
 const PACK_DIR = resolve(import.meta.dirname, '..', '..', 'packs', 'classic');
@@ -53,7 +54,7 @@ beforeAll(() => {
 });
 
 describe('the pack itself', () => {
-  it('loads with its rules and no content yet', () => {
+  it('loads with its rules', () => {
     expect(pack.id).toBe('classic');
     expect(pack.aliens.size).toBe(0);
     expect(pack.stages.size).toBe(0);
@@ -72,13 +73,21 @@ describe('the pack itself', () => {
     //    kinds cannot see. The empty-tree case is covered by
     //    `tests/unit/validate-packs.test.ts`.
     const { source } = readPackSource(PACK_DIR);
-    const kinds = new Set(source?.documents.map((document) => document.kind));
-    expect([...kinds].sort()).toEqual(['paths', 'sounds']);
+    if (source === undefined) throw new Error('classic pack could not be read');
+    const kinds = new Set(source.documents.map((document) => document.kind));
+    expect([...kinds].sort()).toEqual(['paths', 'sounds', 'sprites']);
 
-    const onDisk = source?.documents.length ?? -1;
+    const onDisk = source.documents.length;
     const loaded =
       pack.aliens.size + pack.paths.size + pack.stages.size + pack.sprites.size + pack.sounds.size;
     expect(loaded).toBe(onDisk);
+
+    // A directory nothing references yet is not a broken pack: drop `sprites/`
+    // and the pack still loads. `sounds/` is not droppable the same way — the
+    // manifest's `sounds` map names every one of those ids, so the reference
+    // pass needs the documents there.
+    const withoutSprites = source.documents.filter((document) => document.kind !== 'sprites');
+    expect(loadPack({ ...source, documents: withoutSprites }).ok).toBe(true);
   });
 
   it('declares its own role vocabulary rather than borrowing the engine’s', () => {

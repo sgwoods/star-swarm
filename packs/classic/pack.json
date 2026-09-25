@@ -3,6 +3,22 @@
   "name": "Classic",
   "version": "0.1.0",
   "description": "The arcade-faithful pack. Aliens, paths, stages, sprites and sounds land through Milestones 1 and 2; the formation, roles and stage-sequence shape are here already.",
+  "palette": [
+    "#0000",
+    "#ffffff",
+    "#b9c9ff",
+    "#2b5cff",
+    "#00d8ff",
+    "#00e25a",
+    "#c6ff2e",
+    "#ffd400",
+    "#ff8c00",
+    "#ff2b2b",
+    "#ff4fd0",
+    "#9a4dff",
+    "#7d8aa8",
+    "#000000"
+  ],
   "roles": {
     "drone": {
       "label": "Drone"
