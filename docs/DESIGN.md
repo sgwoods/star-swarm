@@ -233,7 +233,8 @@ src/
   render/      canvas.ts, sprites.ts (data→bitmap cache), starfield.ts, text.ts, crt.ts
   audio/       synth.ts, sfx.ts, music.ts
   content/     schema.ts, loader.ts, registry.ts
-  ui/          attract.ts, menus.ts, hud.ts, results.ts, highscores.ts, lab/
+  ui/          flow.ts (game-state machine), attract.ts, menus.ts, hud.ts,
+               results.ts, highscores.ts, panel.ts, lab/
 packs/
   classic/     aliens/, paths/, stages/, sprites/, sounds/, pack.json
 tests/         unit/, sim/ (headless golden replays), e2e/

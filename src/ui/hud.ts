@@ -9,12 +9,15 @@
  * bottom-left, stage badges along the bottom-right — because the playfield is
  * 224x288 and that is where the space is.
  *
- * Text is drawn with the host's monospace font for now. The original 8x8 pixel
- * font arrives with Milestone 1's sprite-pipeline task; when it does, only
- * {@link drawText} changes.
+ * Text is the pack's 8x8 pixel font (`src/render/text.ts`), which is why every
+ * label here is upper case and inside the font's 0x20–0x5F range.
+ *
+ * The GAME OVER banner is **not** here: it belongs to the game-over screen in
+ * `results.ts`, which the state machine in `flow.ts` decides to draw.
  */
 
 import { LOGICAL_HEIGHT, LOGICAL_WIDTH } from '../render/canvas.js';
+import { drawText } from '../render/text.js';
 
 /**
  * Stage badge denominations, largest first (docs/DESIGN.md section 4:
@@ -56,12 +59,10 @@ export interface HudState {
   /** Fighters in reserve — the one on the field is not drawn down here. */
   readonly lives: number;
   readonly stage: number;
-  readonly gameOver: boolean;
 }
 
 const TEXT_COLOR = '#ffffff';
-const LABEL_COLOR = '#ff4d4d';
-const HUD_FONT = '8px monospace';
+const LABEL_COLOR = '#ff2b2b';
 
 /** Height of the top band, in logical rows. */
 export const TOP_BAND_HEIGHT = 16;
@@ -73,22 +74,6 @@ const BADGE_SIZE = 8;
 const BADGE_GAP = 2;
 /** Most badges that fit along the bottom-right before they are dropped. */
 const MAX_BADGES = 8;
-
-function drawText(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  x: number,
-  y: number,
-  color: string,
-  align: CanvasTextAlign = 'left',
-): void {
-  ctx.font = HUD_FONT;
-  ctx.textBaseline = 'top';
-  ctx.textAlign = align;
-  ctx.fillStyle = color;
-  ctx.fillText(text, x, y);
-  ctx.textAlign = 'left';
-}
 
 /**
  * Six digits, as the original's player-1 display has. Scores below 10 show as
@@ -113,14 +98,10 @@ function drawLifeGlyph(ctx: CanvasRenderingContext2D, x: number, y: number): voi
 /** Draw the whole HUD onto the 224x288 backbuffer. */
 export function drawHud(ctx: CanvasRenderingContext2D, state: HudState): void {
   // Top band: score labels and values.
-  drawText(ctx, '1UP', 16, 0, LABEL_COLOR);
-  drawText(ctx, 'HIGH SCORE', 72, 0, LABEL_COLOR);
-  drawText(ctx, formatScore(state.score), 8, 8, TEXT_COLOR);
-  drawText(ctx, formatScore(state.highScore), 88, 8, TEXT_COLOR);
-
-  if (state.gameOver) {
-    drawText(ctx, 'GAME OVER', LOGICAL_WIDTH / 2, LOGICAL_HEIGHT / 2 - 4, LABEL_COLOR, 'center');
-  }
+  drawText(ctx, '1UP', 16, 0, { colour: LABEL_COLOR });
+  drawText(ctx, 'HIGH SCORE', 72, 0, { colour: LABEL_COLOR });
+  drawText(ctx, formatScore(state.score), 8, 8, { colour: TEXT_COLOR });
+  drawText(ctx, formatScore(state.highScore), 88, 8, { colour: TEXT_COLOR });
 
   // Bottom-left: one glyph per fighter in reserve.
   const glyphY = LOGICAL_HEIGHT - 14;
