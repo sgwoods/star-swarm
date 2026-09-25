@@ -20,3 +20,8 @@ path. `vite.config.ts` maps the `/lab` URL onto `lab.html` from a plugin
 declaring `apply: 'serve'`. `tests/unit/lab-dev-only.test.ts` checks all of it.
 
 Run it with `npm run dev` and open <http://localhost:5173/lab>.
+
+![the path previewer](../../../docs/media/path-lab.gif)
+
+`docs/media/path-lab.gif` is `entry-long-row` scrubbed end to end, then the same
+data flown again with the mirror toggle on.
