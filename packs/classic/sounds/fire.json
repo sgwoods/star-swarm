@@ -1,0 +1,8 @@
+{
+  "id": "fire",
+  "wave": "square",
+  "freq": [880, 2349],
+  "duty": 0.2,
+  "envelope": [0.002, 0.012, 0.038],
+  "volume": 0.3
+}

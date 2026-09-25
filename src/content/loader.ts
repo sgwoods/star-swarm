@@ -335,6 +335,12 @@ export function loadPack(source: PackSource): LoadResult {
 
   checkStageSequence(MANIFEST_FILE, 'stageSequence', manifest.stageSequence);
 
+  // The event → sound bindings the audio layer reads. Checked here so a
+  // misspelt sound id is a load failure rather than an event that plays nothing.
+  for (const [event, sound] of Object.entries(manifest.sounds)) {
+    requireRef(MANIFEST_FILE, `sounds.${event}`, 'sounds', sound);
+  }
+
   for (const [key, formation] of formations) {
     if (formation.slots.length === 0 && stages.size > 0) {
       errors.push({

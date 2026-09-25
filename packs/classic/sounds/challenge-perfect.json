@@ -1,0 +1,17 @@
+{
+  "id": "challenge-perfect",
+  "wave": "square",
+  "duty": 0.3,
+  "envelope": [0.005, 0.64, 0.355],
+  "volume": 0.42,
+  "sequence": [
+    { "freq": 523.25, "duration": 0.09 },
+    { "freq": 659.25, "duration": 0.09 },
+    { "freq": 783.99, "duration": 0.09 },
+    { "freq": 1046.5, "duration": 0.09 },
+    { "freq": 1318.51, "duration": 0.09 },
+    { "freq": 1567.98, "duration": 0.09 },
+    { "freq": 2093.0, "duration": 0.18 },
+    { "freq": [2093.0, 2637.02], "duration": 0.36 }
+  ]
+}

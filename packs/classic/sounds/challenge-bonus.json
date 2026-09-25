@@ -1,0 +1,13 @@
+{
+  "id": "challenge-bonus",
+  "wave": "triangle",
+  "envelope": [0.008, 0.6, 0.392],
+  "volume": 0.4,
+  "sequence": [
+    { "freq": 783.99, "duration": 0.12 },
+    { "freq": 659.25, "duration": 0.12 },
+    { "freq": 587.33, "duration": 0.12 },
+    { "freq": 783.99, "duration": 0.12 },
+    { "freq": 1046.5, "duration": 0.34 }
+  ]
+}

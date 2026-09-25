@@ -1,0 +1,7 @@
+{
+  "id": "enemy-fire",
+  "wave": "triangle",
+  "freq": [620, 165],
+  "envelope": [0.004, 0.026, 0.07],
+  "volume": 0.24
+}

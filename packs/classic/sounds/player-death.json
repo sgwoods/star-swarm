@@ -1,0 +1,14 @@
+{
+  "id": "player-death",
+  "wave": "square",
+  "duty": 0.35,
+  "vibrato": { "rate": 15, "depth": 0.24 },
+  "envelope": [0.01, 0.6, 0.3],
+  "volume": 0.46,
+  "sequence": [
+    { "freq": [740, 300], "duration": 0.22 },
+    { "freq": [520, 180], "duration": 0.26 },
+    { "freq": [330, 72], "duration": 0.34 },
+    { "freq": [900, 90], "duration": 0.5, "wave": "noise", "volume": 0.4 }
+  ]
+}
