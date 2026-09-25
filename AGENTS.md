@@ -17,7 +17,9 @@ states, plus the items still unresolved. The two are a pair — change a number 
 section 4 and the reference changes with it, or they drift apart silently. It
 names the original game and its enemy types so sources stay checkable; that
 licence does not extend to `docs/DESIGN.md`, which uses the project's own naming
-per section 2 of the plan.
+per section 2 of the plan. Unlike the plan it _is_ Prettier-formatted, and
+its claim tables are wide: changing one cell re-pads that whole table, so expect
+a diff larger than the edit and run `npm run format` before `npm run lint`.
 
 ## The one rule that shapes the codebase
 

@@ -362,22 +362,29 @@ describe('section 6 rules', () => {
     expect(withThresholds.extraLives.award).toMatchObject({ first: 20000, repeat: 70000 });
   });
 
-  it('leaves the two unresolved arcade questions expressible either way', () => {
-    const open = rulesSchema.parse(minimal);
-    expect(open.capture.maxHeldTotal).toBeNull();
+  it('expresses a capped capture channel and per-impact challenge scoring, or neither', () => {
+    // Both shapes exist because the arcade original needs them — one held fighter
+    // globally, and a per-impact award that differs by challenge stage. A pack
+    // that wants neither says nothing and gets null for both.
+    const silent = rulesSchema.parse(minimal);
+    expect(silent.capture.maxHeldTotal).toBeNull();
+    expect(silent.scoring.challenge).toBeUndefined();
 
-    const closed = rulesSchema.parse({
+    const classicShaped = rulesSchema.parse({
       ...minimal,
       capture: { maxHeldTotal: 1 },
       scoring: {
         challenge: {
           groupBonus: { rows: [1000] },
-          impactAward: { rows: [50, 80], repeatLast: 1 },
+          impactAward: { rows: [100, 160], repeatLast: 2 },
         },
       },
     });
-    expect(closed.capture.maxHeldTotal).toBe(1);
-    expect(closed.scoring.challenge?.impactAward?.rows).toEqual([50, 80]);
+    expect(classicShaped.capture.maxHeldTotal).toBe(1);
+    expect(classicShaped.scoring.challenge?.impactAward?.rows).toEqual([100, 160]);
+    // `repeatLast` above the plateau of 1: the table cycles, which is what the
+    // per-impact award does and the group bonus beside it does not.
+    expect(classicShaped.scoring.challenge?.impactAward?.repeatLast).toBe(2);
   });
 
   it('rejects an unknown rules field rather than silently dropping it', () => {

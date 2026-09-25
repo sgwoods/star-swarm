@@ -26,6 +26,9 @@ import { resolveRow } from '../../src/content/schema.js';
 
 const PACK_DIR = resolve(import.meta.dirname, '..', '..', 'packs', 'classic');
 
+/** Stand-in for a table that is absent, so a lookup is `undefined` rather than a throw. */
+const EMPTY_TABLE = { rows: [] as number[], repeatLast: 1 };
+
 let pack: LoadedPack;
 let rules: Rules;
 
@@ -229,17 +232,34 @@ describe('the rest of the Classic rules', () => {
     expect(rules.scoring.challenge?.perHit).toBe(100);
     expect(rules.scoring.challenge?.perfect).toBe(10000);
     expect(rules.scoring.challenge?.perfectReplacesPerHit).toBe(true);
-    // A perfect first challenge stage: 5 groups × 1,000 + 10,000 = 15,000.
-    const groups =
-      5 * (resolveRow(rules.scoring.challenge?.groupBonus ?? { rows: [], repeatLast: 1 }, 0) ?? 0);
-    expect(groups + (rules.scoring.challenge?.perfect ?? 0)).toBe(15000);
+    // A perfect first challenge stage, the whole sum: 40 hits on impact at 100,
+    // 5 groups × 1,000, and the 10,000 perfect bonus replacing 100 × hits.
+    // `docs/DESIGN.md` section 4 and reference section 8 both state 19,000.
+    const impact = resolveRow(rules.scoring.challenge?.impactAward ?? EMPTY_TABLE, 0) ?? 0;
+    const groups = 5 * (resolveRow(rules.scoring.challenge?.groupBonus ?? EMPTY_TABLE, 0) ?? 0);
+    expect(40 * impact + groups + (rules.scoring.challenge?.perfect ?? 0)).toBe(19000);
   });
 
-  it('leaves the two unresolved arcade questions open rather than guessing', () => {
-    // Whether challenge enemies pay out on impact — reference section 11 item 2.
-    expect(rules.scoring.challenge?.impactAward).toBeNull();
-    // Whether two captured fighters can be held at once — item 3.
-    expect(rules.capture.maxHeldTotal).toBeNull();
+  it('scores challenge hits on impact, cycling rather than plateauing', () => {
+    // Reference section 8: 100 on the 1st challenge stage, 160 on the 2nd-8th,
+    // and the sprite/score set wraps on the 9th while the group bonus does not.
+    const impactAward = rules.scoring.challenge?.impactAward;
+    expect(impactAward).not.toBeNull();
+    expect(impactAward?.rows).toEqual([100, 160, 160, 160, 160, 160, 160, 160]);
+    expect(impactAward?.repeatLast).toBe(8);
+    const at = (ordinal: number): number | undefined =>
+      resolveRow(impactAward ?? EMPTY_TABLE, ordinal);
+    expect([at(0), at(1), at(7)]).toEqual([100, 160, 160]);
+    // The ninth challenge stage: per-hit wraps to 100, group bonus stays clamped.
+    expect(at(8)).toBe(100);
+    expect(resolveRow(rules.scoring.challenge?.groupBonus ?? EMPTY_TABLE, 8)).toBe(3000);
+  });
+
+  it('holds exactly one captured fighter, globally', () => {
+    // Reference section 7: a single flag gates capture-boss selection and a
+    // successful capture never clears it, so one is the hard global maximum.
+    expect(rules.capture.maxHeldTotal).toBe(1);
+    // The four home slots are one per possible captor, not four captives.
     expect(rules.capture.slotsPerCaptor).toBe(1);
   });
 
