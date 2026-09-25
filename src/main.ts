@@ -7,9 +7,8 @@
  * canvas, and lint would stop it trying (see `eslint.config.js`).
  */
 
-import classicManifest from '../packs/classic/pack.json' with { type: 'json' };
-import classicRules from '../packs/classic/rules.json' with { type: 'json' };
-import { loadPackOrThrow, packSourceFromRecord } from './content/index.js';
+import { bundledPackSource } from './content/bundle.js';
+import { loadPackOrThrow } from './content/index.js';
 import { createKeyboardInput, type InputFrame } from './engine/input.js';
 import { createLoop, STEP_HZ } from './engine/loop.js';
 import { createRng } from './engine/rng.js';
@@ -31,12 +30,14 @@ input.attach(window);
 // pack-validation gate runs, so the game and the gate cannot disagree. The pack
 // is bundled rather than fetched, and it is `loadPack` that turns the JSON into
 // a value the sim will accept — nothing hands the simulation raw data.
-const pack = loadPackOrThrow(
-  packSourceFromRecord('classic', 'bundled:classic', {
-    'pack.json': classicManifest,
-    'rules.json': classicRules,
-  }),
-);
+//
+// `bundledPackSource` globs the whole pack directory rather than naming the two
+// files this once listed: a manifest that references a sound, a path or a sprite
+// has to be loaded *with* them, or the loader's reference pass rejects it and the
+// game will not boot. See `src/content/bundle.ts`.
+const classicSource = bundledPackSource('classic');
+if (classicSource === undefined) throw new Error('the classic pack is not bundled');
+const pack = loadPackOrThrow(classicSource);
 const rules = pack.rules;
 if (rules === undefined) throw new Error('the bundled classic pack has no rules.json');
 

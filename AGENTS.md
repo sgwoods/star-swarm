@@ -99,8 +99,15 @@ Two consequences worth knowing before editing either:
 - Every ramp is literal rows plus its own plateau period, never a curve, and the
   periods differ between tables on purpose. `src/content/rules.ts` is the only
   place that interprets one.
-- `src/content/fs.ts` is the only file there that imports `node:fs`, and
-  `index.ts` does not re-export it, so the platform stays browser-safe.
+- A pack is read **two ways, and they must not drift**: `src/content/fs.ts` walks
+  the directory with `node:fs` for the validator and the tests, and
+  `src/content/bundle.ts` walks the same tree with Vite's `import.meta.glob` for
+  the browser. Neither is re-exported from `index.ts` — one would pull `node:fs`
+  into the bundle, the other a Vite-only transform into plain Node.
+  `tests/unit/bundled-packs.test.ts` holds the two to each other, because
+  otherwise a pack can load from disk, pass every unit test and the validation
+  gate, and still leave the game a blank page. Bundle the whole tree; never a
+  list of the files someone remembered.
 
 ## Audio is the other side of that boundary
 
