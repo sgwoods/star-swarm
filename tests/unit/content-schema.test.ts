@@ -11,6 +11,7 @@ import {
   spriteSchema,
   stageSchema,
 } from '../../src/content/schema.js';
+import { minimalRules } from '../helpers/rules.js';
 
 /**
  * The schemas are the contract three sibling tasks build against
@@ -308,15 +309,9 @@ describe('pack manifest', () => {
 });
 
 describe('section 6 rules', () => {
-  const minimal = {
-    id: 'r',
-    lives: { default: 3 },
-    extraLives: { award: { mode: 'none' } },
-    player: { speed: 1.5, maxShots: 2 },
-    enemies: { maxBullets: 8 },
-    challengeStages: { firstStage: 3, everyStages: 4 },
-    difficulty: { defaultRank: 'A', ranks: { A: { stageTable: { rows: [] } } } },
-  };
+  // `minimalRules` is the least a rules.json can say; keeping it in one place
+  // means a new required field is one edit rather than one per fixture.
+  const minimal = minimalRules();
 
   it('accepts the minimum and defaults the optional layers', () => {
     const rules = rulesSchema.parse(minimal);

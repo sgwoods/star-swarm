@@ -6,13 +6,19 @@ import { readPackSource } from '../../src/content/fs.js';
 import type { LoadedPack } from '../../src/content/loader.js';
 import { loadPack } from '../../src/content/loader.js';
 import {
+  averageStepDistance,
   challengeOrdinal,
   extraLivesEarned,
   isChallengeStage,
+  provenanceOf,
   resolveDifficultyRow,
+  resolveExtraLifeAward,
+  starfieldSpeedByte,
+  unknownProvenancePaths,
 } from '../../src/content/rules.js';
 import type { Rules } from '../../src/content/schema.js';
 import { resolveRow } from '../../src/content/schema.js';
+import { windowGapsX } from '../../src/sim/collision.js';
 
 /**
  * The shipped Classic pack, checked against the verification record in
@@ -183,6 +189,75 @@ describe('the rest of the Classic rules', () => {
     expect(rules.dualFighter.bulletsPerShot).toBe(2);
   });
 
+  it('is played on the 224x288 portrait playfield', () => {
+    expect(rules.playfield).toEqual({ width: 224, height: 288 });
+  });
+
+  it('steps 1 then 2 pixels, which averages the 1.5 px/frame the plan states', () => {
+    expect(rules.player.stepPattern).toEqual([1, 2]);
+    expect(averageStepDistance(rules)).toBe(1.5);
+  });
+
+  it('converts the verified ROM sprite-X limits with a single origin', () => {
+    // `$12`…`$E1` for a single fighter and `$D1` for a dual one, all measured
+    // from the same origin. The origin itself is provisional and the assertion
+    // below is what pins it: it is `$12`, so the left limit is column 0.
+    const origin = 0x12;
+    expect(rules.player.minX).toBe(0x12 - origin);
+    expect(rules.player.maxX).toBe(0xe1 - origin);
+    expect(rules.player.dualMaxX).toBe(0xd1 - origin);
+    expect(rules.player.secondShipOffsetX).toBe(0x0f);
+  });
+
+  it('tests one shot window for a single fighter and two for a dual one', () => {
+    const single = rules.player.shot.windows.single;
+    const dual = rules.player.shot.windows.dual;
+    expect(single.map((each) => [each.dxMin, each.dxMax])).toEqual([[-5, 5]]);
+    expect(dual.map((each) => [each.dxMin, each.dxMax])).toEqual([
+      [-6, 4],
+      [9, 19],
+    ]);
+    // The deliberate dead gap, and the 15-unit separation that is the second
+    // ship's `$0F` offset.
+    expect(windowGapsX([...dual])).toEqual([[5, 8]]);
+    expect((dual[1]?.dxMin ?? 0) - (dual[0]?.dxMin ?? 0)).toBe(0x0f);
+  });
+
+  it('doubles the ROM’s half-scaled Y into playfield pixels for the fighter', () => {
+    // Δy ∈ [−3, +3] in the ROM's units, so [−6, +6] here.
+    expect(rules.player.hitWindow).toEqual({ dxMin: -6, dxMax: 6, dyMin: -6, dyMax: 6 });
+  });
+
+  it('starts three fighters on the factory bonus setting', () => {
+    expect(rules.lives.default).toBe(3);
+    expect(rules.lives.options).toEqual([2, 3, 4, 5]);
+    expect(rules.extraLives.setting).toBe(1);
+    expect(rules.extraLives.stopAfterScore).toBe(1_000_000);
+  });
+
+  it('resolves the setting against the starting-fighter count, not against itself', () => {
+    expect(resolveExtraLifeAward(rules)).toEqual(rules.extraLives.award);
+    expect(resolveExtraLifeAward(rules, 5)).toMatchObject({
+      first: 30_000,
+      second: 120_000,
+      repeat: 120_000,
+    });
+  });
+
+  it('computes the starfield speed byte with the verified ROM formula', () => {
+    // `$40 + ((min(stage, 16) x 4) AND $70)`: five bytes, one step every four
+    // stages, plateauing from stage 16.
+    expect(rules.starfield?.speed).toEqual({
+      base: 0x40,
+      stageMultiplier: 4,
+      mask: 0x70,
+      plateauStage: 16,
+    });
+    expect([1, 4, 8, 12, 16, 40].map((stage) => starfieldSpeedByte(rules, stage))).toEqual([
+      0x40, 0x50, 0x60, 0x70, 0x80, 0x80,
+    ]);
+  });
+
   it('starts every stage with the same three bomber timers, keyed by role', () => {
     expect(rules.enemies.bomberReadyTimers).toEqual({ drone: 22, wing: 2, warden: 2 });
   });
@@ -267,6 +342,86 @@ describe('the rest of the Classic rules', () => {
 
   it('has no transform aliens yet, which the loader is content with', () => {
     expect(rules.transform?.types).toEqual([]);
+  });
+});
+
+/**
+ * `AGENTS.md`: anywhere an arcade value is written down, it is marked verified
+ * or provisional, because that marking is what decides whether a later
+ * correction may change it. The values used to live in a sim-side module with
+ * the marking in a comment; they live in `packs/classic/rules.json` now, so the
+ * marking is data and this is what stops it being lost in the move.
+ */
+describe('how far each value may be trusted', () => {
+  const confidenceOf = (path: string): string | undefined => provenanceOf(rules, path)?.confidence;
+
+  it('marks every value that names a ROM routine as verified', () => {
+    for (const path of [
+      'playfield',
+      'lives.default',
+      'extraLives.award',
+      'extraLives.setting',
+      'extraLives.options',
+      'player.stepPattern',
+      'player.maxShots',
+      'player.autoFire',
+      'player.minX',
+      'player.maxX',
+      'player.dualMaxX',
+      'player.secondShipOffsetX',
+      'player.hitWindow',
+      'player.shot.windows.single[0].dxMin',
+      'player.shot.windows.dual[0].dxMin',
+      'player.shot.windows.dual[1].dxMin',
+      'enemies.maxBullets',
+      'enemies.bomberReadyTimers',
+      'starfield.speed',
+    ]) {
+      expect([path, confidenceOf(path)]).toEqual([path, 'verified']);
+    }
+  });
+
+  it('keeps the values the reference does not cover legibly provisional', () => {
+    for (const path of [
+      'extraLives.stopAfterScore',
+      'player.y',
+      'player.width',
+      'player.height',
+      'player.respawnFrames',
+      'player.shot.speed',
+      'player.shot.width',
+      'player.shot.height',
+      'player.shot.muzzleOffsetX',
+      'player.shot.windows.single[0].dyMin',
+      'player.shot.windows.dual[0].dyMin',
+      'enemies.bullet.speed',
+      'enemies.bullet.width',
+      'enemies.bullet.height',
+    ]) {
+      expect([path, confidenceOf(path)]).toEqual([path, 'provisional']);
+    }
+  });
+
+  it('marks a window per half, because Δx is verified and Δy is not', () => {
+    // The distinction would be lost by marking the window as one value, and it
+    // is the whole reason the Δy half may be retuned and the Δx half may not.
+    for (const mode of ['single', 'dual'] as const) {
+      rules.player.shot.windows[mode].forEach((_each, index) => {
+        const at = `player.shot.windows.${mode}[${String(index)}]`;
+        expect(confidenceOf(`${at}.dxMax`)).toBe('verified');
+        expect(confidenceOf(`${at}.dyMax`)).toBe('provisional');
+      });
+    }
+  });
+
+  it('gives every provisional value a note saying why it is one', () => {
+    for (const [path, entry] of Object.entries(rules.provenance)) {
+      expect([path, typeof entry.note]).toEqual([path, 'string']);
+    }
+  });
+
+  it('names only fields that exist, which the loader also enforces', () => {
+    expect(unknownProvenancePaths(rules)).toEqual([]);
   });
 });
 

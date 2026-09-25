@@ -35,19 +35,34 @@ That scan is textual, so inside `src/sim/` an identifier spelled exactly
 
 ## Arcade numbers say how far to trust themselves
 
-Anywhere an arcade value is written down in code, it is commented **verified** or
+Anywhere an arcade value is written down, it is marked **verified** or
 **provisional**. Verified means `docs/reference/arcade-reference.md` carries the
 ROM routine behind it, and changing it means changing the reference too.
 Provisional means it is ours — the reference does not cover it, or lists it
 unresolved. Keep new values labelled; the distinction is the difference between
-a number that may not be changed and one that may. `src/sim/rules.ts` is the
-worked example.
+a number that may not be changed and one that may.
 
-That module is **interim**: it holds the playable core's rules and predates
-`src/content/` by one PR. The real rules layer is `packs/classic/rules.json` read
-through `src/content/rules.ts`, and a filed follow-up rewires the sim to it.
-Until then both exist and both export a type named `Rules` — `src/content/`'s is
-the canonical one, and a module needing both must alias.
+Those values live in `packs/classic/rules.json`, so the marking is data: the
+`provenance` block maps a field path to its confidence and a note, and the loader
+rejects a key naming no field so a rename cannot leave a marking behind. It is
+granular where the confidence is — a shot window's Δx bounds are verified and its
+Δy bounds are not. In code, the marking is still a comment.
+
+## The simulation has no rules of its own
+
+`src/sim/` is handed one resolved `Rules` value and holds no constants: the
+movement cadence, travel limits, shot cap, hit windows, extra-life thresholds,
+backdrop speed formula and playfield all come from a pack through
+`src/content/`. `createWorld` requires that value, and `src/content/rules.ts` is
+the only place that interprets one. A number the sim needs that is not in the
+schema is a number no pack can change, which is the failure this arrangement
+exists to prevent — so adding one means adding it to `src/content/schema.ts` and
+to the pack, not defaulting it in the sim.
+
+The sim may import `src/content/schema.ts` and `src/content/rules.ts`; it may
+**not** import `src/content/fs.ts`, which is Node-only. The sim receives a
+loaded rules value, it never loads one. `src/main.ts` is where the loader runs
+for the browser.
 
 ## Determinism is a hard requirement
 
@@ -104,6 +119,10 @@ it in.
 - `tests/unit/classic-pack.test.ts` checks `packs/classic/` against
   `docs/reference/arcade-reference.md`. Plan, reference and data are three legs
   of one stool: change a number in any of them and that test is the third voice.
+- `tests/helpers/rules.ts` holds the two rules fixtures: `classicRules()` reads
+  the shipped pack through the real loader, and `minimalRules()` is the smallest
+  document the schema accepts. Tests use them rather than writing rules inline,
+  so a new required field is one edit.
 - `tests/unit/sim-boundary.test.ts` briefly writes `src/sim/__boundary_probe__.ts`
   and removes it again. The path is gitignored in case a run dies mid-test.
 

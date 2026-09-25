@@ -14,7 +14,7 @@
 export interface StageStartedEvent {
   readonly type: 'stage-started';
   readonly stage: number;
-  /** Hardware starfield speed register shadow; see `src/sim/rules.ts`. */
+  /** Hardware starfield speed register shadow; see `starfieldSpeedByte`. */
   readonly starfieldSpeed: number;
 }
 

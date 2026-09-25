@@ -27,7 +27,7 @@ const ROLE_COLORS: Readonly<Record<string, string>> = Object.freeze({
 /** The fighter, drawn from its anchor — two ships when it is a dual fighter. */
 function drawPlayer(ctx: CanvasRenderingContext2D, world: World): void {
   if (!world.player.alive) return;
-  for (const { x, y } of shipAnchors(world.player, world.rules.player)) {
+  for (const { x, y } of shipAnchors(world.player, world.rules)) {
     ctx.fillStyle = PLAYER_COLOR;
     ctx.fillRect(x + 7, y + 2, 2, 6);
     ctx.fillRect(x + 4, y + 8, 8, 4);
@@ -52,7 +52,7 @@ function drawTargets(ctx: CanvasRenderingContext2D, world: World): void {
 }
 
 function drawShots(ctx: CanvasRenderingContext2D, world: World): void {
-  const { muzzleOffsetX, width, height } = world.rules.shots;
+  const { muzzleOffsetX, width, height } = world.rules.player.shot;
   ctx.fillStyle = SHOT_COLOR;
   for (const shot of world.shots) {
     if (!shot.active) continue;
@@ -71,7 +71,7 @@ function drawShots(ctx: CanvasRenderingContext2D, world: World): void {
 }
 
 function drawEnemyBullets(ctx: CanvasRenderingContext2D, world: World): void {
-  const { width, height } = world.rules.enemyBullets;
+  const { width, height } = world.rules.enemies.bullet;
   ctx.fillStyle = BULLET_COLOR;
   for (const bullet of world.enemyBullets) {
     if (!bullet.active) continue;

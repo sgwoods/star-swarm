@@ -15,14 +15,34 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
+import { readPackSource } from '../src/content/fs.js';
+import { loadPackOrThrow } from '../src/content/loader.js';
+import type { Rules } from '../src/content/schema.js';
 import { frameOf, type InputFrame, type InputSource } from '../src/engine/input.js';
 import { createLoop, STEP_MS } from '../src/engine/loop.js';
 import { recordInput, serializeReplay } from '../src/engine/replay.js';
 import { createRng } from '../src/engine/rng.js';
-import { CLASSIC_RULES, type Rules } from '../src/sim/rules.js';
 import { createWorld, fingerprintWorld, stepWorld } from '../src/sim/world.js';
 
 const GOLDEN_DIR = resolve(import.meta.dirname, '..', 'tests', 'sim', 'golden');
+
+/**
+ * The rules a golden is recorded against: the shipped Classic pack, read
+ * through the real loader. A golden proved against rules the game does not use
+ * proves nothing, so this is the same path `src/main.ts` takes.
+ */
+export function classicRules(): Rules {
+  const packDir = resolve(import.meta.dirname, '..', 'packs', 'classic');
+  const { source, errors } = readPackSource(packDir);
+  if (source === undefined) {
+    throw new Error(`could not read ${packDir}: ${JSON.stringify(errors)}`);
+  }
+  const rules = loadPackOrThrow(source).rules;
+  if (rules === undefined) throw new Error(`${packDir} has no rules.json`);
+  return rules;
+}
+
+const CLASSIC_RULES = classicRules();
 
 /**
  * A scripted pilot: seeded, so the log is reproducible, and varied enough to
@@ -66,8 +86,12 @@ export function runWorld(
   input: InputSource,
   steps: number,
   rules: Rules = CLASSIC_RULES,
+  standInFireRate?: number,
 ): { readonly fingerprint: string; readonly trace: string[] } {
-  const world = createWorld({ seed, rules });
+  const world =
+    standInFireRate === undefined
+      ? createWorld({ seed, rules })
+      : createWorld({ seed, rules, standInFireRate });
   const trace: string[] = [];
 
   const loop = createLoop({
@@ -90,17 +114,13 @@ export interface GoldenSpec {
   readonly inputSeed: string;
   readonly steps: number;
   readonly rules?: Rules;
+  /**
+   * The stand-in formation's fire rate. `0` turns its guns off, so a run reaches
+   * the end of a stage instead of ending in a game over — which is how a golden
+   * covers the stage roll while the stand-in still exists.
+   */
+  readonly standInFireRate?: number;
 }
-
-/**
- * The stand-in formation with its guns off, so a run reaches the end of a stage
- * instead of ending in a game over. Milestone 2 replaces the stand-in outright;
- * until then this is how a golden covers the stage roll.
- */
-const PEACEFUL_RULES: Rules = {
-  ...CLASSIC_RULES,
-  stages: { ...CLASSIC_RULES.stages, standInFireRate: 0 },
-};
 
 export const GOLDENS: readonly GoldenSpec[] = [
   // Three minutes of ordinary play, ending the way ordinary play ends: three
@@ -114,7 +134,7 @@ export const GOLDENS: readonly GoldenSpec[] = [
     seed: 'golden-player-survival',
     inputSeed: 'pilot-2',
     steps: 14_400,
-    rules: PEACEFUL_RULES,
+    standInFireRate: 0,
   },
 ];
 
@@ -124,7 +144,13 @@ export function goldenPath(name: string): string {
 
 export function recordGolden(spec: GoldenSpec): string {
   const recorder = recordInput(scriptedPilot(spec.inputSeed), spec.seed);
-  const run = runWorld(spec.seed, recorder.source, spec.steps, spec.rules ?? CLASSIC_RULES);
+  const run = runWorld(
+    spec.seed,
+    recorder.source,
+    spec.steps,
+    spec.rules ?? CLASSIC_RULES,
+    spec.standInFireRate,
+  );
   return `${serializeReplay(recorder.finish(run.fingerprint))}\n`;
 }
 

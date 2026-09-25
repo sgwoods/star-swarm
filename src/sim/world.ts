@@ -13,13 +13,14 @@
  * Milestone 2 and are deliberately absent rather than stubbed.
  */
 
+import { extraLivesEarned, starfieldSpeedByte } from '../content/rules.js';
+import type { Rules } from '../content/schema.js';
 import { isDown, type InputFrame } from '../engine/input.js';
 import { createRng, type Rng, type RngState } from '../engine/rng.js';
 import { hitWindowIndex } from './collision.js';
 import type { SimEvent } from './events.js';
-import { bonusesAwarded, bonusThresholdsOf, createLives, type LivesState } from './lives.js';
+import { createLives, type LivesState } from './lives.js';
 import { createPlayer, type PlayerState, shipAnchors, startX, stepPlayer } from './player.js';
-import { CLASSIC_RULES, type Rules, starfieldSpeedByte } from './rules.js';
 import {
   clearEnemyBullets,
   clearShots,
@@ -32,12 +33,24 @@ import {
   stepEnemyBullets,
   stepShots,
 } from './shots.js';
-import { aliveTargets, createStandInFormation, type Target } from './targets.js';
+import {
+  aliveTargets,
+  createStandInFormation,
+  STAND_IN_FIRE_RATE,
+  type Target,
+} from './targets.js';
 
 export type WorldStatus = 'playing' | 'game-over';
 
 export interface World {
+  /**
+   * The rules this run obeys, as the content loader resolved them from a pack.
+   * The simulation never loads one: it is handed a value, which is what lets a
+   * test swap a single field and watch behaviour follow.
+   */
   readonly rules: Rules;
+  /** @see STAND_IN_FIRE_RATE — Milestone 1 scaffolding, and it goes with it. */
+  readonly standInFireRate: number;
   /** Simulation steps run. The only notion of time the sim has. */
   step: number;
   stage: number;
@@ -54,33 +67,38 @@ export interface World {
 }
 
 export interface WorldOptions {
+  /** A loaded pack's rules. Required: the simulation has no rules of its own. */
+  readonly rules: Rules;
   readonly seed?: number | string | RngState;
-  readonly rules?: Rules;
   readonly stage?: number;
+  /** @see STAND_IN_FIRE_RATE */
+  readonly standInFireRate?: number;
 }
 
-export function createWorld(options: WorldOptions = {}): World {
-  const rules = options.rules ?? CLASSIC_RULES;
+export function createWorld(options: WorldOptions): World {
+  const { rules } = options;
   const rng = createRng(options.seed ?? 'star-swarm');
   const stage = options.stage ?? rules.stages.firstStage;
+  const standInFireRate = options.standInFireRate ?? STAND_IN_FIRE_RATE;
 
   const world: World = {
     rules,
+    standInFireRate,
     step: 0,
     stage,
     score: 0,
     status: 'playing',
-    player: createPlayer(rules.player),
-    lives: createLives(rules.lives),
-    shots: createShots(rules.shots),
-    enemyBullets: createEnemyBullets(rules.enemyBullets),
-    targets: createStandInFormation(rng, { fireRate: rules.stages.standInFireRate }),
+    player: createPlayer(rules),
+    lives: createLives(rules),
+    shots: createShots(rules),
+    enemyBullets: createEnemyBullets(rules),
+    targets: createStandInFormation(rng, { fireRate: standInFireRate }),
     rng,
     events: [],
   };
 
   world.events = [
-    { type: 'stage-started', stage, starfieldSpeed: starfieldSpeedByte(stage) },
+    { type: 'stage-started', stage, starfieldSpeed: starfieldSpeedByte(rules, stage) },
     { type: 'player-ready', x: world.player.x, y: world.player.y },
   ];
   return world;
@@ -93,8 +111,7 @@ function addScore(world: World, delta: number): void {
   world.score += delta;
   world.events.push({ type: 'score-changed', score: world.score, delta });
 
-  const thresholds = bonusThresholdsOf(world.rules.lives);
-  const awards = bonusesAwarded(previous, world.score, thresholds, world.rules.lives.bonusCeiling);
+  const awards = extraLivesEarned(world.rules, previous, world.score);
   for (let i = 0; i < awards; i += 1) {
     world.lives.reserve += 1;
     world.lives.bonusesAwarded += 1;
@@ -138,7 +155,7 @@ function resolvePlayerShots(world: World): void {
 
 /** The stand-in formation shooting back, inside the global 8-bullet cap. */
 function fireEnemyBullets(world: World): void {
-  const { speed } = world.rules.enemyBullets;
+  const { speed } = world.rules.enemies.bullet;
   for (const target of world.targets) {
     if (!target.alive || target.fireIntervalSteps === 0) continue;
     target.fireTimer -= 1;
@@ -156,7 +173,7 @@ function fireEnemyBullets(world: World): void {
 /** Take a life, and end the game if that was the last one. */
 function killPlayer(world: World, x: number, y: number): void {
   world.player.alive = false;
-  world.player.respawnTimer = world.rules.player.respawnSteps;
+  world.player.respawnTimer = world.rules.player.respawnFrames;
   world.player.stepFlag = 0;
   clearShots(world.shots);
   clearEnemyBullets(world.enemyBullets);
@@ -176,7 +193,7 @@ function killPlayer(world: World, x: number, y: number): void {
 function resolveEnemyBullets(world: World): void {
   if (!world.player.alive) return;
   const hitWindow = world.rules.player.hitWindow;
-  const anchors = shipAnchors(world.player, world.rules.player);
+  const anchors = shipAnchors(world.player, world.rules);
 
   for (const bullet of world.enemyBullets) {
     if (!bullet.active) continue;
@@ -196,7 +213,7 @@ function resolveRespawn(world: World): void {
   if (world.player.respawnTimer > 0) return;
   world.player.respawnTimer = 0;
   world.player.alive = true;
-  world.player.x = startX(world.rules.player, world.player.mode);
+  world.player.x = startX(world.rules, world.player.mode);
   world.events.push({ type: 'player-ready', x: world.player.x, y: world.player.y });
 }
 
@@ -207,13 +224,11 @@ function resolveStageEnd(world: World): void {
   world.stage += 1;
   clearShots(world.shots);
   clearEnemyBullets(world.enemyBullets);
-  world.targets = createStandInFormation(world.rng, {
-    fireRate: world.rules.stages.standInFireRate,
-  });
+  world.targets = createStandInFormation(world.rng, { fireRate: world.standInFireRate });
   world.events.push({
     type: 'stage-started',
     stage: world.stage,
-    starfieldSpeed: starfieldSpeedByte(world.stage),
+    starfieldSpeed: starfieldSpeedByte(world.rules, world.stage),
   });
 }
 
@@ -231,7 +246,7 @@ export function stepWorld(world: World, frame: InputFrame): readonly SimEvent[] 
   }
 
   resolveRespawn(world);
-  stepPlayer(world.player, frame, world.rules.player);
+  stepPlayer(world.player, frame, world.rules);
 
   // No edge detection: holding fire fires whenever a slot is free. The cap and
   // the flight time are the whole of the fire rate.
@@ -241,18 +256,18 @@ export function stepWorld(world: World, frame: InputFrame): readonly SimEvent[] 
       world.player.x,
       world.player.y,
       world.player.mode,
-      world.rules.shots,
+      world.rules,
     );
     if (shot !== null) {
       world.events.push({ type: 'shot-fired', slot: shot.slot, x: shot.x, y: shot.y });
     }
   }
 
-  stepShots(world.shots, world.rules.shots);
+  stepShots(world.shots, world.rules);
   resolvePlayerShots(world);
 
   fireEnemyBullets(world);
-  stepEnemyBullets(world.enemyBullets, world.rules.playfield.width, world.rules.playfield.height);
+  stepEnemyBullets(world.enemyBullets, world.rules);
   resolveEnemyBullets(world);
 
   resolveStageEnd(world);

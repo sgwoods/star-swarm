@@ -5,6 +5,8 @@ import { join, resolve } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { minimalRules } from '../helpers/rules.js';
+
 /**
  * `npm run validate-packs` is a CI gate (`docs/DESIGN.md` section 11), so it has
  * to actually reject things. These tests run the real script against throwaway
@@ -140,15 +142,7 @@ describe('empty and absent trees', () => {
     const root = makePacksRoot();
     writePack(root, 'bare', {
       'pack.json': { id: 'bare', name: 'Bare' },
-      'rules.json': {
-        id: 'bare',
-        lives: { default: 3 },
-        extraLives: { award: { mode: 'none' } },
-        player: { speed: 1.5, maxShots: 2 },
-        enemies: { maxBullets: 8 },
-        challengeStages: { firstStage: 3, everyStages: 4 },
-        difficulty: { defaultRank: 'A', ranks: { A: { stageTable: { rows: [] } } } },
-      },
+      'rules.json': minimalRules('bare'),
     });
     const result = validate(root);
     expect(result.code).toBe(0);
@@ -296,12 +290,7 @@ describe('a malformed document of each content type is rejected', () => {
     expectRejected(
       goodExcept({
         'rules.json': {
-          id: 'good',
-          lives: { default: 3 },
-          extraLives: { award: { mode: 'none' } },
-          player: { speed: 1.5, maxShots: 2 },
-          enemies: { maxBullets: 8 },
-          challengeStages: { firstStage: 3, everyStages: 4 },
+          ...minimalRules('good'),
           difficulty: { defaultRank: 'Z', ranks: { A: { stageTable: { rows: [] } } } },
         },
       }),

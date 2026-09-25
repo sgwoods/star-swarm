@@ -9,8 +9,9 @@
  * **The speed is a function of the stage.** The ROM computes
  * `$40 + ((min(stage, 16) × 4) AND $70)` at the start of every stage, giving
  * five discrete values that step every four stages and plateau from stage 16.
- * That formula is verified and lives in `src/sim/rules.ts`; the conversion from
- * the byte to a visible pixel rate is *not* — it is unresolved item 4 in
+ * That formula is verified and lives in the pack's `rules.json`, read through
+ * `src/content/rules.ts`; the conversion from the byte to a visible pixel rate
+ * is *not* — it is unresolved item 4 in
  * `docs/reference/arcade-reference.md`, because the write path into the Namco
  * 05XX generator's 3-bit scroll fields was never traced. {@link SPEED_TIERS} is
  * therefore ours, chosen to look right, and it is the one number to change when

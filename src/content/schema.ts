@@ -92,6 +92,56 @@ export function resolveRow<T>(table: PlateauTable<T>, index: number): T | undefi
   return table.rows[length - period + ((index - length) % period)];
 }
 
+/**
+ * How far a value may be trusted, and why.
+ *
+ * Arcade-derived packs mix numbers taken from a disassembly with numbers chosen
+ * by whoever built the pack, and the difference decides whether a later
+ * correction may change them. Carrying that as data rather than as a comment is
+ * what lets it survive the move out of source and into a `rules.json`, and what
+ * lets a test assert it is still there.
+ */
+export const CONFIDENCE_LEVELS = ['verified', 'provisional'] as const;
+export type Confidence = (typeof CONFIDENCE_LEVELS)[number];
+
+export const provenanceEntrySchema = z.strictObject({
+  confidence: z.enum(CONFIDENCE_LEVELS),
+  /** Where a verified value came from, or why a provisional one was chosen. */
+  note: z.string().min(1).optional(),
+});
+
+export type ProvenanceEntry = z.infer<typeof provenanceEntrySchema>;
+
+/**
+ * Field path inside the same document → how far that value may be trusted.
+ * Paths are the dotted form `formatFieldPath` prints, e.g. `player.minX` or
+ * `player.shot.windows.dual[1]`, and the loader rejects one that names nothing.
+ */
+export const provenanceSchema = z.record(z.string().min(1), provenanceEntrySchema).default({});
+
+export type Provenance = z.infer<typeof provenanceSchema>;
+
+/**
+ * A rectangular hit window, as the offset from the *subject's* anchor to the
+ * *target's* anchor.
+ *
+ * Windows are data rather than constants in the collision code because one
+ * fighter mode can need two of them with a deliberate dead gap in between, which
+ * no box intersection expresses.
+ */
+export const hitWindowSchema = z.strictObject({
+  dxMin: z.number(),
+  dxMax: z.number(),
+  dyMin: z.number(),
+  dyMax: z.number(),
+});
+
+export type HitWindow = z.infer<typeof hitWindowSchema>;
+
+/** A single fighter, or the dual fighter a rescue wins back. */
+export const FIGHTER_MODES = ['single', 'dual'] as const;
+export type FighterMode = (typeof FIGHTER_MODES)[number];
+
 /* -------------------------------------------------------------------------- */
 /* 7.4 Sprite                                                                   */
 /* -------------------------------------------------------------------------- */
@@ -628,15 +678,35 @@ export const rulesSchema = z.strictObject({
   id: idSchema,
   name: z.string().optional(),
 
+  /**
+   * The logical playfield every distance in this file is measured on. Stated
+   * here rather than taken from the display: the simulation has to know how big
+   * the world is without knowing anything about a canvas.
+   */
+  playfield: z.strictObject({
+    width: z.number().int().positive(),
+    height: z.number().int().positive(),
+  }),
+
   lives: z.strictObject({
     default: z.number().int().positive(),
     options: z.array(z.number().int().positive()).default([]),
   }),
 
   extraLives: z.strictObject({
+    /** The award in force, for the default starting-life count. */
     award: extraLifeAwardSchema,
     /** Awards stop once the score passes this. Omitted means never. */
     stopAfterScore: z.number().int().positive().optional(),
+    /**
+     * Which of `options` the cabinet is set to, as a zero-based index into the
+     * options that apply to the starting-life count in play. Omitted means
+     * `award` is used whatever that count is; present, it is what makes a
+     * cabinet started on more lives award a *different* set of thresholds
+     * rather than the same ones, which is the arcade behaviour and is silently
+     * wrong if the setting is keyed on nothing.
+     */
+    setting: z.number().int().nonnegative().optional(),
     /**
      * The settings a cabinet could offer. Which are on offer depends on the
      * starting-ship count, so each option says which counts it applies to.
@@ -652,8 +722,17 @@ export const rulesSchema = z.strictObject({
   }),
 
   player: z.strictObject({
-    /** Average pixels per frame. The arcade alternates 1 and 2 for 1.5. */
-    speed: z.number().positive(),
+    /**
+     * Pixels moved on successive frames while the stick is held, cycled in
+     * order — the cadence, not an average.
+     *
+     * A one-element pattern is a constant speed, so a game with smooth movement
+     * writes `[3]`. The arcade original alternates 1 and 2 px, averaging 1.5,
+     * and that alternation is audible in the feel of the controls: replacing it
+     * with its own average is a behaviour change, which is why the pattern
+     * rather than the average is what a pack states.
+     */
+    stepPattern: z.array(z.number().positive()).min(1),
     /**
      * Total player shots in flight, **not** per ship: a dual fighter still gets
      * this many, each becoming a spread. Doubling it makes the dual fighter far
@@ -662,6 +741,42 @@ export const rulesSchema = z.strictObject({
     maxShots: z.number().int().positive(),
     /** Holding fire repeats. The arcade has no edge detection, so the cap sets the rate. */
     autoFire: z.boolean().default(true),
+
+    /** The row the fighter sits on, and how big it is. */
+    y: z.number(),
+    width: z.number().positive(),
+    height: z.number().positive(),
+
+    /** Travel limits for the sprite's left edge. */
+    minX: z.number(),
+    maxX: z.number(),
+    /** The right limit while the fighter is dual. Omitted means `maxX`. */
+    dualMaxX: z.number().optional(),
+    /** Where a dual fighter's second ship sits, relative to the anchor. */
+    secondShipOffsetX: z.number().default(0),
+
+    /** One enemy bullet against one ship. A dual fighter is tested twice. */
+    hitWindow: hitWindowSchema,
+    /** Frames the fighter is off the field after a hit. */
+    respawnFrames: framesSchema,
+
+    /** The shot the fighter fires. */
+    shot: z.strictObject({
+      speed: speedSchema,
+      width: z.number().positive(),
+      height: z.number().positive(),
+      /** Where the muzzle is drawn, relative to the firing anchor. */
+      muzzleOffsetX: z.number().default(0),
+      /**
+       * Hit windows by fighter mode. A mode may list more than one, and the
+       * gap between two of them is deliberate rather than an oversight — see
+       * `hitWindowSchema`.
+       */
+      windows: z.strictObject({
+        single: z.array(hitWindowSchema).min(1),
+        dual: z.array(hitWindowSchema).min(1),
+      }),
+    }),
   }),
 
   enemies: z.strictObject({
@@ -672,7 +787,41 @@ export const rulesSchema = z.strictObject({
      * unconditionally at stage start, independent of the difficulty table.
      */
     bomberReadyTimers: z.record(idSchema, z.number().int().nonnegative()).default({}),
+    /** Every enemy bullet, whoever fired it. */
+    bullet: z.strictObject({
+      speed: speedSchema,
+      width: z.number().positive(),
+      height: z.number().positive(),
+    }),
   }),
+
+  stages: z
+    .strictObject({
+      /** The stage number a new game starts on. */
+      firstStage: z.number().int().positive().default(1),
+    })
+    .prefault({}),
+
+  /**
+   * The scrolling backdrop's speed, as the *formula* rather than a table.
+   *
+   * The byte it produces is a hardware register shadow, not a pixel rate: what
+   * it looks like is the renderer's business, which is what keeps this a rules
+   * value the simulation can emit without knowing anything is drawn. Omitted
+   * means a game with no scrolling backdrop, and the byte is then always 0.
+   */
+  starfield: z
+    .strictObject({
+      speed: z.strictObject({
+        /** `base + ((min(stage, plateauStage) * stageMultiplier) AND mask)`. */
+        base: z.number().int().nonnegative(),
+        stageMultiplier: z.number().int().nonnegative(),
+        mask: z.number().int().nonnegative(),
+        /** Stage past which the speed stops climbing. */
+        plateauStage: z.number().int().nonnegative(),
+      }),
+    })
+    .optional(),
 
   challengeStages: z.strictObject({
     enabled: z.boolean().default(true),
@@ -785,6 +934,16 @@ export const rulesSchema = z.strictObject({
     /** Rank id → its whole data set. */
     ranks: z.record(idSchema, difficultyRankSchema),
   }),
+
+  /**
+   * How far each value above may be trusted, keyed by its own field path.
+   *
+   * A pack derived from a real machine holds a mixture of numbers read out of a
+   * disassembly and numbers someone chose, and only the second kind may be
+   * retuned. The loader checks every path here names a field that exists, so
+   * the marking cannot quietly outlive the value it describes.
+   */
+  provenance: provenanceSchema,
 });
 
 export type Rules = z.infer<typeof rulesSchema>;

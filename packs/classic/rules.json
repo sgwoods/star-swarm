@@ -1,6 +1,10 @@
 {
   "id": "classic",
   "name": "Classic rules",
+  "playfield": {
+    "width": 224,
+    "height": 288
+  },
   "lives": {
     "default": 3,
     "options": [2, 3, 4, 5]
@@ -13,6 +17,7 @@
       "repeat": 70000
     },
     "stopAfterScore": 1000000,
+    "setting": 1,
     "options": [
       {
         "startingLives": [2, 3, 4],
@@ -148,9 +153,53 @@
     ]
   },
   "player": {
-    "speed": 1.5,
+    "stepPattern": [1, 2],
     "maxShots": 2,
-    "autoFire": true
+    "autoFire": true,
+    "y": 248,
+    "width": 16,
+    "height": 16,
+    "minX": 0,
+    "maxX": 207,
+    "dualMaxX": 191,
+    "secondShipOffsetX": 15,
+    "hitWindow": {
+      "dxMin": -6,
+      "dxMax": 6,
+      "dyMin": -6,
+      "dyMax": 6
+    },
+    "respawnFrames": 90,
+    "shot": {
+      "speed": 6,
+      "width": 1,
+      "height": 4,
+      "muzzleOffsetX": 7,
+      "windows": {
+        "single": [
+          {
+            "dxMin": -5,
+            "dxMax": 5,
+            "dyMin": -6,
+            "dyMax": 6
+          }
+        ],
+        "dual": [
+          {
+            "dxMin": -6,
+            "dxMax": 4,
+            "dyMin": -6,
+            "dyMax": 6
+          },
+          {
+            "dxMin": 9,
+            "dxMax": 19,
+            "dyMin": -6,
+            "dyMax": 6
+          }
+        ]
+      }
+    }
   },
   "enemies": {
     "maxBullets": 8,
@@ -158,6 +207,22 @@
       "drone": 22,
       "wing": 2,
       "warden": 2
+    },
+    "bullet": {
+      "speed": 2,
+      "width": 1,
+      "height": 3
+    }
+  },
+  "stages": {
+    "firstStage": 1
+  },
+  "starfield": {
+    "speed": {
+      "base": 64,
+      "stageMultiplier": 4,
+      "mask": 112,
+      "plateauStage": 16
     }
   },
   "challengeStages": {
@@ -215,7 +280,7 @@
     "defaultRank": "A",
     "ranks": {
       "A": {
-        "label": "A \u2014 easiest, factory default",
+        "label": "A — easiest, factory default",
         "stageTable": {
           "rows": [
             {
@@ -587,7 +652,7 @@
         }
       },
       "B": {
-        "label": "B \u2014 2nd level of difficulty",
+        "label": "B — 2nd level of difficulty",
         "stageTable": {
           "rows": [
             {
@@ -959,7 +1024,7 @@
         }
       },
       "C": {
-        "label": "C \u2014 3rd level of difficulty",
+        "label": "C — 3rd level of difficulty",
         "stageTable": {
           "rows": [
             {
@@ -1331,7 +1396,7 @@
         }
       },
       "D": {
-        "label": "D \u2014 most difficult",
+        "label": "D — most difficult",
         "stageTable": {
           "rows": [
             {
@@ -1702,6 +1767,172 @@
           "repeatLast": 4
         }
       }
+    }
+  },
+  "provenance": {
+    "playfield": {
+      "confidence": "verified",
+      "note": "MAME galaga.cpp:1508 set_raw plus the driver’s ROT90 — a 224-wide by 288-tall portrait raster. Arcade reference section 2."
+    },
+    "lives.default": {
+      "confidence": "verified",
+      "note": "Switch-selectable 2, 3, 4 or 5 fighters; the factory default is 3."
+    },
+    "lives.options": {
+      "confidence": "verified",
+      "note": "The four settings the cabinet offers."
+    },
+    "extraLives.award": {
+      "confidence": "verified",
+      "note": "Setting 1 of the 2/3/4-fighter table — 20,000, then 70,000, then every 70,000. Operator manual and MAME’s dipswitch block."
+    },
+    "extraLives.setting": {
+      "confidence": "verified",
+      "note": "The DIP setting the cabinet shipped on, for both threshold tables."
+    },
+    "extraLives.options": {
+      "confidence": "verified",
+      "note": "Both threshold tables, eight settings each: one set for a 2-, 3- or 4-fighter cabinet and a different set for a 5-fighter one. The available thresholds depend on the starting-fighter count, so one table keyed by setting alone awards the wrong bonuses."
+    },
+    "extraLives.stopAfterScore": {
+      "confidence": "provisional",
+      "note": "No further extra life past 1,000,000. Arcade reference section 5 rates this medium confidence: a secondary source consistent with the six-digit score display, not confirmed in the ROM."
+    },
+    "player.stepPattern": {
+      "confidence": "verified",
+      "note": "The ROM XORs a flag with 1 on every call and steps 1 px when the result is non-zero, 2 px when it is zero — so 1, 2, 1, 2 …, averaging 1.5 px/frame. The flag is cleared whenever the stick is neutral, so the first frame of any new movement is a 1-px step. Do not replace this with its own average: the cadence is the feel."
+    },
+    "player.maxShots": {
+      "confidence": "verified",
+      "note": "Two rocket slots in total, whether the fighter is single or dual: the fire handler checks slot 0, then slot 1, then returns. Arcade reference section 3."
+    },
+    "player.autoFire": {
+      "confidence": "verified",
+      "note": "The fire handler has no edge detection, so holding the button fires whenever a slot is free. Arcade reference section 3."
+    },
+    "player.y": {
+      "confidence": "provisional",
+      "note": "The row the fighter sits on. The reference does not give it."
+    },
+    "player.width": {
+      "confidence": "provisional",
+      "note": "The 16×16 sprite of docs/DESIGN.md section 7.4. The reference gives travel limits in ROM sprite-X bytes but not the fighter’s own box."
+    },
+    "player.height": {
+      "confidence": "provisional",
+      "note": "As player.width."
+    },
+    "player.minX": {
+      "confidence": "verified",
+      "note": "ROM sprite-X `$12`. The ROM’s sprite X is offset from the visible playfield by an amount the reference does not trace, so *the origin* is provisional and is taken as `$12` itself; the geometry pins it to within a pixel, because `$12`…`$E1` is 207 positions of travel that a 16-px fighter turns into 223 of the playfield’s 224 columns — exactly one column goes unvisited whatever the origin, and this choice puts the left limit flush against column 0."
+    },
+    "player.maxX": {
+      "confidence": "verified",
+      "note": "ROM sprite-X `$E1`, minus the same origin as player.minX."
+    },
+    "player.dualMaxX": {
+      "confidence": "verified",
+      "note": "ROM sprite-X `$D1`, minus the same origin as player.minX."
+    },
+    "player.secondShipOffsetX": {
+      "confidence": "verified",
+      "note": "The dual fighter’s second ship is drawn at X + `$0F`."
+    },
+    "player.hitWindow": {
+      "confidence": "verified",
+      "note": "Δx ∈ [−6, +6] and Δy ∈ [−3, +3] in the ROM’s half-scaled Y units, so the Y half is doubled here into playfield pixels."
+    },
+    "player.respawnFrames": {
+      "confidence": "provisional",
+      "note": "Frames the fighter is off the field after a hit. Not in the reference."
+    },
+    "player.shot.speed": {
+      "confidence": "provisional",
+      "note": "The reference gives no shot speed. Worth knowing that this number *is* the fire rate: with no edge detection and a hard cap of two, how fast shots leave the screen is the only thing deciding how often you may fire again."
+    },
+    "player.shot.width": {
+      "confidence": "provisional",
+      "note": "Ours; the reference does not give the rocket’s size."
+    },
+    "player.shot.height": {
+      "confidence": "provisional",
+      "note": "As player.shot.width."
+    },
+    "player.shot.muzzleOffsetX": {
+      "confidence": "provisional",
+      "note": "Where the muzzle is drawn. Presentation, not a ROM figure."
+    },
+    "player.shot.windows.single[0].dxMin": {
+      "confidence": "verified",
+      "note": "A single fighter’s shot tests one window, Δx ∈ [−5, +5]. Arcade reference section 3."
+    },
+    "player.shot.windows.single[0].dxMax": {
+      "confidence": "verified",
+      "note": "As the dxMin of the same window."
+    },
+    "player.shot.windows.single[0].dyMin": {
+      "confidence": "provisional",
+      "note": "The reference does not give the Δy half of any shot window."
+    },
+    "player.shot.windows.single[0].dyMax": {
+      "confidence": "provisional",
+      "note": "As the dyMin of the same window."
+    },
+    "player.shot.windows.dual[0].dxMin": {
+      "confidence": "verified",
+      "note": "A dual fighter’s shot tests two windows, Δx ∈ [−6, +4] and Δx ∈ [+9, +19], with Δx ∈ [+5, +8] deliberately dead. The 15-unit gap between the window centres is the second ship’s `$0F` offset."
+    },
+    "player.shot.windows.dual[0].dxMax": {
+      "confidence": "verified",
+      "note": "As the dxMin of the same window."
+    },
+    "player.shot.windows.dual[0].dyMin": {
+      "confidence": "provisional",
+      "note": "The reference does not give the Δy half of any shot window."
+    },
+    "player.shot.windows.dual[0].dyMax": {
+      "confidence": "provisional",
+      "note": "As the dyMin of the same window."
+    },
+    "player.shot.windows.dual[1].dxMin": {
+      "confidence": "verified",
+      "note": "The second window of the pair; see dual[0].dxMin."
+    },
+    "player.shot.windows.dual[1].dxMax": {
+      "confidence": "verified",
+      "note": "As the dxMin of the same window."
+    },
+    "player.shot.windows.dual[1].dyMin": {
+      "confidence": "provisional",
+      "note": "The reference does not give the Δy half of any shot window."
+    },
+    "player.shot.windows.dual[1].dyMax": {
+      "confidence": "provisional",
+      "note": "As the dyMin of the same window."
+    },
+    "enemies.maxBullets": {
+      "confidence": "verified",
+      "note": "At most eight enemy bullets exist at once, globally rather than per enemy: the routine that creates one searches eight slots and creates nothing when all are taken. Arcade reference section 5."
+    },
+    "enemies.bomberReadyTimers": {
+      "confidence": "verified",
+      "note": "Loaded unconditionally at every stage start as `$16`, `$02`, `$02` for the bee, butterfly and boss types. Arcade reference section 7."
+    },
+    "enemies.bullet.speed": {
+      "confidence": "provisional",
+      "note": "The reference gives no bullet speed."
+    },
+    "enemies.bullet.width": {
+      "confidence": "provisional",
+      "note": "Ours; the reference does not give the bullet’s size."
+    },
+    "enemies.bullet.height": {
+      "confidence": "provisional",
+      "note": "As enemies.bullet.width."
+    },
+    "starfield.speed": {
+      "confidence": "verified",
+      "note": "The ROM computes `$40 + ((min(stage, 16) × 4) AND $70)` at the start of every stage, giving the five bytes `$40 $50 $60 $70 $80`, one step every four stages, plateauing from stage 16. The byte is a hardware register shadow, not a pixel rate — converting it to a visible scroll rate is unresolved item 4 in the reference, and that conversion lives in src/render/starfield.ts."
     }
   }
 }

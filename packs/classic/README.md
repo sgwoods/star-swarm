@@ -25,11 +25,28 @@ this project's own. For anyone checking a number against
 - **`rules.json`** — all four difficulty ranks as 26 literal rows each, from
   `docs/reference/arcade-reference.md` section 6, plus the shot caps, extra-life
   settings, challenge cadence, capture rules and scoring rules from sections 3,
-  7, 8 and 9.
+  7, 8 and 9. It also carries everything the simulation steps: the movement
+  cadence and travel limits, the fighter and shot geometry, both hit-window
+  sets, the enemy bullet, the starfield speed formula and the playfield. The
+  simulation reads this file through the loader and holds no copy of any of it.
 
 `tests/unit/classic-pack.test.ts` checks these against the reference, so the
 plan, the reference and the data are three legs of the same stool: change one
 and the test says so.
+
+## How far each value may be trusted
+
+`provenance` maps a field path in this file to `verified` or `provisional` with
+a note. **Verified** means `docs/reference/arcade-reference.md` carries the ROM
+routine behind it, and changing it means changing the reference too;
+**provisional** means it is ours, because the reference does not cover it or
+lists it unresolved. A value with no entry has simply not been assessed.
+
+The marking is data rather than a comment because these numbers live in JSON,
+and it is granular where the confidence is: a shot window's Δx bounds are
+verified and its Δy bounds are not, so each is marked on its own. The loader
+rejects a key that names no field, so a rename cannot quietly leave a verified
+value unmarked.
 
 ## What is deliberately empty
 

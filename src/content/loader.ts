@@ -21,6 +21,7 @@ import type { z } from 'zod';
 
 import type { ContentError } from './errors.js';
 import { ContentValidationError, fromZodError } from './errors.js';
+import { unknownProvenancePaths } from './rules.js';
 import type {
   Alien,
   ContentDir,
@@ -348,6 +349,17 @@ export function loadPack(source: PackSource): LoadResult {
   if (rules !== undefined) {
     for (const role of Object.keys(rules.enemies.bomberReadyTimers)) {
       requireRole(RULES_FILE, `enemies.bomberReadyTimers.${role}`, role);
+    }
+    // A provenance key that names nothing is how a verified marking quietly
+    // becomes an unmarked value during a rename, so it is an error rather than
+    // a shrug.
+    for (const path of unknownProvenancePaths(rules)) {
+      errors.push({
+        pack,
+        file: RULES_FILE,
+        field: `provenance.${path}`,
+        message: `"${path}" does not name a field in ${RULES_FILE}`,
+      });
     }
     if (rules.transform !== undefined) {
       rules.transform.types.forEach((id, index) => {

@@ -21,7 +21,11 @@ import { resolveRow } from './schema.js';
 import type {
   DifficultyRank,
   DifficultyRow,
+  ExtraLifeAward,
+  FighterMode,
+  HitWindow,
   PackManifest,
+  ProvenanceEntry,
   Rules,
   StageSequence,
 } from './schema.js';
@@ -139,21 +143,195 @@ export function lookup<T>(table: PlateauTable<T> | undefined | null, index: numb
   return resolveRow(table, index);
 }
 
+/* -------------------------------------------------------------------------- */
+/* Extra lives                                                                  */
+/* -------------------------------------------------------------------------- */
+
+/** No thresholds at all — the last setting of most cabinets' tables. */
+export const NO_EXTRA_LIFE_AWARD: ExtraLifeAward = Object.freeze({ mode: 'none' });
+
+/**
+ * The award in force for a cabinet started on `startingLives` fighters.
+ *
+ * **The thresholds depend on the starting-life count, not on the setting
+ * alone.** A cabinet set to its second option awards one set of scores when it
+ * starts you with three fighters and a different set when it starts you with
+ * five, so resolving the setting against the options that apply to the count in
+ * play is the whole point of this function: reading `extraLives.award`
+ * regardless hands a five-fighter cabinet the wrong bonuses, silently, for a
+ * whole game. Rules with no `setting` say the award is the award.
+ */
+export function resolveExtraLifeAward(rules: Rules, startingLives?: number): ExtraLifeAward {
+  const { award, setting, options } = rules.extraLives;
+  if (setting === undefined) return award;
+  const lives = startingLives ?? rules.lives.default;
+  const applicable = options.filter((option) => option.startingLives.includes(lives));
+  if (applicable.length === 0) return award;
+  // An out-of-range setting awards nothing rather than guessing at one.
+  return applicable[setting]?.award ?? NO_EXTRA_LIFE_AWARD;
+}
+
+/**
+ * How many extra lives a score of `score` has earned in total under `award`.
+ *
+ * Counting totals rather than watching for crossings is deliberate: a single
+ * step can cross two thresholds at once, and a crossing test that fires once
+ * per step would swallow the second award.
+ */
+export function extraLivesEarnedAt(
+  award: ExtraLifeAward,
+  score: number,
+  stopAfterScore?: number,
+): number {
+  if (award.mode === 'none') return 0;
+  // Awards stop once the score passes the ceiling, so cap before counting.
+  const capped = Math.min(score, stopAfterScore ?? Number.POSITIVE_INFINITY);
+  if (capped < award.first) return 0;
+  if (award.second === undefined || capped < award.second) return 1;
+  if (award.repeat === undefined) return 2;
+  return 2 + Math.floor((capped - award.second) / award.repeat);
+}
+
+/** Awards earned by moving from `scoreBefore` to `scoreAfter`. */
+export function extraLivesEarnedBetween(
+  award: ExtraLifeAward,
+  scoreBefore: number,
+  scoreAfter: number,
+  stopAfterScore?: number,
+): number {
+  return Math.max(
+    0,
+    extraLivesEarnedAt(award, scoreAfter, stopAfterScore) -
+      extraLivesEarnedAt(award, scoreBefore, stopAfterScore),
+  );
+}
+
 /**
  * Whether the player has earned an extra life by crossing `score`, given the
- * score before the award. Returns how many awards are due, which is normally 0
- * or 1 but can be more if a single hit jumps two thresholds.
+ * score before the award, under the award the rules resolve to.
  */
-export function extraLivesEarned(rules: Rules, scoreBefore: number, scoreAfter: number): number {
-  const { award, stopAfterScore } = rules.extraLives;
-  if (award.mode === 'none') return 0;
-  const ceiling = stopAfterScore ?? Number.POSITIVE_INFINITY;
-  const reached = (score: number): number => {
-    const capped = Math.min(score, ceiling);
-    if (capped < award.first) return 0;
-    if (award.second === undefined || capped < award.second) return 1;
-    if (award.repeat === undefined) return 2;
-    return 2 + Math.floor((capped - award.second) / award.repeat);
-  };
-  return Math.max(0, reached(scoreAfter) - reached(scoreBefore));
+export function extraLivesEarned(
+  rules: Rules,
+  scoreBefore: number,
+  scoreAfter: number,
+  startingLives?: number,
+): number {
+  return extraLivesEarnedBetween(
+    resolveExtraLifeAward(rules, startingLives),
+    scoreBefore,
+    scoreAfter,
+    rules.extraLives.stopAfterScore,
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* The player, and what it fires                                                */
+/* -------------------------------------------------------------------------- */
+
+/** The right-hand travel limit for a fighter in this mode. */
+export function maxXFor(rules: Rules, mode: FighterMode): number {
+  const { maxX, dualMaxX } = rules.player;
+  return mode === 'dual' ? (dualMaxX ?? maxX) : maxX;
+}
+
+/** The hit windows a shot fired by a fighter in this mode carries. */
+export function shotWindowsFor(rules: Rules, mode: FighterMode): readonly HitWindow[] {
+  return rules.player.shot.windows[mode];
+}
+
+/**
+ * The mean of the movement cadence — the one number a "player speed" figure
+ * states. Derived rather than stored, so it cannot drift from the pattern the
+ * simulation actually steps.
+ */
+export function averageStepDistance(rules: Rules): number {
+  const pattern = rules.player.stepPattern;
+  return pattern.reduce((total, step) => total + step, 0) / pattern.length;
+}
+
+/* -------------------------------------------------------------------------- */
+/* The starfield                                                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The backdrop speed byte for a stage, from the rules' formula.
+ *
+ * The result is a hardware register shadow rather than a pixel rate; turning it
+ * into something visible belongs to the renderer, which is why the simulation
+ * can emit it without knowing anything is drawn.
+ */
+export function starfieldSpeedByte(rules: Rules, stage: number): number {
+  const speed = rules.starfield?.speed;
+  if (speed === undefined) return 0;
+  const clamped = Math.min(Math.max(Math.trunc(stage), 0), speed.plateauStage);
+  return speed.base + ((clamped * speed.stageMultiplier) & speed.mask);
+}
+
+/** Lowest and highest bytes {@link starfieldSpeedByte} can produce. */
+export function starfieldSpeedRange(rules: Rules): { readonly min: number; readonly max: number } {
+  const speed = rules.starfield?.speed;
+  if (speed === undefined) return { min: 0, max: 0 };
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+  // The mask makes the formula non-monotonic in general, so the range is taken
+  // by walking the stages that can reach it rather than by reading the ends.
+  for (let stage = 0; stage <= speed.plateauStage; stage += 1) {
+    const byte = starfieldSpeedByte(rules, stage);
+    if (byte < min) min = byte;
+    if (byte > max) max = byte;
+  }
+  return { min, max };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Provenance                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/** A dotted field path, with `[n]` for array indices. */
+const FIELD_PATH = /^[^.[\]]+(?:\.[^.[\]]+|\[\d+\])*$/;
+const FIELD_PATH_TOKEN = /([^.[\]]+)|\[(\d+)\]/g;
+
+/** `player.shot.windows.dual[1]` → `['player','shot','windows','dual',1]`. */
+export function parseFieldPath(path: string): readonly (string | number)[] | undefined {
+  if (!FIELD_PATH.test(path)) return undefined;
+  const keys: (string | number)[] = [];
+  for (const [, name, index] of path.matchAll(FIELD_PATH_TOKEN)) {
+    keys.push(name ?? Number(index));
+  }
+  return keys;
+}
+
+/** Whether `path` names something that exists inside `root`. */
+export function fieldPathExists(root: unknown, path: string): boolean {
+  const keys = parseFieldPath(path);
+  if (keys === undefined) return false;
+  let current: unknown = root;
+  for (const key of keys) {
+    if (current === null || current === undefined) return false;
+    if (typeof key === 'number') {
+      if (!Array.isArray(current) || key >= current.length) return false;
+      current = current[key];
+      continue;
+    }
+    if (typeof current !== 'object') return false;
+    if (!Object.hasOwn(current, key)) return false;
+    current = (current as Record<string, unknown>)[key];
+  }
+  return true;
+}
+
+/** How far one value may be trusted, or `undefined` when it is unmarked. */
+export function provenanceOf(rules: Rules, path: string): ProvenanceEntry | undefined {
+  return rules.provenance[path];
+}
+
+/**
+ * Provenance keys that name nothing in the rules.
+ *
+ * The loader rejects these, which is what stops a marking outliving the value
+ * it describes — the failure mode that would quietly turn a verified number
+ * into an unmarked one during a rename.
+ */
+export function unknownProvenancePaths(rules: Rules): readonly string[] {
+  return Object.keys(rules.provenance).filter((path) => !fieldPathExists(rules, path));
 }

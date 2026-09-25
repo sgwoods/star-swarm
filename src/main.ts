@@ -7,6 +7,9 @@
  * canvas, and lint would stop it trying (see `eslint.config.js`).
  */
 
+import classicManifest from '../packs/classic/pack.json' with { type: 'json' };
+import classicRules from '../packs/classic/rules.json' with { type: 'json' };
+import { loadPackOrThrow, packSourceFromRecord } from './content/index.js';
 import { createKeyboardInput, type InputFrame } from './engine/input.js';
 import { createLoop, STEP_HZ } from './engine/loop.js';
 import { createRng } from './engine/rng.js';
@@ -24,11 +27,24 @@ const display = createDisplay({ container });
 const input = createKeyboardInput();
 input.attach(window);
 
+// The rules the simulation obeys come from a pack, through the same loader the
+// pack-validation gate runs, so the game and the gate cannot disagree. The pack
+// is bundled rather than fetched, and it is `loadPack` that turns the JSON into
+// a value the sim will accept — nothing hands the simulation raw data.
+const pack = loadPackOrThrow(
+  packSourceFromRecord('classic', 'bundled:classic', {
+    'pack.json': classicManifest,
+    'rules.json': classicRules,
+  }),
+);
+const rules = pack.rules;
+if (rules === undefined) throw new Error('the bundled classic pack has no rules.json');
+
 // Seeded from a constant so a session is reproducible and a recorded replay
 // means something. A real game seeds from the start-of-game state and records
 // the seed alongside the input log (`src/engine/replay.ts`).
 const SEED = 'star-swarm-m1';
-const world = createWorld({ seed: SEED });
+const world = createWorld({ seed: SEED, rules });
 
 // The starfield gets its own generator: it is presentation, and pulling draws
 // from the simulation's stream would make what the sim computes depend on how
