@@ -10,3 +10,8 @@ docs/DESIGN.md
 
 # Generated pointer file; its exact shape belongs to the tool that writes it.
 CLAUDE.md
+
+# Per-session harness settings, git-excluded and machine-generated. Prettier
+# does not read git excludes, so without this `npm run lint` fails locally on a
+# file that never reaches CI.
+.claude/settings.local.json

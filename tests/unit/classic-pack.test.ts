@@ -1,0 +1,278 @@
+import { join, resolve } from 'node:path';
+
+import { beforeAll, describe, expect, it } from 'vitest';
+
+import { readPackSource } from '../../src/content/fs.js';
+import type { LoadedPack } from '../../src/content/loader.js';
+import { loadPack } from '../../src/content/loader.js';
+import {
+  challengeOrdinal,
+  extraLivesEarned,
+  isChallengeStage,
+  resolveDifficultyRow,
+} from '../../src/content/rules.js';
+import type { Rules } from '../../src/content/schema.js';
+import { resolveRow } from '../../src/content/schema.js';
+
+/**
+ * The shipped Classic pack, checked against the verification record in
+ * `docs/reference/arcade-reference.md`. `AGENTS.md`: change a number in the plan
+ * and the reference changes with it — this test is the third leg, so a number
+ * cannot change in `packs/classic/rules.json` without someone noticing.
+ *
+ * The content directories are deliberately empty at Milestone 1; sibling tasks
+ * fill them. What is here is the shape, the formation and the four rank tables.
+ */
+
+const PACK_DIR = resolve(import.meta.dirname, '..', '..', 'packs', 'classic');
+
+let pack: LoadedPack;
+let rules: Rules;
+
+beforeAll(() => {
+  const { source, errors } = readPackSource(PACK_DIR);
+  expect(errors).toEqual([]);
+  if (source === undefined) throw new Error('classic pack could not be read');
+  const result = loadPack(source);
+  if (!result.ok)
+    throw new Error(`classic pack failed to load:\n${JSON.stringify(result.errors, null, 2)}`);
+  pack = result.pack;
+  if (pack.rules === undefined) throw new Error('classic pack has no rules.json');
+  rules = pack.rules;
+});
+
+describe('the pack itself', () => {
+  it('loads with its rules and no content yet', () => {
+    expect(pack.id).toBe('classic');
+    expect(pack.aliens.size).toBe(0);
+    expect(pack.stages.size).toBe(0);
+    expect(rules.id).toBe('classic');
+  });
+
+  it('is still a valid pack with every content directory empty', () => {
+    const { source } = readPackSource(PACK_DIR);
+    expect(source?.documents).toEqual([]);
+  });
+
+  it('declares its own role vocabulary rather than borrowing the engine’s', () => {
+    expect(Object.keys(pack.manifest.roles).sort()).toEqual(['drone', 'warden', 'wing']);
+  });
+
+  it('carries the 40-slot formation of docs/DESIGN.md section 4', () => {
+    const formation = pack.formations.get('classic40');
+    expect(formation).toBeDefined();
+    expect(formation?.slots).toHaveLength(40);
+
+    const byRole = (role: string) => formation?.slots.filter((slot) => slot.role === role) ?? [];
+    expect(byRole('warden')).toHaveLength(4);
+    expect(byRole('wing')).toHaveLength(16);
+    expect(byRole('drone')).toHaveLength(20);
+
+    expect(byRole('warden').map((slot) => slot.column)).toEqual([6, 8, 10, 12]);
+    expect(
+      byRole('wing')
+        .slice(0, 8)
+        .map((slot) => slot.column),
+    ).toEqual([2, 4, 6, 8, 10, 12, 14, 16]);
+    expect(
+      byRole('drone')
+        .slice(0, 10)
+        .map((slot) => slot.column),
+    ).toEqual([0, 2, 4, 6, 8, 10, 12, 14, 16, 18]);
+  });
+
+  it('gives each captor its own captive slot, one row above it', () => {
+    const formation = pack.formations.get('classic40');
+    expect(formation?.captiveSlots).toHaveLength(4);
+    for (const captive of formation?.captiveSlots ?? []) {
+      const captor = formation?.slots[captive.captor];
+      expect(captor?.role).toBe('warden');
+      expect(captive.row).toBe((captor?.row ?? 0) - 1);
+      expect(captive.column).toBe(captor?.column);
+    }
+  });
+
+  it('states the two sequence plateau periods, which differ on purpose', () => {
+    expect(pack.manifest.stageSequence.normal.repeatLast).toBe(3);
+    expect(pack.manifest.stageSequence.challenge.repeatLast).toBe(8);
+  });
+});
+
+describe('the four rank tables', () => {
+  it('ships all four, not one table plus three multipliers', () => {
+    expect(Object.keys(rules.difficulty.ranks).sort()).toEqual(['A', 'B', 'C', 'D']);
+    expect(rules.difficulty.defaultRank).toBe('A');
+  });
+
+  it('holds 26 literal rows per rank, cycling the last four', () => {
+    for (const rank of Object.values(rules.difficulty.ranks)) {
+      expect(rank.stageTable.rows).toHaveLength(26);
+      expect(rank.stageTable.repeatLast).toBe(4);
+    }
+  });
+
+  it('matches the reference for rank A, stage 1', () => {
+    expect(resolveDifficultyRow(rules, 1, 'A')).toEqual({
+      bombEnable: 0,
+      launchRates: { drone: 0, wing: 0, warden: 0 },
+      maxDivers: 2,
+      maxDiversBump: 2,
+      captureRate: 12,
+      continuousBombingAt: 6,
+      reloadAttackVectors: false,
+      reloadBombVectors: false,
+    });
+  });
+
+  it('matches the reference for rank A, stage 9 — where the vectors first reload', () => {
+    expect(resolveDifficultyRow(rules, 9, 'A')).toMatchObject({
+      bombEnable: 2,
+      launchRates: { drone: 2, wing: 3, warden: 6 },
+      maxDivers: 3,
+      maxDiversBump: 4,
+      captureRate: 6,
+      continuousBombingAt: 9,
+      reloadAttackVectors: true,
+      reloadBombVectors: false,
+    });
+  });
+
+  it('keeps the deliberate breathers, so the ramp is not a monotonic curve', () => {
+    // Rank A stages 10 and 18, rank B stages 6 and 14, rank C stage 10.
+    const easier = (rank: string, stage: number, key: 'bombEnable' | 'maxDivers') =>
+      (resolveDifficultyRow(rules, stage, rank)?.[key] ?? 0) <
+      (resolveDifficultyRow(rules, stage - 1, rank)?.[key] ?? 0);
+    expect(easier('A', 10, 'bombEnable')).toBe(true);
+    expect(easier('A', 18, 'bombEnable')).toBe(true);
+    expect(easier('B', 6, 'bombEnable')).toBe(true);
+    expect(easier('B', 14, 'bombEnable')).toBe(true);
+    expect(easier('C', 10, 'bombEnable')).toBe(true);
+  });
+
+  it('plateaus by cycling rows 23–26 forever, not by freezing at the hardest', () => {
+    for (const rank of ['A', 'B', 'C', 'D']) {
+      expect(resolveDifficultyRow(rules, 27, rank)).toEqual(resolveDifficultyRow(rules, 23, rank));
+      expect(resolveDifficultyRow(rules, 28, rank)).toEqual(resolveDifficultyRow(rules, 24, rank));
+      expect(resolveDifficultyRow(rules, 31, rank)).toEqual(resolveDifficultyRow(rules, 23, rank));
+      expect(resolveDifficultyRow(rules, 200, rank)).toEqual(
+        resolveDifficultyRow(rules, 23 + ((200 - 27) % 4), rank),
+      );
+    }
+    // Stage 23 is a challenge row, so the plateau really does replay one.
+    expect(resolveDifficultyRow(rules, 27, 'A')?.maxDivers).toBe(0);
+  });
+
+  it('sorts into two easier and two harder ranks, as the reference cross-check says', () => {
+    const last = (rank: string) => resolveDifficultyRow(rules, 26, rank);
+    expect(last('A')).toEqual(last('B'));
+    expect(last('C')).toEqual(last('D'));
+    expect(last('A')).not.toEqual(last('C'));
+  });
+
+  it('raises the continuous-bombing threshold from 6 to 12 across rank A', () => {
+    expect(resolveDifficultyRow(rules, 1, 'A')?.continuousBombingAt).toBe(6);
+    expect(resolveDifficultyRow(rules, 22, 'A')?.continuousBombingAt).toBe(12);
+  });
+});
+
+describe('the rest of the Classic rules', () => {
+  it('caps player shots at 2 in total and enemy bullets at 8 globally', () => {
+    expect(rules.player.maxShots).toBe(2);
+    expect(rules.player.autoFire).toBe(true);
+    expect(rules.enemies.maxBullets).toBe(8);
+    expect(rules.dualFighter.bulletsPerShot).toBe(2);
+  });
+
+  it('starts every stage with the same three bomber timers, keyed by role', () => {
+    expect(rules.enemies.bomberReadyTimers).toEqual({ drone: 22, wing: 2, warden: 2 });
+  });
+
+  it('awards extra lives at 20,000 and 70,000, then every 70,000, stopping at a million', () => {
+    expect(rules.extraLives.award).toMatchObject({ first: 20000, second: 70000, repeat: 70000 });
+    expect(extraLivesEarned(rules, 0, 70000)).toBe(2);
+    expect(extraLivesEarned(rules, 1000000, 2000000)).toBe(0);
+  });
+
+  it('offers a threshold set per starting-ship count, because the cabinet did', () => {
+    const forFive = rules.extraLives.options.filter((option) => option.startingLives.includes(5));
+    const forThree = rules.extraLives.options.filter((option) => option.startingLives.includes(3));
+    expect(forFive).toHaveLength(8);
+    expect(forThree).toHaveLength(8);
+    expect(forFive[1]?.award).toMatchObject({ first: 30000, second: 120000, repeat: 120000 });
+    expect(forThree.at(-1)?.award.mode).toBe('none');
+  });
+
+  it('puts challenge stages at 3 and every 4th after it', () => {
+    expect([3, 7, 11, 15].every((n) => isChallengeStage(rules, n))).toBe(true);
+    expect([1, 2, 4, 12].some((n) => isChallengeStage(rules, n))).toBe(false);
+  });
+
+  it('scores a diving captor 400, 800 and 1,600 from a base and a latched bonus', () => {
+    const base = 150;
+    const doubled = base * rules.scoring.movingMultiplier;
+    const bonus = rules.scoring.escortBonus.byEscortCount;
+    expect(rules.scoring.escortBonus.latchedAtLaunch).toBe(true);
+    expect([0, 1, 2].map((escorts) => doubled + (bonus[escorts] ?? 0))).toEqual([400, 800, 1600]);
+  });
+
+  it('steps the challenge group bonus by challenge-stage index and holds it at 3,000', () => {
+    const groupBonus = rules.scoring.challenge?.groupBonus;
+    expect(groupBonus).toBeDefined();
+    if (groupBonus === undefined) return;
+    const at = (stage: number) => resolveRow(groupBonus, challengeOrdinal(rules, stage));
+    expect([3, 7, 11, 15, 19, 23, 27, 31, 99].map(at)).toEqual([
+      1000, 1000, 1500, 1500, 2000, 2000, 3000, 3000, 3000,
+    ]);
+  });
+
+  it('replaces the per-hit bonus with the perfect one rather than adding to it', () => {
+    expect(rules.scoring.challenge?.perHit).toBe(100);
+    expect(rules.scoring.challenge?.perfect).toBe(10000);
+    expect(rules.scoring.challenge?.perfectReplacesPerHit).toBe(true);
+    // A perfect first challenge stage: 5 groups × 1,000 + 10,000 = 15,000.
+    const groups =
+      5 * (resolveRow(rules.scoring.challenge?.groupBonus ?? { rows: [], repeatLast: 1 }, 0) ?? 0);
+    expect(groups + (rules.scoring.challenge?.perfect ?? 0)).toBe(15000);
+  });
+
+  it('leaves the two unresolved arcade questions open rather than guessing', () => {
+    // Whether challenge enemies pay out on impact — reference section 11 item 2.
+    expect(rules.scoring.challenge?.impactAward).toBeNull();
+    // Whether two captured fighters can be held at once — item 3.
+    expect(rules.capture.maxHeldTotal).toBeNull();
+    expect(rules.capture.slotsPerCaptor).toBe(1);
+  });
+
+  it('carries the capture rules that change the state machine', () => {
+    expect(rules.capture.lastFighterCaptureEndsGame).toBe(true);
+    expect(rules.capture.disablesFireWhileBeamed).toBe(true);
+    expect(rules.rescue.requiresCaptorAttacking).toBe(true);
+  });
+
+  it('cycles three transform types on a four-stage period, with a 1,000/2,000/3,000 bonus', () => {
+    expect(rules.transform).toMatchObject({
+      enabled: true,
+      fromStage: 4,
+      stagesPerType: 4,
+      groupSize: 3,
+    });
+    expect(rules.transform?.remainingThreshold).toBe(10);
+    const bonus = rules.scoring.transformGroupBonus;
+    expect(bonus?.rows).toEqual([1000, 2000, 3000]);
+    // Group 3 (stage 16) starts the cycle again at 1,000.
+    expect([0, 1, 2, 3].map((g) => resolveRow(bonus ?? { rows: [], repeatLast: 1 }, g))).toEqual([
+      1000, 2000, 3000, 1000,
+    ]);
+  });
+
+  it('has no transform aliens yet, which the loader is content with', () => {
+    expect(rules.transform?.types).toEqual([]);
+  });
+});
+
+describe('packs/ as a whole', () => {
+  it('contains only the classic pack for now', () => {
+    expect(join(PACK_DIR, '..')).toContain('packs');
+    expect(pack.origin).toBe(PACK_DIR);
+  });
+});

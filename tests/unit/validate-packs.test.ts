@@ -6,9 +6,14 @@ import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 /**
- * `npm run validate-packs` is a CI gate (docs/DESIGN.md section 11), so it has to
- * actually reject things. These tests run the real script against throwaway pack
- * trees and check its exit code.
+ * `npm run validate-packs` is a CI gate (`docs/DESIGN.md` section 11), so it has
+ * to actually reject things. These tests run the real script against throwaway
+ * pack trees and check its exit code and its report.
+ *
+ * The script delegates its schema and reference passes to `loadPack`, so what is
+ * exercised here is the end-to-end gate — layout, parsing, schemas, references
+ * and the per-file report — rather than the loader in isolation
+ * (`content-loader.test.ts` covers that).
  */
 
 const REPO_ROOT = resolve(import.meta.dirname, '..', '..');
@@ -47,12 +52,64 @@ function validate(packsRoot: string): RunResult {
   }
 }
 
-function writePack(packsRoot: string, name: string, files: Readonly<Record<string, string>>): void {
+function writePack(
+  packsRoot: string,
+  name: string,
+  files: Readonly<Record<string, unknown>>,
+): void {
   for (const [relativePath, contents] of Object.entries(files)) {
     const full = join(packsRoot, name, relativePath);
     mkdirSync(join(full, '..'), { recursive: true });
-    writeFileSync(full, contents, 'utf8');
+    writeFileSync(full, typeof contents === 'string' ? contents : JSON.stringify(contents), 'utf8');
   }
+}
+
+/** A pack with one of everything, which validates. Tests break one piece at a time. */
+const GOOD = {
+  'pack.json': {
+    id: 'good',
+    name: 'Good',
+    roles: { drone: { label: 'Drone' } },
+    formations: { grid: { id: 'grid', slots: [{ row: 0, column: 0, role: 'drone' }] } },
+    stageSequence: { normal: { rows: ['stage-01'] } },
+  },
+  'sprites/drone.json': {
+    id: 'drone',
+    size: 2,
+    palette: ['#0000', '#fff'],
+    frames: [['.1', '1.']],
+  },
+  'sounds/pop.json': { id: 'pop', wave: 'noise', freq: 220 },
+  'paths/left-hook.json': {
+    id: 'left-hook',
+    segments: [{ type: 'line', to: [112, 200], speed: 1.5 }],
+  },
+  'aliens/drone.json': {
+    id: 'drone',
+    role: 'drone',
+    sprite: 'drone',
+    score: { base: 50 },
+    sounds: { death: 'pop' },
+  },
+  'stages/stage-01.json': {
+    id: 'stage-01',
+    formation: 'grid',
+    waves: [{ at: 0, entryPath: 'left-hook', slots: [{ alien: 'drone' }] }],
+  },
+} as const;
+
+/** `GOOD`, with the named files replaced. */
+function goodExcept(overrides: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  return { ...GOOD, ...overrides };
+}
+
+function expectRejected(files: Readonly<Record<string, unknown>>, contains: string): RunResult {
+  const root = makePacksRoot();
+  writePack(root, 'good', files);
+  const result = validate(root);
+  expect(result.code).toBe(1);
+  expect(result.output).toContain(contains);
+  return result;
 }
 
 describe('empty and absent trees', () => {
@@ -78,113 +135,72 @@ describe('empty and absent trees', () => {
     expect(result.code).toBe(0);
     expect(result.output).toContain('empty skeleton');
   });
+
+  it('succeeds on a manifest and rules with no content at all — the Classic skeleton', () => {
+    const root = makePacksRoot();
+    writePack(root, 'bare', {
+      'pack.json': { id: 'bare', name: 'Bare' },
+      'rules.json': {
+        id: 'bare',
+        lives: { default: 3 },
+        extraLives: { award: { mode: 'none' } },
+        player: { speed: 1.5, maxShots: 2 },
+        enemies: { maxBullets: 8 },
+        challengeStages: { firstStage: 3, everyStages: 4 },
+        difficulty: { defaultRank: 'A', ranks: { A: { stageTable: { rows: [] } } } },
+      },
+    });
+    const result = validate(root);
+    expect(result.code).toBe(0);
+    expect(result.output).toContain('rules.json');
+  });
 });
 
 describe('the real packs/ tree in this repo', () => {
   it('passes', () => {
-    expect(validate(join(REPO_ROOT, 'packs')).code).toBe(0);
+    const result = validate(join(REPO_ROOT, 'packs'));
+    expect(result.code).toBe(0);
+    expect(result.output).toContain('classic: OK');
   });
 });
 
 describe('a well-formed pack', () => {
-  it('passes and reports how many documents it checked', () => {
+  it('passes and reports what it found', () => {
     const root = makePacksRoot();
-    writePack(root, 'classic', {
-      'pack.json': JSON.stringify({ id: 'classic', name: 'Classic' }),
-      'aliens/drone.json': JSON.stringify({ id: 'drone', role: 'bee' }),
-      'paths/left-hook.json': JSON.stringify({ id: 'left-hook', segments: [] }),
-    });
+    writePack(root, 'good', GOOD);
     const result = validate(root);
     expect(result.code).toBe(0);
-    expect(result.output).toContain('2 document(s) checked');
+    expect(result.output).toContain('1 alien(s)');
+    expect(result.output).toContain('1 formation(s)');
   });
 });
 
-describe('malformed packs are rejected', () => {
+describe('layout problems are rejected', () => {
   it('fails on invalid JSON', () => {
-    const root = makePacksRoot();
-    writePack(root, 'broken', {
-      'pack.json': JSON.stringify({ id: 'broken' }),
-      'aliens/drone.json': '{ "id": "drone",, }',
-    });
-    const result = validate(root);
-    expect(result.code).toBe(1);
-    expect(result.output).toContain('invalid JSON');
+    expectRejected(goodExcept({ 'aliens/drone.json': '{ "id": "drone",, }' }), 'invalid JSON');
   });
 
   it('fails when content has no pack.json', () => {
     const root = makePacksRoot();
-    writePack(root, 'orphan', { 'aliens/drone.json': JSON.stringify({ id: 'drone' }) });
+    writePack(root, 'orphan', { 'sounds/pop.json': { id: 'pop', wave: 'noise', freq: 220 } });
     const result = validate(root);
     expect(result.code).toBe(1);
     expect(result.output).toContain('no pack.json');
   });
 
-  it('fails when pack.json has no id', () => {
-    const root = makePacksRoot();
-    writePack(root, 'nameless', {
-      'pack.json': JSON.stringify({ name: 'Nameless' }),
-      'aliens/drone.json': JSON.stringify({ id: 'drone' }),
-    });
-    const result = validate(root);
-    expect(result.code).toBe(1);
-    expect(result.output).toContain('"id"');
-  });
-
   it('fails when pack.json id disagrees with the directory name', () => {
-    const root = makePacksRoot();
-    writePack(root, 'classic', {
-      'pack.json': JSON.stringify({ id: 'not-classic' }),
-      'aliens/drone.json': JSON.stringify({ id: 'drone' }),
-    });
-    const result = validate(root);
-    expect(result.code).toBe(1);
-    expect(result.output).toContain('but the directory is');
-  });
-
-  it('fails on a content document that is not an object', () => {
-    const root = makePacksRoot();
-    writePack(root, 'listy', {
-      'pack.json': JSON.stringify({ id: 'listy' }),
-      'aliens/drone.json': JSON.stringify([{ id: 'drone' }]),
-    });
-    const result = validate(root);
-    expect(result.code).toBe(1);
-    expect(result.output).toContain('expected a JSON object');
-  });
-
-  it('fails on a content document with no id', () => {
-    const root = makePacksRoot();
-    writePack(root, 'anon', {
-      'pack.json': JSON.stringify({ id: 'anon' }),
-      'stages/one.json': JSON.stringify({ kind: 'normal' }),
-    });
-    const result = validate(root);
-    expect(result.code).toBe(1);
-    expect(result.output).toContain('non-empty string "id"');
+    expectRejected(
+      goodExcept({ 'pack.json': { ...GOOD['pack.json'], id: 'elsewhere' } }),
+      'but the pack directory is',
+    );
   });
 
   it('fails on an unexpected directory inside a pack', () => {
-    const root = makePacksRoot();
-    writePack(root, 'strays', {
-      'pack.json': JSON.stringify({ id: 'strays' }),
-      'aliens/drone.json': JSON.stringify({ id: 'drone' }),
-      'music/theme.json': JSON.stringify({ id: 'theme' }),
-    });
-    const result = validate(root);
-    expect(result.code).toBe(1);
-    expect(result.output).toContain('unexpected directory');
+    expectRejected(goodExcept({ 'music/theme.json': { id: 'theme' } }), 'unexpected directory');
   });
 
   it('fails on a loose JSON file inside a pack', () => {
-    const root = makePacksRoot();
-    writePack(root, 'loose', {
-      'pack.json': JSON.stringify({ id: 'loose' }),
-      'drone.json': JSON.stringify({ id: 'drone' }),
-    });
-    const result = validate(root);
-    expect(result.code).toBe(1);
-    expect(result.output).toContain('loose JSON file');
+    expectRejected(goodExcept({ 'drone.json': { id: 'drone' } }), 'loose JSON file');
   });
 
   it('fails on a JSON file outside any pack directory', () => {
@@ -195,16 +211,156 @@ describe('malformed packs are rejected', () => {
     expect(result.code).toBe(1);
     expect(result.output).toContain('outside any pack directory');
   });
+});
 
-  it('reports every problem at once rather than stopping at the first', () => {
+describe('a malformed document of each content type is rejected', () => {
+  it('alien: a score without a base', () => {
+    const result = expectRejected(
+      goodExcept({
+        'aliens/drone.json': {
+          id: 'drone',
+          role: 'drone',
+          sprite: 'drone',
+          score: { formation: 50, diving: 100 },
+        },
+      }),
+      'aliens/drone.json',
+    );
+    expect(result.output).toContain('score.base');
+  });
+
+  it('alien: a role the pack never declares', () => {
+    expectRejected(
+      goodExcept({ 'aliens/drone.json': { ...GOOD['aliens/drone.json'], role: 'drome' } }),
+      'not declared in pack.json',
+    );
+  });
+
+  it('path: an unknown segment type', () => {
+    expectRejected(
+      goodExcept({
+        'paths/left-hook.json': { id: 'left-hook', segments: [{ type: 'warp', to: [0, 0] }] },
+      }),
+      'paths/left-hook.json',
+    );
+  });
+
+  it('stage: a wave slot with no path and no wave-level entryPath', () => {
+    const result = expectRejected(
+      goodExcept({
+        'stages/stage-01.json': {
+          id: 'stage-01',
+          formation: 'grid',
+          waves: [{ at: 0, slots: [{ alien: 'drone' }] }],
+        },
+      }),
+      'waves[0].slots[0].path',
+    );
+    expect(result.output).toContain('must set "entryPath"');
+  });
+
+  it('sprite: a row that does not match the declared size', () => {
+    expectRejected(
+      goodExcept({
+        'sprites/drone.json': {
+          id: 'drone',
+          size: 2,
+          palette: ['#0000', '#fff'],
+          frames: [['.1', '1..']],
+        },
+      }),
+      '2 characters',
+    );
+  });
+
+  it('sound: neither a freq nor a sequence', () => {
+    expectRejected(
+      goodExcept({ 'sounds/pop.json': { id: 'pop', wave: 'noise' } }),
+      'sounds/pop.json',
+    );
+  });
+
+  it('manifest: a formation whose key and id disagree', () => {
+    expectRejected(
+      goodExcept({
+        'pack.json': {
+          ...GOOD['pack.json'],
+          formations: { grid: { id: 'lattice', slots: [{ row: 0, column: 0, role: 'drone' }] } },
+        },
+      }),
+      'formations.grid.id',
+    );
+  });
+
+  it('rules: a default rank that is not declared', () => {
+    expectRejected(
+      goodExcept({
+        'rules.json': {
+          id: 'good',
+          lives: { default: 3 },
+          extraLives: { award: { mode: 'none' } },
+          player: { speed: 1.5, maxShots: 2 },
+          enemies: { maxBullets: 8 },
+          challengeStages: { firstStage: 3, everyStages: 4 },
+          difficulty: { defaultRank: 'Z', ranks: { A: { stageTable: { rows: [] } } } },
+        },
+      }),
+      'difficulty.defaultRank',
+    );
+  });
+
+  it('any type: an unknown field, rather than dropping it silently', () => {
+    expectRejected(
+      goodExcept({ 'sounds/pop.json': { id: 'pop', wave: 'noise', freq: 220, vol: 1 } }),
+      'sounds/pop.json',
+    );
+  });
+});
+
+describe('cross-references are checked after the schemas pass', () => {
+  it('fails on an alien pointing at a sprite that is not there', () => {
+    const result = expectRejected(
+      goodExcept({ 'aliens/drone.json': { ...GOOD['aliens/drone.json'], sprite: 'ghost' } }),
+      'no sprite with id "ghost"',
+    );
+    expect(result.output).toContain('good/aliens/drone.json');
+    expect(result.output).toContain('sprite:');
+  });
+
+  it('fails on a stage sequence naming a stage that is not there', () => {
+    expectRejected(
+      goodExcept({
+        'pack.json': { ...GOOD['pack.json'], stageSequence: { normal: { rows: ['stage-99'] } } },
+      }),
+      'stageSequence.normal.rows[0]',
+    );
+  });
+});
+
+describe('the report', () => {
+  it('lists every problem at once rather than stopping at the first', () => {
     const root = makePacksRoot();
-    writePack(root, 'many', {
-      'pack.json': JSON.stringify({ id: 'many' }),
-      'aliens/a.json': '{ broken',
-      'aliens/b.json': JSON.stringify({ role: 'bee' }),
-    });
+    writePack(
+      root,
+      'good',
+      goodExcept({
+        'aliens/drone.json': {
+          ...GOOD['aliens/drone.json'],
+          sprite: 'ghost',
+          sounds: { death: 'silence' },
+        },
+      }),
+    );
     const result = validate(root);
     expect(result.code).toBe(1);
     expect(result.output).toContain('2 problem(s)');
+  });
+
+  it('groups problems under the file they came from', () => {
+    const result = expectRejected(
+      goodExcept({ 'aliens/drone.json': { ...GOOD['aliens/drone.json'], sprite: 'ghost' } }),
+      'good/aliens/drone.json:',
+    );
+    expect(result.output).toContain('1 problem(s)');
   });
 });
