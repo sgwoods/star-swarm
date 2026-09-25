@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { shotWindowsFor } from '../../src/content/rules.js';
+import type { HitWindow } from '../../src/content/schema.js';
 import {
   expandWindow,
   hitsAny,
@@ -8,10 +10,11 @@ import {
   windowGapsX,
   withinWindow,
 } from '../../src/sim/collision.js';
-import { CLASSIC_RULES, type HitWindow, shotWindowsFor } from '../../src/sim/rules.js';
+import { classicRules } from '../helpers/rules.js';
 
-const single = shotWindowsFor(CLASSIC_RULES.shots, 'single');
-const dual = shotWindowsFor(CLASSIC_RULES.shots, 'dual');
+const rules = classicRules();
+const single = shotWindowsFor(rules, 'single');
+const dual = shotWindowsFor(rules, 'dual');
 
 /** Which Δx values hit, for a target on the same row as the subject. */
 function hitsAcross(windows: readonly HitWindow[], from: number, to: number): number[] {
@@ -96,7 +99,7 @@ describe('target padding', () => {
     // A 1-px-wider target narrows the 4-px dead gap to 2 px; it does not close
     // it, and both windows are still there.
     const padding = { x: 1, y: 0 };
-    expect(windowGapsX(dual.map((w) => expandWindow(w, padding)))).toEqual([[6, 7]]);
+    expect(windowGapsX(dual.map((each) => expandWindow(each, padding)))).toEqual([[6, 7]]);
     expect(hitsAny({ x: 0, y: 0 }, { x: 5, y: 0 }, dual, padding)).toBe(true);
     expect(hitsAny({ x: 0, y: 0 }, { x: 6, y: 0 }, dual, padding)).toBe(false);
     expect(hitsAny({ x: 0, y: 0 }, { x: 7, y: 0 }, dual, padding)).toBe(false);

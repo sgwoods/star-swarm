@@ -5,15 +5,15 @@
  * anchors and asks whether the difference falls inside a *window* — which is why
  * the dual fighter's shot has two windows with a four-pixel dead gap between
  * them, something no box intersection can express. So the primitive here is the
- * window, and the windows themselves are data from `src/sim/rules.ts` rather
- * than constants in this file: a pack that wants fatter aliens changes its
- * rules, not this code.
+ * window, and the windows themselves are data the content loader resolved from
+ * the pack's `rules.json` rather than constants in this file: a pack that wants
+ * fatter aliens changes its rules, not this code.
  *
  * Every offset is measured target-anchor minus subject-anchor, so a positive Δx
  * means the target is to the right of the thing being tested.
  */
 
-import type { HitWindow } from './rules.js';
+import type { HitWindow } from '../content/schema.js';
 
 /** Anything with a position. Anchors are sprite top-left, in playfield pixels. */
 export interface Anchored {

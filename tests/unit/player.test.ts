@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { averageStepDistance } from '../../src/content/rules.js';
 import { EMPTY_FRAME, frameOf } from '../../src/engine/input.js';
 import {
   createPlayer,
@@ -8,9 +9,12 @@ import {
   stepDistance,
   stepPlayer,
 } from '../../src/sim/player.js';
-import { CLASSIC_RULES, fromRomX } from '../../src/sim/rules.js';
+import { classicRules } from '../helpers/rules.js';
 
-const rules = CLASSIC_RULES.player;
+// Every number here comes from the shipped pack through the loader; nothing in
+// this file states a rules value of its own.
+const rules = classicRules();
+const fighter = rules.player;
 const LEFT = frameOf('left');
 const RIGHT = frameOf('right');
 
@@ -58,9 +62,11 @@ describe('the alternating 1/2 pixel cadence', () => {
 
   it("averages 1.5 px per frame — the arcade's ~91 px/s", () => {
     // 100 steps from the left limit, which stays clear of the right one.
-    const moved = positions(100, RIGHT, rules.minX);
-    const travelled = (moved[moved.length - 1] ?? 0) - rules.minX;
+    const moved = positions(100, RIGHT, fighter.minX);
+    const travelled = (moved[moved.length - 1] ?? 0) - fighter.minX;
     expect(travelled / 100).toBe(1.5);
+    // And the cadence's own mean says the same thing, so the two cannot drift.
+    expect(averageStepDistance(rules)).toBe(1.5);
     // The original runs at 60.6061 Hz, where 1.5 px/frame is 90.9 px/s; we step
     // at 60 Hz and accept the 0.6% difference (docs/DESIGN.md section 4).
     expect(1.5 * 60.6061).toBeCloseTo(91, 0);
@@ -77,9 +83,9 @@ describe('the alternating 1/2 pixel cadence', () => {
 
   it('keeps toggling while held against a limit', () => {
     const player = createPlayer(rules);
-    player.x = rules.minX;
+    player.x = fighter.minX;
     for (let i = 0; i < 10; i += 1) stepPlayer(player, LEFT, rules);
-    expect(player.x).toBe(rules.minX);
+    expect(player.x).toBe(fighter.minX);
     // The stick was never neutral, so the flag kept alternating: after ten
     // steps it is back where it started.
     expect(player.stepFlag).toBe(0);
@@ -87,33 +93,42 @@ describe('the alternating 1/2 pixel cadence', () => {
 });
 
 describe('travel limits', () => {
-  it('clamps a single fighter to the verified ROM range $12…$E1', () => {
-    expect(rules.minX).toBe(fromRomX(0x12));
-    expect(rules.maxX).toBe(fromRomX(0xe1));
-
+  it("clamps a single fighter to the pack's limits", () => {
+    // That those limits are the verified ROM bytes $12…$E1 is asserted against
+    // the arcade reference in tests/unit/classic-pack.test.ts; here the point is
+    // that the simulation obeys whatever the pack said.
     const player = createPlayer(rules);
     for (let i = 0; i < 400; i += 1) stepPlayer(player, LEFT, rules);
-    expect(player.x).toBe(rules.minX);
+    expect(player.x).toBe(fighter.minX);
     for (let i = 0; i < 400; i += 1) stepPlayer(player, RIGHT, rules);
-    expect(player.x).toBe(rules.maxX);
+    expect(player.x).toBe(fighter.maxX);
   });
 
   it('stops a dual fighter earlier, so its second ship still fits', () => {
-    expect(rules.dualMaxX).toBe(fromRomX(0xd1));
-    expect(rules.maxX - rules.dualMaxX).toBe(0x10);
+    expect(fighter.maxX - (fighter.dualMaxX ?? fighter.maxX)).toBe(0x10);
 
     const player = createPlayer(rules, 'dual');
     for (let i = 0; i < 400; i += 1) stepPlayer(player, RIGHT, rules);
-    expect(player.x).toBe(rules.dualMaxX);
+    expect(player.x).toBe(fighter.dualMaxX);
+  });
+
+  it('gives a fighter mode with no limit of its own the single-fighter one', () => {
+    const { dualMaxX: _dropped, ...withoutDualLimit } = fighter;
+    const noDualLimit = { ...rules, player: withoutDualLimit };
+    const player = createPlayer(noDualLimit, 'dual');
+    for (let i = 0; i < 400; i += 1) stepPlayer(player, RIGHT, noDualLimit);
+    expect(player.x).toBe(fighter.maxX);
   });
 
   it('sits on the playfield, with the left limit at column 0', () => {
-    // $12…$E1 is 207 positions of travel, so a 16-px fighter covers 223 of the
-    // 224 columns whatever the origin. SPRITE_X_ORIGIN picks which column is
-    // left over by putting the left limit flush against the left edge.
-    expect(rules.minX).toBe(0);
-    expect(rules.maxX + rules.width).toBe(223);
-    expect(rules.dualMaxX + rules.secondShipOffsetX + rules.width).toBeLessThanOrEqual(224);
+    // 207 positions of travel, so a 16-px fighter covers 223 of the 224
+    // columns whatever the origin; the pack's choice of origin decides which
+    // column is left over, and it puts the left limit flush against the edge.
+    expect(fighter.minX).toBe(0);
+    expect(fighter.maxX + fighter.width).toBe(223);
+    expect(
+      (fighter.dualMaxX ?? fighter.maxX) + fighter.secondShipOffsetX + fighter.width,
+    ).toBeLessThanOrEqual(rules.playfield.width);
   });
 });
 
@@ -136,7 +151,7 @@ describe('the stick', () => {
 describe('ships', () => {
   it('is one ship for a single fighter', () => {
     const player = createPlayer(rules);
-    expect(shipAnchors(player, rules)).toEqual([{ x: player.x, y: rules.y }]);
+    expect(shipAnchors(player, rules)).toEqual([{ x: player.x, y: fighter.y }]);
   });
 
   it('is two ships 15 px apart for a dual fighter', () => {

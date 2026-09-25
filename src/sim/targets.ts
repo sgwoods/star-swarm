@@ -114,6 +114,17 @@ export interface StandInOptions {
 }
 
 /**
+ * The stand-in's default fire-rate scale.
+ *
+ * It is a constant here rather than a rule because the stand-in is not a game:
+ * all 40 targets sit still and fire straight down, which at their nominal rates
+ * is far deadlier than the real thing, so the default holds them well back.
+ * Milestone 2 deletes the stand-in and drives enemy fire from the per-stage
+ * difficulty table the pack already carries, and this goes with it.
+ */
+export const STAND_IN_FIRE_RATE = 0.1;
+
+/**
  * Build the stand-in formation.
  *
  * `rng` staggers the initial fire timers. It is a seeded generator from

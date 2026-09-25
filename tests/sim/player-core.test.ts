@@ -7,6 +7,9 @@ import { createReplaySource, parseReplay, recordInput } from '../../src/engine/r
 import { eventsOfType, type SimEvent } from '../../src/sim/events.js';
 import { createWorld, fingerprintWorld, stepWorld } from '../../src/sim/world.js';
 import { GOLDENS, goldenPath, runWorld, scriptedPilot } from '../../scripts/record-replay.js';
+import { classicRules } from '../helpers/rules.js';
+
+const rules = classicRules();
 
 /**
  * Golden replays for the playable core (docs/DESIGN.md section 11).
@@ -23,21 +26,23 @@ import { GOLDENS, goldenPath, runWorld, scriptedPilot } from '../../scripts/reco
  */
 describe.each(GOLDENS)('golden replay: $name', (spec) => {
   const replay = parseReplay(readFileSync(goldenPath(spec.name), 'utf8'));
-  const rules = spec.rules;
+  const goldenRules = spec.rules ?? rules;
+  const fireRate = spec.standInFireRate;
 
   it('lands on the recorded final state', () => {
     const run = runWorld(
       spec.seed,
       createReplaySource(replay, { onOverrun: 'throw' }),
       replay.steps,
-      rules,
+      goldenRules,
+      fireRate,
     );
     expect(run.fingerprint).toBe(replay.finalState);
   });
 
   it('passes through the same intermediate states, not just the same last one', () => {
-    const a = runWorld(spec.seed, createReplaySource(replay), replay.steps, rules);
-    const b = runWorld(spec.seed, createReplaySource(replay), replay.steps, rules);
+    const a = runWorld(spec.seed, createReplaySource(replay), replay.steps, goldenRules, fireRate);
+    const b = runWorld(spec.seed, createReplaySource(replay), replay.steps, goldenRules, fireRate);
     expect(b.trace).toEqual(a.trace);
   });
 
@@ -68,7 +73,7 @@ describe('what the goldens actually cover', () => {
 
     const replay = parseReplay(readFileSync(goldenPath(core.name), 'utf8'));
     const source = createReplaySource(replay);
-    const world = createWorld({ seed: core.seed });
+    const world = createWorld({ seed: core.seed, rules });
     const events: SimEvent[] = [];
     for (let i = 0; i < replay.steps; i += 1) events.push(...stepWorld(world, source.sample()));
 
@@ -89,7 +94,10 @@ describe('what the goldens actually cover', () => {
     const source = createReplaySource(replay);
     const world = createWorld({
       seed: survival.seed,
-      ...(survival.rules && { rules: survival.rules }),
+      rules: survival.rules ?? rules,
+      ...(survival.standInFireRate !== undefined && {
+        standInFireRate: survival.standInFireRate,
+      }),
     });
     const events: SimEvent[] = [...world.events];
     for (let i = 0; i < replay.steps; i += 1) events.push(...stepWorld(world, source.sample()));
@@ -107,7 +115,7 @@ describe('determinism of the world itself', () => {
   it('is a pure function of seed and input frames', () => {
     const fire = frameOf('fire', 'right');
     const run = (seed: string): string => {
-      const world = createWorld({ seed });
+      const world = createWorld({ seed, rules });
       for (let i = 0; i < 1_200; i += 1) stepWorld(world, fire);
       return fingerprintWorld(world);
     };
@@ -121,11 +129,11 @@ describe('determinism of the world itself', () => {
     // presentation — and the generator's position rides along in the
     // fingerprint, which is what catches a change that only diverges later.
     const timers = (seed: string): number[] =>
-      createWorld({ seed }).targets.map((target) => target.fireTimer);
+      createWorld({ seed, rules }).targets.map((target) => target.fireTimer);
     expect(timers('stream')).toEqual(timers('stream'));
     expect(timers('stream')).not.toEqual(timers('other-stream'));
 
-    const world = createWorld({ seed: 'stream' });
+    const world = createWorld({ seed: 'stream', rules });
     expect(fingerprintWorld(world)).toContain(JSON.stringify(world.rng.getState()));
   });
 });

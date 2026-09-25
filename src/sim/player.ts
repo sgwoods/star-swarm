@@ -13,8 +13,9 @@
  * and a whole-pixel position is what keeps the sim exactly reproducible.
  */
 
+import { maxXFor } from '../content/rules.js';
+import type { FighterMode, Rules } from '../content/schema.js';
 import { isDown, type InputFrame } from '../engine/input.js';
-import { type FighterMode, maxXFor, type PlayerRules } from './rules.js';
 
 export interface PlayerState {
   /** Sprite left edge, in playfield columns. Always a whole number. */
@@ -36,14 +37,14 @@ export interface PlayerState {
 export type MoveDirection = -1 | 0 | 1;
 
 /** Centre of the fighter's travel, where a new life starts. */
-export function startX(rules: PlayerRules, mode: FighterMode = 'single'): number {
-  return Math.floor((rules.minX + maxXFor(rules, mode)) / 2);
+export function startX(rules: Rules, mode: FighterMode = 'single'): number {
+  return Math.floor((rules.player.minX + maxXFor(rules, mode)) / 2);
 }
 
-export function createPlayer(rules: PlayerRules, mode: FighterMode = 'single'): PlayerState {
+export function createPlayer(rules: Rules, mode: FighterMode = 'single'): PlayerState {
   return {
     x: startX(rules, mode),
-    y: rules.y,
+    y: rules.player.y,
     mode,
     stepFlag: 0,
     alive: true,
@@ -75,15 +76,17 @@ export function toggleStepFlag(stepFlag: number): number {
  * Exported so a test can state the cadence as 1, 2, 1, 2 … rather than infer it
  * from positions.
  */
-export function stepDistance(rules: PlayerRules, stepFlag: number): number {
-  const pattern = rules.stepPattern;
+export function stepDistance(rules: Rules, stepFlag: number): number {
+  const pattern = rules.player.stepPattern;
   // The ROM's branch: 1 px when the XOR result is non-zero, 2 px when it is
-  // zero. `stepPattern` is that pair, kept in the rules so a pack can retune it.
-  return (toggleStepFlag(stepFlag) !== 0 ? pattern[0] : pattern[1]) ?? 1;
+  // zero. `stepPattern` is that pair, and it comes from the pack, so a pack can
+  // retune it — or state a single step, which is then a constant speed.
+  const distance = toggleStepFlag(stepFlag) !== 0 ? pattern[0] : (pattern[1] ?? pattern[0]);
+  return distance ?? 1;
 }
 
 /** Advance the fighter by exactly one simulation step. */
-export function stepPlayer(player: PlayerState, frame: InputFrame, rules: PlayerRules): void {
+export function stepPlayer(player: PlayerState, frame: InputFrame, rules: Rules): void {
   if (!player.alive) return;
 
   const direction = moveDirection(frame);
@@ -97,17 +100,17 @@ export function stepPlayer(player: PlayerState, frame: InputFrame, rules: Player
   player.stepFlag = toggleStepFlag(player.stepFlag);
 
   const limit = maxXFor(rules, player.mode);
-  player.x = Math.min(limit, Math.max(rules.minX, player.x + direction * distance));
+  player.x = Math.min(limit, Math.max(rules.player.minX, player.x + direction * distance));
 }
 
 /** Every ship the fighter currently is: one anchor, or two for a dual fighter. */
 export function shipAnchors(
   player: PlayerState,
-  rules: PlayerRules,
+  rules: Rules,
 ): { readonly x: number; readonly y: number }[] {
   if (player.mode !== 'dual') return [{ x: player.x, y: player.y }];
   return [
     { x: player.x, y: player.y },
-    { x: player.x + rules.secondShipOffsetX, y: player.y },
+    { x: player.x + rules.player.secondShipOffsetX, y: player.y },
   ];
 }

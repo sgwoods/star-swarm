@@ -1,17 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
+import { starfieldSpeedByte } from '../../src/content/rules.js';
 import { EMPTY_FRAME, frameOf } from '../../src/engine/input.js';
 import { eventsOfType, type SimEvent } from '../../src/sim/events.js';
-import { CLASSIC_RULES, starfieldSpeedByte } from '../../src/sim/rules.js';
 import { launchEnemyBullet } from '../../src/sim/shots.js';
 import type { Target } from '../../src/sim/targets.js';
 import { createWorld, stepWorld, type World } from '../../src/sim/world.js';
+import { classicRules } from '../helpers/rules.js';
+
+const rules = classicRules();
 
 const FIRE = frameOf('fire');
 
 /** A world with the stand-in formation replaced by exactly the given targets. */
 function worldWith(targets: Target[], seed = 'world-test'): World {
-  const world = createWorld({ seed });
+  const world = createWorld({ seed, rules });
   world.targets = targets;
   return world;
 }
@@ -123,7 +126,7 @@ describe('enemy bullets against the player', () => {
 
     const events = runUntil(world, EMPTY_FRAME, (w) => w.player.alive, 200);
     expect(eventsOfType(events, 'player-ready')).toHaveLength(1);
-    expect(world.player.x).toBe(createWorld({ seed: 'x' }).player.x);
+    expect(world.player.x).toBe(createWorld({ seed: 'x', rules }).player.x);
   });
 
   it('ends the game when the last fighter is lost', () => {
@@ -183,9 +186,9 @@ describe('extra lives', () => {
 
 describe('the stage', () => {
   it('reports the verified starfield speed byte when a stage starts', () => {
-    const world = createWorld({ seed: 'stage', stage: 1 });
+    const world = createWorld({ seed: 'stage', stage: 1, rules });
     const started = eventsOfType(world.events, 'stage-started');
-    expect(started[0]?.starfieldSpeed).toBe(starfieldSpeedByte(1));
+    expect(started[0]?.starfieldSpeed).toBe(starfieldSpeedByte(rules, 1));
     expect(started[0]?.starfieldSpeed).toBe(0x40);
   });
 
@@ -206,13 +209,13 @@ describe('the simulation boundary', () => {
     // The Vitest projects use the Node environment, so this is not rhetorical:
     // any DOM or Canvas reference inside src/sim/ would fail to import here.
     expect(typeof globalThis.document).toBe('undefined');
-    const world = createWorld({ seed: 'headless', rules: CLASSIC_RULES });
+    const world = createWorld({ seed: 'headless', rules });
     for (let i = 0; i < 300; i += 1) stepWorld(world, FIRE);
     expect(world.step).toBe(300);
   });
 
   it('replaces its event list every step rather than accumulating', () => {
-    const world = createWorld({ seed: 'events' });
+    const world = createWorld({ seed: 'events', rules });
     stepWorld(world, EMPTY_FRAME);
     const first = world.events;
     stepWorld(world, EMPTY_FRAME);

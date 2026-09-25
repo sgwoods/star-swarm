@@ -14,6 +14,7 @@ import {
   resolveTransformType,
   transformGroupIndex,
 } from '../../src/content/rules.js';
+import { minimalRules } from '../helpers/rules.js';
 
 /**
  * The rules layer is where "rank is a selector, not a multiplier" and "each
@@ -22,16 +23,7 @@ import {
  */
 
 function rulesWith(overrides: Record<string, unknown> = {}): Rules {
-  return rulesSchema.parse({
-    id: 'r',
-    lives: { default: 3 },
-    extraLives: { award: { mode: 'none' } },
-    player: { speed: 1.5, maxShots: 2 },
-    enemies: { maxBullets: 8 },
-    challengeStages: { firstStage: 3, everyStages: 4 },
-    difficulty: { defaultRank: 'A', ranks: { A: { stageTable: { rows: [] } } } },
-    ...overrides,
-  });
+  return rulesSchema.parse({ ...minimalRules(), ...overrides });
 }
 
 describe('challenge-stage cadence', () => {

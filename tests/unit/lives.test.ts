@@ -1,124 +1,151 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  bonusesAwarded,
-  bonusesEarnedAt,
-  bonusThresholdsFor,
-  bonusThresholdsOf,
-  createLives,
-  NO_BONUS,
-} from '../../src/sim/lives.js';
-import {
-  BONUS_CEILING,
-  BONUS_TABLE_SHIPS_2_TO_4,
-  BONUS_TABLE_SHIPS_5,
-  CLASSIC_RULES,
-  FACTORY_BONUS_SETTING,
-} from '../../src/sim/rules.js';
+  extraLivesEarnedAt,
+  extraLivesEarnedBetween,
+  NO_EXTRA_LIFE_AWARD,
+  resolveExtraLifeAward,
+} from '../../src/content/rules.js';
+import type { ExtraLifeAward, Rules } from '../../src/content/schema.js';
+import { createLives } from '../../src/sim/lives.js';
+import { classicRules } from '../helpers/rules.js';
+
+/**
+ * Extra lives are a *rule*, so they are tested against the shipped pack rather
+ * than against numbers this file makes up. What the simulation contributes is
+ * only the reserve count; everything above that is `src/content/rules.ts`
+ * reading `packs/classic/rules.json`.
+ */
+const rules = classicRules();
+
+/** The same rules, as a cabinet started on a different number of fighters. */
+function startedOn(startingLives: number): Rules {
+  return { ...rules, lives: { ...rules.lives, default: startingLives } };
+}
+
+/** The same rules on a different DIP setting. */
+function atSetting(setting: number): Rules {
+  return { ...rules, extraLives: { ...rules.extraLives, setting } };
+}
 
 describe('the two threshold tables', () => {
-  it('has eight settings in each', () => {
-    expect(BONUS_TABLE_SHIPS_2_TO_4).toHaveLength(8);
-    expect(BONUS_TABLE_SHIPS_5).toHaveLength(8);
+  it('ships eight settings for each starting-fighter count', () => {
+    const forThreeShips = rules.extraLives.options.filter((option) =>
+      option.startingLives.includes(3),
+    );
+    const forFiveShips = rules.extraLives.options.filter((option) =>
+      option.startingLives.includes(5),
+    );
+    expect(forThreeShips).toHaveLength(8);
+    expect(forFiveShips).toHaveLength(8);
   });
 
-  it('gives the factory default 20k / 70k / every 70k on a 3-ship cabinet', () => {
-    expect(bonusThresholdsFor(3, FACTORY_BONUS_SETTING)).toEqual({
+  it('gives the factory default 20k / 70k / every 70k on a 3-fighter cabinet', () => {
+    expect(resolveExtraLifeAward(rules)).toEqual({
+      mode: 'thresholds',
       first: 20_000,
       second: 70_000,
       repeat: 70_000,
     });
   });
 
-  it('gives the same setting different thresholds on a 5-ship cabinet', () => {
+  it('gives the same setting different thresholds on a 5-fighter cabinet', () => {
     // The reason there are two tables: the set on offer depends on the
-    // starting-ship count, so one table keyed by setting alone is wrong.
-    expect(bonusThresholdsFor(5, FACTORY_BONUS_SETTING)).toEqual({
+    // starting-fighter count, so one table keyed by setting alone is wrong.
+    expect(resolveExtraLifeAward(startedOn(5))).toEqual({
+      mode: 'thresholds',
       first: 30_000,
       second: 120_000,
       repeat: 120_000,
     });
   });
 
-  it('uses the 2-to-4 table for 2 and 4 ships too', () => {
+  it('uses the 2-to-4 table for 2 and 4 fighters too', () => {
+    const first = resolveExtraLifeAward(startedOn(2), 2);
     for (const ships of [2, 3, 4]) {
-      expect(bonusThresholdsFor(ships, 0)).toEqual(BONUS_TABLE_SHIPS_2_TO_4[0]);
+      expect(resolveExtraLifeAward(startedOn(ships))).toEqual(first);
     }
   });
 
   it('models the settings that award nothing at all', () => {
-    expect(bonusThresholdsFor(3, 7)).toEqual(NO_BONUS);
-    expect(bonusThresholdsFor(5, 7)).toEqual(NO_BONUS);
+    expect(resolveExtraLifeAward(atSetting(7))).toEqual(NO_EXTRA_LIFE_AWARD);
+    expect(resolveExtraLifeAward(atSetting(7), 5)).toEqual(NO_EXTRA_LIFE_AWARD);
   });
 
-  it('falls back to no bonus rather than guessing at an unknown setting', () => {
-    expect(bonusThresholdsFor(3, 99)).toEqual(NO_BONUS);
-    expect(bonusThresholdsFor(3, -1)).toEqual(NO_BONUS);
+  it('falls back to no award rather than guessing at an unknown setting', () => {
+    expect(resolveExtraLifeAward(atSetting(99))).toEqual(NO_EXTRA_LIFE_AWARD);
   });
 
-  it('resolves from the rules', () => {
-    expect(bonusThresholdsOf(CLASSIC_RULES.lives)).toEqual({
-      first: 20_000,
-      second: 70_000,
-      repeat: 70_000,
-    });
+  it('takes the stated award when the rules name no setting', () => {
+    const { setting: _unset, ...extraLives } = rules.extraLives;
+    const unset: Rules = { ...rules, extraLives };
+    expect(resolveExtraLifeAward(unset, 5)).toEqual(rules.extraLives.award);
   });
 });
 
 describe('awarding extra lives', () => {
-  const classic = bonusThresholdsFor(3, FACTORY_BONUS_SETTING);
+  const classic = resolveExtraLifeAward(rules);
+  const ceiling = rules.extraLives.stopAfterScore;
 
   it('counts the awards a score has earned', () => {
-    expect(bonusesEarnedAt(0, classic)).toBe(0);
-    expect(bonusesEarnedAt(19_999, classic)).toBe(0);
-    expect(bonusesEarnedAt(20_000, classic)).toBe(1);
-    expect(bonusesEarnedAt(69_999, classic)).toBe(1);
-    expect(bonusesEarnedAt(70_000, classic)).toBe(2);
-    expect(bonusesEarnedAt(140_000, classic)).toBe(3);
-    expect(bonusesEarnedAt(209_999, classic)).toBe(3);
-    expect(bonusesEarnedAt(210_000, classic)).toBe(4);
+    const at = (score: number) => extraLivesEarnedAt(classic, score, ceiling);
+    expect(at(0)).toBe(0);
+    expect(at(19_999)).toBe(0);
+    expect(at(20_000)).toBe(1);
+    expect(at(69_999)).toBe(1);
+    expect(at(70_000)).toBe(2);
+    expect(at(140_000)).toBe(3);
+    expect(at(209_999)).toBe(3);
+    expect(at(210_000)).toBe(4);
   });
 
   it('awards on the crossing, once', () => {
-    expect(bonusesAwarded(19_999, 20_000, classic)).toBe(1);
-    expect(bonusesAwarded(20_000, 20_001, classic)).toBe(0);
-    expect(bonusesAwarded(20_000, 69_999, classic)).toBe(0);
+    const between = (from: number, to: number) =>
+      extraLivesEarnedBetween(classic, from, to, ceiling);
+    expect(between(19_999, 20_000)).toBe(1);
+    expect(between(20_000, 20_001)).toBe(0);
+    expect(between(20_000, 69_999)).toBe(0);
   });
 
   it('awards twice when one hit crosses two thresholds', () => {
-    // A 1,600-point boss taken at 19,000 crosses nothing else here, but a
+    // A 1,600-point captor taken at 19,000 crosses nothing else here, but a
     // setting whose thresholds sit close together can, and a per-step crossing
     // test would swallow the second award.
-    const tight = { first: 100, second: 200, repeat: 100 };
-    expect(bonusesAwarded(0, 500, tight)).toBe(5);
+    const tight: ExtraLifeAward = { mode: 'thresholds', first: 100, second: 200, repeat: 100 };
+    expect(extraLivesEarnedBetween(tight, 0, 500)).toBe(5);
   });
 
   it('stops repeating when the setting has no repeat interval', () => {
-    const twoOnly = bonusThresholdsFor(3, 3); // 20,000 and 60,000 only
-    expect(twoOnly).toEqual({ first: 20_000, second: 60_000, repeat: null });
-    expect(bonusesEarnedAt(1_000_000, twoOnly)).toBe(2);
+    const twoOnly = resolveExtraLifeAward(atSetting(3));
+    expect(twoOnly).toMatchObject({ first: 20_000, second: 60_000 });
+    expect(twoOnly).not.toHaveProperty('repeat');
+    expect(extraLivesEarnedAt(twoOnly, 1_000_000, ceiling)).toBe(2);
   });
 
   it('awards nothing on the "none" setting, at any score', () => {
-    expect(bonusesEarnedAt(999_999, NO_BONUS)).toBe(0);
-    expect(bonusesAwarded(0, 999_999, NO_BONUS)).toBe(0);
+    expect(extraLivesEarnedAt(NO_EXTRA_LIFE_AWARD, 999_999)).toBe(0);
+    expect(extraLivesEarnedBetween(NO_EXTRA_LIFE_AWARD, 0, 999_999)).toBe(0);
   });
 
-  it('stops awarding past 1,000,000', () => {
-    expect(BONUS_CEILING).toBe(1_000_000);
-    const atCeiling = bonusesEarnedAt(1_000_000, classic);
-    expect(bonusesEarnedAt(5_000_000, classic)).toBe(atCeiling);
-    expect(bonusesAwarded(1_000_000, 5_000_000, classic)).toBe(0);
+  it('stops awarding past the ceiling the pack states', () => {
+    expect(ceiling).toBe(1_000_000);
+    const atCeiling = extraLivesEarnedAt(classic, 1_000_000, ceiling);
+    expect(extraLivesEarnedAt(classic, 5_000_000, ceiling)).toBe(atCeiling);
+    expect(extraLivesEarnedBetween(classic, 1_000_000, 5_000_000, ceiling)).toBe(0);
+  });
+
+  it('never stops when the rules state no ceiling', () => {
+    expect(extraLivesEarnedBetween(classic, 1_000_000, 5_000_000)).toBeGreaterThan(0);
   });
 });
 
 describe('the reserve', () => {
-  it('starts one below the ship count, because one is on the field', () => {
-    expect(createLives(CLASSIC_RULES.lives).reserve).toBe(2);
-    expect(createLives({ ...CLASSIC_RULES.lives, startingShips: 5 }).reserve).toBe(4);
+  it('starts one below the fighter count, because one is on the field', () => {
+    expect(createLives(rules).reserve).toBe(2);
+    expect(createLives(startedOn(5)).reserve).toBe(4);
   });
 
   it('never starts negative', () => {
-    expect(createLives({ ...CLASSIC_RULES.lives, startingShips: 0 }).reserve).toBe(0);
+    expect(createLives({ ...rules, lives: { ...rules.lives, default: 0 } }).reserve).toBe(0);
   });
 });

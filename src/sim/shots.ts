@@ -14,8 +14,8 @@
  * rate is set entirely by the cap and by how fast shots leave the screen.
  */
 
-import type { EnemyBulletRules, HitWindow, ShotRules } from './rules.js';
-import { type FighterMode, shotWindowsFor } from './rules.js';
+import { shotWindowsFor } from '../content/rules.js';
+import type { FighterMode, HitWindow, Rules } from '../content/schema.js';
 
 export interface Shot {
   /** Slot index; stable for the life of the pool, and reported in events. */
@@ -28,11 +28,11 @@ export interface Shot {
   windows: readonly HitWindow[];
 }
 
-/** The slot pool. Exactly `rules.cap` slots exist, for the whole run. */
+/** The slot pool. Exactly `player.maxShots` slots exist, for the whole run. */
 export type ShotPool = Shot[];
 
-export function createShots(rules: ShotRules): ShotPool {
-  return Array.from({ length: rules.cap }, (_unused, slot) => ({
+export function createShots(rules: Rules): ShotPool {
+  return Array.from({ length: rules.player.maxShots }, (_unused, slot) => ({
     slot,
     active: false,
     x: 0,
@@ -59,14 +59,14 @@ export function freeSlot(shots: ShotPool): Shot | null {
  *
  * `x` and `y` are the firing fighter's anchor; the shot keeps that anchor so
  * collision offsets stay in one coordinate system. Where the muzzle *looks* like
- * it is comes from `ShotRules.muzzleOffsetX` and belongs to the renderer.
+ * it is comes from `player.shot.muzzleOffsetX` and belongs to the renderer.
  */
 export function fireShot(
   shots: ShotPool,
   x: number,
   y: number,
   mode: FighterMode,
-  rules: ShotRules,
+  rules: Rules,
 ): Shot | null {
   const shot = freeSlot(shots);
   if (shot === null) return null;
@@ -78,11 +78,12 @@ export function fireShot(
 }
 
 /** Move every shot up one step, retiring the ones that leave the top. */
-export function stepShots(shots: ShotPool, rules: ShotRules): void {
+export function stepShots(shots: ShotPool, rules: Rules): void {
+  const { speed, height } = rules.player.shot;
   for (const shot of shots) {
     if (!shot.active) continue;
-    shot.y -= rules.speed;
-    if (shot.y + rules.height < 0) shot.active = false;
+    shot.y -= speed;
+    if (shot.y + height < 0) shot.active = false;
   }
 }
 
@@ -119,8 +120,8 @@ export interface EnemyBullet {
 
 export type EnemyBulletPool = EnemyBullet[];
 
-export function createEnemyBullets(rules: EnemyBulletRules): EnemyBulletPool {
-  return Array.from({ length: rules.cap }, (_unused, slot) => ({
+export function createEnemyBullets(rules: Rules): EnemyBulletPool {
+  return Array.from({ length: rules.enemies.maxBullets }, (_unused, slot) => ({
     slot,
     active: false,
     x: 0,
@@ -149,16 +150,13 @@ export function launchEnemyBullet(
 }
 
 /** Advance every bullet one step, retiring the ones that leave the playfield. */
-export function stepEnemyBullets(
-  bullets: EnemyBulletPool,
-  playfieldWidth: number,
-  playfieldHeight: number,
-): void {
+export function stepEnemyBullets(bullets: EnemyBulletPool, rules: Rules): void {
+  const { width, height } = rules.playfield;
   for (const bullet of bullets) {
     if (!bullet.active) continue;
     bullet.x += bullet.vx;
     bullet.y += bullet.vy;
-    if (bullet.y > playfieldHeight || bullet.y < -8 || bullet.x < -8 || bullet.x > playfieldWidth) {
+    if (bullet.y > height || bullet.y < -8 || bullet.x < -8 || bullet.x > width) {
       bullet.active = false;
     }
   }

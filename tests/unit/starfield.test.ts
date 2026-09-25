@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { starfieldSpeedByte } from '../../src/content/rules.js';
 import { createRng } from '../../src/engine/rng.js';
 import {
   advanceStars,
@@ -9,7 +10,12 @@ import {
   speedForByte,
   starIsLit,
 } from '../../src/render/starfield.js';
-import { starfieldSpeedByte } from '../../src/sim/rules.js';
+import { classicRules } from '../helpers/rules.js';
+
+const rules = classicRules();
+
+/** The speed byte the Classic pack's formula gives for a stage. */
+const byteFor = (stage: number): number => starfieldSpeedByte(rules, stage);
 
 describe('speed byte to scroll rate', () => {
   it('maps the five ROM bytes onto the five tiers', () => {
@@ -17,7 +23,7 @@ describe('speed byte to scroll rate', () => {
   });
 
   it('gets faster with the stage, then plateaus with the ROM formula', () => {
-    const byStage = [1, 4, 8, 12, 16, 30].map((stage) => speedForByte(starfieldSpeedByte(stage)));
+    const byStage = [1, 4, 8, 12, 16, 30].map((stage) => speedForByte(byteFor(stage)));
     expect(byStage).toEqual([...SPEED_TIERS, SPEED_TIERS[4]]);
     // Monotonic up to the plateau, which is what "rises with stage number" means.
     for (let i = 1; i < 5; i += 1) {
@@ -74,9 +80,9 @@ describe('the field', () => {
 describe('the starfield a renderer drives', () => {
   it('takes its speed from a sim stage-started event', () => {
     const field = createStarfield(createRng('field'), { count: 10 });
-    field.setSpeedByte(starfieldSpeedByte(1));
+    field.setSpeedByte(byteFor(1));
     expect(field.speed).toBe(SPEED_TIERS[0]);
-    field.setSpeedByte(starfieldSpeedByte(16));
+    field.setSpeedByte(byteFor(16));
     expect(field.speed).toBe(SPEED_TIERS[4]);
   });
 

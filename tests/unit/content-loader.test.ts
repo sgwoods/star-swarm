@@ -4,6 +4,7 @@ import { ContentValidationError } from '../../src/content/errors.js';
 import type { PackSource } from '../../src/content/loader.js';
 import { loadPack, loadPackOrThrow, packSourceFromRecord } from '../../src/content/loader.js';
 import { createRegistry } from '../../src/content/registry.js';
+import { minimalRules } from '../helpers/rules.js';
 
 /**
  * `docs/DESIGN.md` section 11: a pack that fails validation never loads. These
@@ -230,12 +231,11 @@ describe('a pack that fails never loads', () => {
 
 describe('the rules layer', () => {
   const RULES = {
-    id: 'testpack',
-    lives: { default: 3 },
-    extraLives: { award: { mode: 'none' } },
-    player: { speed: 1.5, maxShots: 2 },
-    enemies: { maxBullets: 8, bomberReadyTimers: { drone: 22 } },
-    challengeStages: { firstStage: 3, everyStages: 4 },
+    ...minimalRules('testpack'),
+    enemies: {
+      ...(minimalRules()['enemies'] as Record<string, unknown>),
+      bomberReadyTimers: { drone: 22 },
+    },
     difficulty: {
       defaultRank: 'A',
       ranks: { A: { stageTable: { rows: [{ launchRates: { drone: 1 } }] } } },
@@ -272,6 +272,39 @@ describe('the rules layer', () => {
       'rules.json': { ...RULES, transform: { enabled: true, types: ['ghost'] } },
     });
     expect(errors[0]?.field).toBe('transform.types[0]');
+  });
+
+  it('catches a provenance key that names nothing in the file', () => {
+    const errors = errorsFrom({
+      'rules.json': {
+        ...RULES,
+        provenance: {
+          'player.maxShots': { confidence: 'verified' },
+          'player.maxShotz': { confidence: 'verified' },
+        },
+      },
+    });
+    // The marking outliving the value it describes is how a verified number
+    // quietly becomes an unmarked one, so the rename has to fail loudly.
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({
+      file: 'rules.json',
+      field: 'provenance.player.maxShotz',
+    });
+  });
+
+  it('accepts a provenance key that reaches into an array', () => {
+    const pack = loadPackOrThrow(
+      source({
+        'rules.json': {
+          ...RULES,
+          provenance: { 'player.shot.windows.single[0].dxMin': { confidence: 'verified' } },
+        },
+      }),
+    );
+    expect(pack.rules?.provenance['player.shot.windows.single[0].dxMin']?.confidence).toBe(
+      'verified',
+    );
   });
 
   it('catches a plateau longer than the table it cycles', () => {
