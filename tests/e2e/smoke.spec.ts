@@ -5,7 +5,9 @@ import { expect, test } from '@playwright/test';
  * 224x288 playfield at a whole-number scale (docs/DESIGN.md section 3).
  *
  * Deliberately shallow. Behaviour is proved headlessly in `tests/sim/`; this only
- * checks that the browser half — the thing Vitest cannot see — is wired up.
+ * checks that the browser half — the thing Vitest cannot see — is wired up: that
+ * a real key event reaches the simulation and that what the simulation computes
+ * comes back out.
  */
 
 const LOGICAL_WIDTH = 224;
@@ -126,4 +128,49 @@ test('the display relayouts on resize without distorting', async ({ page }) => {
       layout?.surfaceHeight ?? 0,
     );
   }
+});
+
+test('a keypress in the browser reaches the simulation', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => (window.starSwarm?.step ?? 0) > 0);
+
+  const start = await page.evaluate(() => window.starSwarm?.playerX ?? 0);
+
+  await page.keyboard.down('ArrowRight');
+  await page.waitForTimeout(500);
+  await page.keyboard.up('ArrowRight');
+  const right = await page.evaluate(() => window.starSwarm?.playerX ?? 0);
+  expect(right).toBeGreaterThan(start);
+
+  await page.keyboard.down('ArrowLeft');
+  await page.waitForTimeout(500);
+  await page.keyboard.up('ArrowLeft');
+  expect(await page.evaluate(() => window.starSwarm?.playerX ?? 0)).toBeLessThan(right);
+
+  // Half a second of the 1/2-px cadence is about 45 px; the bounds are loose
+  // because a stalled CI machine runs fewer steps, not different ones.
+  expect(right - start).toBeLessThanOrEqual(50);
+});
+
+test('holding fire scores against the stand-in formation', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => (window.starSwarm?.step ?? 0) > 0);
+
+  expect(await page.evaluate(() => window.starSwarm?.stage)).toBe(1);
+  expect(await page.evaluate(() => window.starSwarm?.lives)).toBe(2);
+
+  // Auto-fire: the button goes down once and stays down, as it does in the
+  // arcade. Sweeping is necessary — the formation is symmetric about the screen
+  // centre, so a fighter sitting dead centre lines up with nothing.
+  await page.keyboard.down('Space');
+  for (let sweep = 0; sweep < 8; sweep += 1) {
+    const key = sweep % 2 === 0 ? 'ArrowRight' : 'ArrowLeft';
+    await page.keyboard.down(key);
+    await page.waitForTimeout(600);
+    await page.keyboard.up(key);
+    if ((await page.evaluate(() => window.starSwarm?.score ?? 0)) > 0) break;
+  }
+  await page.keyboard.up('Space');
+
+  expect(await page.evaluate(() => window.starSwarm?.score ?? 0)).toBeGreaterThan(0);
 });
