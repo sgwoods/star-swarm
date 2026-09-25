@@ -233,7 +233,7 @@
   "capture": {
     "enabled": true,
     "slotsPerCaptor": 1,
-    "maxHeldTotal": null,
+    "maxHeldTotal": 1,
     "lastFighterCaptureEndsGame": true,
     "disablesFireWhileBeamed": true
   },
@@ -265,7 +265,10 @@
       "perHit": 100,
       "perfect": 10000,
       "perfectReplacesPerHit": true,
-      "impactAward": null
+      "impactAward": {
+        "rows": [100, 160, 160, 160, 160, 160, 160, 160],
+        "repeatLast": 8
+      }
     }
   },
   "transform": {

@@ -58,13 +58,22 @@ value unmarked.
 - `transform.types`. Three alien ids, cycling on a four-stage period; the bonus
   they earn (1,000 / 2,000 / 3,000) is already in `scoring.transformGroupBonus`.
 
-## Two values left open on purpose
+## Two values that were left open, and are now settled
 
-Both are unresolved in `docs/reference/arcade-reference.md` section 11 and both
-change a shape rather than a number, so the data expresses either answer:
+Both were unresolved when this pack was first written; a second pass through the
+ROM closed them, and both changed a shape rather than a number:
 
-- `scoring.challenge.impactAward` is `null` — no points at the moment of impact.
-  If challenge enemies do score on impact, it becomes a table indexed by
-  challenge-stage ordinal, because the value may differ per challenge stage.
-- `capture.maxHeldTotal` is `null` — nothing beyond `slotsPerCaptor` limits how
-  many captured fighters are held. If only one may be held at once, it becomes 1.
+- `scoring.challenge.impactAward` is a table indexed by challenge-stage ordinal:
+  **100 on the first challenge stage, 160 on the second through eighth**, with
+  `repeatLast: 8` so the whole table cycles rather than plateauing. That cycle is
+  deliberate and is _not_ shared with `challenge.groupBonus`, whose index clamps
+  at 3,000 from stage 32 — the ninth challenge stage pays 100 a hit and a 3,000
+  group bonus at the same time. `docs/reference/arcade-reference.md` section 8.
+- `capture.maxHeldTotal` is **1**. The original holds at most one captured fighter
+  at a time, globally, and while one is held no capture attempt happens at all —
+  which is why this is a rule and not just a cap. `slotsPerCaptor` stays 1: the
+  four home slots are one per possible captor, not four simultaneous captives.
+  `docs/reference/arcade-reference.md` section 7.
+
+One narrower question is still open and does not touch this pack's data: see
+`docs/reference/arcade-reference.md` section 11.

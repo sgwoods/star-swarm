@@ -838,9 +838,9 @@ export const rulesSchema = z.strictObject({
       slotsPerCaptor: z.number().int().nonnegative().default(1),
       /**
        * A global cap across all captors, or `null` for "only `slotsPerCaptor`
-       * limits it". Left open because whether the original can hold two at once
-       * is unresolved (`docs/reference/arcade-reference.md` section 11 item 3);
-       * the shape expresses either answer without the engine assuming one.
+       * limits it". The arcade original enforces exactly one held fighter, ever
+       * (`docs/reference/arcade-reference.md` section 7), so the Classic pack sets
+       * 1; a pack with several independent captors can leave it null.
        */
       maxHeldTotal: z.number().int().nonnegative().nullable().default(null),
       /** Being captured on the last fighter ends the game — a distinct loss condition. */
@@ -899,9 +899,11 @@ export const rulesSchema = z.strictObject({
           perfectReplacesPerHit: z.boolean().default(true),
           /**
            * Points at the moment of impact, indexed by challenge-stage ordinal,
-           * or `null` for none. Open because whether the original awards them is
-           * unresolved (`docs/reference/arcade-reference.md` section 11 item 2),
-           * and if it does the value may vary by challenge stage.
+           * or `null` for none. Indexed rather than scalar because the arcade
+           * original's value differs per challenge stage and cycles rather than
+           * plateauing — 100, then 160 for seven, then back to 100 — on a period
+           * of its own that the group bonus does not share
+           * (`docs/reference/arcade-reference.md` section 8).
            */
           impactAward: plateauTableSchema(z.number().int().nonnegative()).nullable().default(null),
         })
