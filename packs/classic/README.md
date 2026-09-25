@@ -1,8 +1,8 @@
 # `packs/classic/`
 
-The arcade-faithful pack. At Milestone 1 it is a skeleton: the manifest, the
-formation and the rules are here; aliens, paths, stages, sprites and sounds land
-with the sibling Milestone 1 and 2 tasks.
+The arcade-faithful pack. At Milestone 1 it is still mostly a skeleton: the
+manifest, the formation, the rules and the entry paths are here; aliens, stages,
+sprites and sounds land with the sibling Milestone 1 and 2 tasks.
 
 ## Roles
 
@@ -50,7 +50,9 @@ value unmarked.
 
 ## What is deliberately empty
 
-- The five content directories. Siblings fill them.
+- `aliens/`, `stages/`, `sprites/` and `sounds/`. Siblings fill them. `paths/`
+  has landed — see its own README for which entry choreography is authored and
+  which is deliberately left for Milestone 2.
 - `stageSequence.normal.rows` and `.challenge.rows`. Their `repeatLast` values —
   3 and 8 — are already stated, because the two sequences plateau on _different_
   periods and that is easy to lose. The per-rank sequences of reference section 5

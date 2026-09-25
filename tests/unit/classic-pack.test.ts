@@ -26,8 +26,10 @@ import { windowGapsX } from '../../src/sim/collision.js';
  * and the reference changes with it — this test is the third leg, so a number
  * cannot change in `packs/classic/rules.json` without someone noticing.
  *
- * The content directories are deliberately empty at Milestone 1; sibling tasks
- * fill them. What is here is the shape, the formation and the four rank tables.
+ * The content directories fill one Milestone 1 task at a time; what is checked
+ * here is the shape, the formation and the four rank tables. The content itself
+ * has its own tests — `tests/unit/classic-sounds.test.ts` for `sounds/` and
+ * `tests/unit/classic-paths.test.ts` for `paths/`.
  */
 
 const PACK_DIR = resolve(import.meta.dirname, '..', '..', 'packs', 'classic');
@@ -58,13 +60,25 @@ describe('the pack itself', () => {
     expect(rules.id).toBe('classic');
   });
 
-  it('is still a valid pack with its unfilled content directories empty', () => {
+  it('holds exactly the content its landed tasks put there, and loads all of it', () => {
+    // Two things at once, because the directories fill one Milestone 1 task at a
+    // time and each answer goes stale on its own schedule:
+    //
+    //  - *which* directories have landed — sounds with the synth task and paths
+    //    with the path task; aliens, stages and sprites are still to come. Their
+    //    own tests are `tests/unit/classic-sounds.test.ts` and
+    //    `tests/unit/classic-paths.test.ts`.
+    //  - that nothing on disk is silently dropped on the way in, which a list of
+    //    kinds cannot see. The empty-tree case is covered by
+    //    `tests/unit/validate-packs.test.ts`.
     const { source } = readPackSource(PACK_DIR);
-    // Sounds landed with the synth task; aliens, paths, stages and sprites are
-    // still the sibling tasks' to fill. `tests/unit/classic-sounds.test.ts`
-    // covers what is in `sounds/`.
     const kinds = new Set(source?.documents.map((document) => document.kind));
-    expect([...kinds]).toEqual(['sounds']);
+    expect([...kinds].sort()).toEqual(['paths', 'sounds']);
+
+    const onDisk = source?.documents.length ?? -1;
+    const loaded =
+      pack.aliens.size + pack.paths.size + pack.stages.size + pack.sprites.size + pack.sounds.size;
+    expect(loaded).toBe(onDisk);
   });
 
   it('declares its own role vocabulary rather than borrowing the engine’s', () => {

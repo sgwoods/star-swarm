@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Star Swarm — /lab</title>
+    <!--
+      The `/lab` preview harness (docs/DESIGN.md section 8 step 3).
+
+      Dev build only. Vite builds the entry points it is given, and it is given
+      `index.html` alone, so nothing under `src/ui/lab/` reaches a production
+      bundle and nothing here is on the game's code path. `vite.config.ts` maps
+      `/lab` onto this file while the dev server is running, and only then.
+    -->
+    <style>
+      :root {
+        color-scheme: dark;
+        --ink: #e8e8f0;
+        --dim: #8a8aa0;
+        --line: #2a2a3a;
+        --accent: #37e0e8;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: #101018;
+        color: var(--ink);
+        font:
+          13px/1.5 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+      }
+      #lab {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 320px);
+        gap: 16px;
+        height: 100%;
+        box-sizing: border-box;
+        padding: 16px;
+      }
+      #screen-pane {
+        min-width: 0;
+        background: #000;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        overflow: hidden;
+      }
+      #panel {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        overflow-y: auto;
+      }
+      h1 {
+        font-size: 14px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        margin: 0;
+        color: var(--accent);
+      }
+      fieldset {
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        margin: 0;
+        padding: 10px 12px 12px;
+        min-width: 0;
+      }
+      legend {
+        color: var(--dim);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-size: 11px;
+        padding: 0 4px;
+      }
+      label {
+        display: block;
+        margin-bottom: 6px;
+      }
+      select,
+      input[type='range'] {
+        width: 100%;
+        box-sizing: border-box;
+      }
+      select,
+      button {
+        background: #1a1a26;
+        color: var(--ink);
+        border: 1px solid var(--line);
+        border-radius: 3px;
+        padding: 4px 8px;
+        font: inherit;
+      }
+      button {
+        cursor: pointer;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+      }
+      td {
+        padding: 1px 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      td:first-child {
+        color: var(--dim);
+        width: 40%;
+      }
+      .hint {
+        color: var(--dim);
+        margin: 0;
+      }
+      .problem {
+        color: #ff8080;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="lab">
+      <div id="screen-pane"></div>
+      <div id="panel"></div>
+    </div>
+    <script type="module" src="/src/ui/lab/main.ts"></script>
+  </body>
+</html>

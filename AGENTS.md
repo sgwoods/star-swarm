@@ -123,6 +123,11 @@ the loader checks every id, and `src/audio/sfx.ts` names no effect of its own.
 short README saying what lands there and when, updated as each milestone fills
 it in.
 
+`/lab` (`src/ui/lab/`, entry document `lab.html`) is a **dev-only** route, kept
+that way three ways at once: Vite's only build input is `index.html`, nothing on
+that graph imports the lab, and the URL is wired up by a plugin declaring
+`apply: 'serve'`. `tests/unit/lab-dev-only.test.ts` checks all three.
+
 ## Sharp edges
 
 - Vitest runs two projects, `unit` and `sim`, both on the **Node** environment.
@@ -142,6 +147,15 @@ it in.
   so a new required field is one edit.
 - `tests/unit/sim-boundary.test.ts` briefly writes `src/sim/__boundary_probe__.ts`
   and removes it again. The path is gitignored in case a run dies mid-test.
+- Headings are degrees, **clockwise positive, with 0 pointing down the screen**
+  (`src/content/schema.ts`), so on a y-down playfield a heading θ is the vector
+  `(−sin θ, cos θ)` and 90° points _left_. `src/sim/paths.ts` restates it as a
+  table; reading it the other way round is the quietest bug in movement code.
+- Mirroring a path is a reflection applied to the **evaluation**, never a second
+  copy of the data: world-space targets reflect in, sampled positions reflect
+  out, and arcs reverse their handedness because the reflection says so. A pack
+  that ships a hand-mirrored twin of a path is working against
+  `src/sim/paths.ts`.
 
 ## Maintaining this file
 

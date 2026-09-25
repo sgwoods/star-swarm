@@ -1,0 +1,10 @@
+{
+  "id": "entry-wide-arc",
+  "mirror": true,
+  "start": [-16, 72],
+  "segments": [
+    { "type": "bezier", "to": [112, 200], "c1": [56, 112], "c2": [40, 200], "speed": 1.7 },
+    { "type": "bezier", "to": [168, 96], "c1": [184, 200], "c2": [192, 120], "speed": 1.7 },
+    { "type": "toSlot", "speed": 1.7 }
+  ]
+}
