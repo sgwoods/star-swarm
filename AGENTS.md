@@ -135,6 +135,24 @@ that way three ways at once: Vite's only build input is `index.html`, nothing on
 that graph imports the lab, and the URL is wired up by a plugin declaring
 `apply: 'serve'`. `tests/unit/lab-dev-only.test.ts` checks all three.
 
+## Rendering: rasterise once, and no colours in the renderer
+
+`src/render/` is a subscriber and holds no art of its own. Two contracts that
+are easy to break and cheap to keep — `src/render/README.md` has the detail:
+
+- Anything derived from pack data is built when the pack loads, not per frame.
+  `createSpriteSheet` rasterises every frame up front and `SpriteSheet.bitmap`
+  returns the _same_ object each call; the font caches one tinted strip per ink
+  colour. Treat what comes back as read-only.
+- The palette is pack data. A sprite colour the pack's `palette` does not declare
+  is a load-time throw from `createSpriteSheet`, never a silent black pixel.
+
+Rasterising is split from drawing so both are testable on Node: pixels are pure,
+and turning a bitmap into something `drawImage` takes is an injectable
+`SurfaceFactory`. Keep that split. `npm run sprite-sheet` renders a pack's art
+and font through the real pipeline into `docs/media/`, which is the contact sheet
+`docs/DESIGN.md` section 11 asks a visual PR to attach.
+
 ## Sharp edges
 
 - Vitest runs two projects, `unit` and `sim`, both on the **Node** environment.
@@ -152,6 +170,10 @@ that graph imports the lab, and the URL is wired up by a plugin declaring
   the shipped pack through the real loader, and `minimalRules()` is the smallest
   document the schema accepts. Tests use them rather than writing rules inline,
   so a new required field is one edit.
+- Art is original by rule, not by preference: `docs/DESIGN.md` section 2 bars
+  ripped sprites, traced art, ROM data and the original's names. Enemy roles are
+  `drone`, `wing` and `warden` everywhere outside
+  `docs/reference/arcade-reference.md`.
 - `tests/unit/sim-boundary.test.ts` briefly writes `src/sim/__boundary_probe__.ts`
   and removes it again. The path is gitignored in case a run dies mid-test.
 - Headings are degrees, **clockwise positive, with 0 pointing down the screen**

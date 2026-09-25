@@ -1,8 +1,8 @@
 # `packs/classic/`
 
-The arcade-faithful pack. At Milestone 1 it is still mostly a skeleton: the
-manifest, the formation, the rules and the entry paths are here; aliens, stages,
-sprites and sounds land with the sibling Milestone 1 and 2 tasks.
+The arcade-faithful pack. The manifest, the palette, the formation, the rules,
+the entry paths, the sprite set and the sound set are here; aliens and stages
+land with the sibling Milestone 2 tasks.
 
 ## Roles
 
@@ -29,6 +29,19 @@ this project's own. For anyone checking a number against
   cadence and travel limits, the fighter and shot geometry, both hit-window
   sets, the enemy bullet, the starfield speed formula and the playfield. The
   simulation reads this file through the loader and holds no copy of any of it.
+- **`palette`** in `pack.json` — the pack-wide palette of `docs/DESIGN.md`
+  section 5. Every colour a sprite uses has to be one of these; the renderer
+  holds none of its own and refuses to build a sheet from a colour that is not
+  here.
+- **`sprites/`** — the original 16×16 cast (`player`, `player-captured`, the
+  three roles, `warden-hit` for the boss's second colour, both explosions) and
+  the 8×8 HUD art (`shot-player`, `shot-alien`, the six stage badges). Drawn for
+  this project: `docs/DESIGN.md` section 2 rules out the original's art, so these
+  take the style and none of the pixels. Wings flap over two frames and
+  explosions run over four, per section 5. `npm run sprite-sheet` renders the
+  whole set as a contact sheet.
+- **`sounds/`** and the `sounds` map in `pack.json` — the Classic SFX set, and
+  which simulation event plays each one.
 
 `tests/unit/classic-pack.test.ts` checks these against the reference, so the
 plan, the reference and the data are three legs of the same stool: change one
@@ -50,9 +63,9 @@ value unmarked.
 
 ## What is deliberately empty
 
-- `aliens/`, `stages/`, `sprites/` and `sounds/`. Siblings fill them. `paths/`
-  has landed — see its own README for which entry choreography is authored and
-  which is deliberately left for Milestone 2.
+- `aliens/` and `stages/`. Siblings fill them. `paths/` has landed — see its own
+  README for which entry choreography is authored and which is deliberately left
+  for Milestone 2.
 - `stageSequence.normal.rows` and `.challenge.rows`. Their `repeatLast` values —
   3 and 8 — are already stated, because the two sequences plateau on _different_
   periods and that is easy to lose. The per-rank sequences of reference section 5
