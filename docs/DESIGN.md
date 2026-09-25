@@ -126,6 +126,8 @@ The Classic rules therefore ship **all four rank tables**, not one table plus th
 
 A **"Classic" pack plus classic rules** reproduces the arcade game. Other packs can extend or replace it (e.g. a "Classic + Weird" mix that inserts new stages every 5th level).
 
+**The content and rules model is a shared platform, not Star Swarm's private format.** Star Swarm is the first game in an arcade lineage and is expected to be joined by siblings — other formation shooters of the same era and category, built as another pack plus another `rules.json` and nothing else. So the engine-side types in `src/content/` carry no knowledge of this game: enemy roles are ids a pack declares rather than a fixed set, per-role numbers in the rules are keyed by those ids, formations and scoring rules are data, and every difficulty or sequence table is literal rows with its own plateau. Where a shape could fit the arcade original exactly or also admit a sibling game, the platform takes the second. The second mode itself is tracked separately and is not designed here.
+
 ## 7. Content model (what prompts generate)
 
 All of these are JSON validated by schemas in `src/content/schema.ts`. Examples are illustrative.
@@ -138,13 +140,15 @@ All of these are JSON validated by schemas in `src/content/schema.ts`. Examples 
   "role": "butterfly",
   "hp": 1,
   "sprite": "jellyfish",
-  "score": { "formation": 80, "diving": 160 },
+  "score": { "base": 80 },
   "fire": { "pattern": "aimed", "shotsPerDive": 2 },
   "dive": { "paths": ["swirl8"], "weight": 1.0 },
   "abilities": [{ "type": "splitOnHit", "into": "jellyling", "count": 2 }],
   "sounds": { "dive": "wobble", "death": "pop" }
 }
 ```
+
+`score` carries the **base** value only: the diving value is the base times the rules layer's moving multiplier, plus any bonus. Section 4 explains why — a flat formation/diving pair cannot express a boss's escort bonus, which is latched at launch.
 
 ### 7.2 Movement path
 

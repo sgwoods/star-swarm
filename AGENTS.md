@@ -45,6 +45,23 @@ Practical consequences:
   accumulates in _steps_ and carries a tolerance for exactly this reason; naive
   millisecond subtraction silently loses a step per burst.
 
+## The second rule: content is a platform, not this game
+
+`src/content/` holds no knowledge of Star Swarm. The content model is shared
+across an arcade lineage expected to host more than one game (`docs/DESIGN.md`
+section 6), so enemy roles are ids a pack declares, per-role numbers are records
+keyed by those ids, and formations, scoring and every difficulty or sequence
+table are data. A Classic-specific name or assumption belongs in
+`packs/classic/`, never in a type under `src/content/`.
+
+Two consequences worth knowing before editing either:
+
+- Every ramp is literal rows plus its own plateau period, never a curve, and the
+  periods differ between tables on purpose. `src/content/rules.ts` is the only
+  place that interprets one.
+- `src/content/fs.ts` is the only file there that imports `node:fs`, and
+  `index.ts` does not re-export it, so the platform stays browser-safe.
+
 ## Layout
 
 `docs/DESIGN.md` section 9 fixes the source layout, and each directory carries a
@@ -56,9 +73,13 @@ short README saying what lands there and when. Milestone 1 tasks fill them in.
   There is no DOM in either — that is deliberate, and it is what stops sim code
   from quietly acquiring a browser dependency.
 - `npm run validate-packs` must pass in CI and succeeds on an empty `packs/`
-  tree. `scripts/validate-packs.ts` marks the seam where Milestone 1's Zod
-  schemas plug in; its tests in `tests/unit/validate-packs.test.ts` run the real
-  script against throwaway pack trees.
+  tree and on a pack whose content directories are empty. It calls the real
+  `loadPack`, so the gate and the game cannot disagree; its tests in
+  `tests/unit/validate-packs.test.ts` run the script against throwaway pack
+  trees. Section 8's playability checks are Milestone 3 and are not in it yet.
+- `tests/unit/classic-pack.test.ts` checks `packs/classic/` against
+  `docs/reference/arcade-reference.md`. Plan, reference and data are three legs
+  of one stool: change a number in any of them and that test is the third voice.
 - `tests/unit/sim-boundary.test.ts` briefly writes `src/sim/__boundary_probe__.ts`
   and removes it again. The path is gitignored in case a run dies mid-test.
 

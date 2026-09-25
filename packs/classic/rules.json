@@ -1,0 +1,1707 @@
+{
+  "id": "classic",
+  "name": "Classic rules",
+  "lives": {
+    "default": 3,
+    "options": [2, 3, 4, 5]
+  },
+  "extraLives": {
+    "award": {
+      "mode": "thresholds",
+      "first": 20000,
+      "second": 70000,
+      "repeat": 70000
+    },
+    "stopAfterScore": 1000000,
+    "options": [
+      {
+        "startingLives": [2, 3, 4],
+        "award": {
+          "mode": "thresholds",
+          "first": 20000,
+          "second": 60000,
+          "repeat": 60000
+        }
+      },
+      {
+        "startingLives": [2, 3, 4],
+        "award": {
+          "mode": "thresholds",
+          "first": 20000,
+          "second": 70000,
+          "repeat": 70000
+        }
+      },
+      {
+        "startingLives": [2, 3, 4],
+        "award": {
+          "mode": "thresholds",
+          "first": 20000,
+          "second": 80000,
+          "repeat": 80000
+        }
+      },
+      {
+        "startingLives": [2, 3, 4],
+        "award": {
+          "mode": "thresholds",
+          "first": 20000,
+          "second": 60000
+        }
+      },
+      {
+        "startingLives": [2, 3, 4],
+        "award": {
+          "mode": "thresholds",
+          "first": 30000,
+          "second": 80000
+        }
+      },
+      {
+        "startingLives": [2, 3, 4],
+        "award": {
+          "mode": "thresholds",
+          "first": 30000,
+          "second": 100000,
+          "repeat": 100000
+        }
+      },
+      {
+        "startingLives": [2, 3, 4],
+        "award": {
+          "mode": "thresholds",
+          "first": 30000,
+          "second": 120000,
+          "repeat": 120000
+        }
+      },
+      {
+        "startingLives": [2, 3, 4],
+        "award": {
+          "mode": "none"
+        }
+      },
+      {
+        "startingLives": [5],
+        "award": {
+          "mode": "thresholds",
+          "first": 30000,
+          "second": 100000,
+          "repeat": 100000
+        }
+      },
+      {
+        "startingLives": [5],
+        "award": {
+          "mode": "thresholds",
+          "first": 30000,
+          "second": 120000,
+          "repeat": 120000
+        }
+      },
+      {
+        "startingLives": [5],
+        "award": {
+          "mode": "thresholds",
+          "first": 30000,
+          "second": 150000,
+          "repeat": 150000
+        }
+      },
+      {
+        "startingLives": [5],
+        "award": {
+          "mode": "thresholds",
+          "first": 30000,
+          "second": 150000
+        }
+      },
+      {
+        "startingLives": [5],
+        "award": {
+          "mode": "thresholds",
+          "first": 30000
+        }
+      },
+      {
+        "startingLives": [5],
+        "award": {
+          "mode": "thresholds",
+          "first": 30000,
+          "second": 100000
+        }
+      },
+      {
+        "startingLives": [5],
+        "award": {
+          "mode": "thresholds",
+          "first": 30000,
+          "second": 120000
+        }
+      },
+      {
+        "startingLives": [5],
+        "award": {
+          "mode": "none"
+        }
+      }
+    ]
+  },
+  "player": {
+    "speed": 1.5,
+    "maxShots": 2,
+    "autoFire": true
+  },
+  "enemies": {
+    "maxBullets": 8,
+    "bomberReadyTimers": {
+      "drone": 22,
+      "wing": 2,
+      "warden": 2
+    }
+  },
+  "challengeStages": {
+    "enabled": true,
+    "firstStage": 3,
+    "everyStages": 4
+  },
+  "capture": {
+    "enabled": true,
+    "slotsPerCaptor": 1,
+    "maxHeldTotal": null,
+    "lastFighterCaptureEndsGame": true,
+    "disablesFireWhileBeamed": true
+  },
+  "rescue": {
+    "enabled": true,
+    "requiresCaptorAttacking": true,
+    "freedShipInvulnerableWhileDocking": true,
+    "divingEnemiesReturnToFormation": true
+  },
+  "dualFighter": {
+    "enabled": true,
+    "bulletsPerShot": 2
+  },
+  "scoring": {
+    "movingMultiplier": 2,
+    "escortBonus": {
+      "latchedAtLaunch": true,
+      "byEscortCount": [100, 500, 1300]
+    },
+    "transformGroupBonus": {
+      "rows": [1000, 2000, 3000],
+      "repeatLast": 3
+    },
+    "challenge": {
+      "groupBonus": {
+        "rows": [1000, 1000, 1500, 1500, 2000, 2000, 3000],
+        "repeatLast": 1
+      },
+      "perHit": 100,
+      "perfect": 10000,
+      "perfectReplacesPerHit": true,
+      "impactAward": null
+    }
+  },
+  "transform": {
+    "enabled": true,
+    "fromStage": 4,
+    "remainingThreshold": 10,
+    "stagesPerType": 4,
+    "types": [],
+    "groupSize": 3
+  },
+  "difficulty": {
+    "defaultRank": "A",
+    "ranks": {
+      "A": {
+        "label": "A \u2014 easiest, factory default",
+        "stageTable": {
+          "rows": [
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 2,
+              "maxDiversBump": 2,
+              "captureRate": 12,
+              "continuousBombingAt": 6,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 1,
+                "warden": 1
+              },
+              "maxDivers": 2,
+              "maxDiversBump": 3,
+              "captureRate": 12,
+              "continuousBombingAt": 7,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 0,
+              "maxDiversBump": 0,
+              "captureRate": 12,
+              "continuousBombingAt": 0,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 1,
+              "launchRates": {
+                "drone": 1,
+                "wing": 1,
+                "warden": 2
+              },
+              "maxDivers": 2,
+              "maxDiversBump": 3,
+              "captureRate": 9,
+              "continuousBombingAt": 7,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 1,
+              "launchRates": {
+                "drone": 1,
+                "wing": 2,
+                "warden": 3
+              },
+              "maxDivers": 2,
+              "maxDiversBump": 3,
+              "captureRate": 9,
+              "continuousBombingAt": 8,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 2,
+              "launchRates": {
+                "drone": 1,
+                "wing": 2,
+                "warden": 4
+              },
+              "maxDivers": 3,
+              "maxDiversBump": 3,
+              "captureRate": 9,
+              "continuousBombingAt": 8,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 0,
+              "maxDiversBump": 0,
+              "captureRate": 9,
+              "continuousBombingAt": 0,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 2,
+              "launchRates": {
+                "drone": 2,
+                "wing": 2,
+                "warden": 5
+              },
+              "maxDivers": 3,
+              "maxDiversBump": 3,
+              "captureRate": 9,
+              "continuousBombingAt": 9,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 2,
+              "launchRates": {
+                "drone": 2,
+                "wing": 3,
+                "warden": 6
+              },
+              "maxDivers": 3,
+              "maxDiversBump": 4,
+              "captureRate": 6,
+              "continuousBombingAt": 9,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 1,
+              "launchRates": {
+                "drone": 0,
+                "wing": 1,
+                "warden": 1
+              },
+              "maxDivers": 2,
+              "maxDiversBump": 3,
+              "captureRate": 9,
+              "continuousBombingAt": 7,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 0,
+              "maxDiversBump": 0,
+              "captureRate": 6,
+              "continuousBombingAt": 0,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 3,
+              "launchRates": {
+                "drone": 2,
+                "wing": 4,
+                "warden": 6
+              },
+              "maxDivers": 3,
+              "maxDiversBump": 4,
+              "captureRate": 6,
+              "continuousBombingAt": 7,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 3,
+              "launchRates": {
+                "drone": 2,
+                "wing": 6,
+                "warden": 7
+              },
+              "maxDivers": 4,
+              "maxDiversBump": 4,
+              "captureRate": 6,
+              "continuousBombingAt": 8,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 3,
+              "launchRates": {
+                "drone": 2,
+                "wing": 6,
+                "warden": 7
+              },
+              "maxDivers": 4,
+              "maxDiversBump": 5,
+              "captureRate": 6,
+              "continuousBombingAt": 8,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 0,
+              "maxDiversBump": 0,
+              "captureRate": 6,
+              "continuousBombingAt": 0,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 4,
+              "launchRates": {
+                "drone": 2,
+                "wing": 7,
+                "warden": 8
+              },
+              "maxDivers": 4,
+              "maxDiversBump": 5,
+              "captureRate": 6,
+              "continuousBombingAt": 9,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 4,
+              "launchRates": {
+                "drone": 2,
+                "wing": 7,
+                "warden": 8
+              },
+              "maxDivers": 4,
+              "maxDiversBump": 5,
+              "captureRate": 6,
+              "continuousBombingAt": 9,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 1,
+              "launchRates": {
+                "drone": 1,
+                "wing": 2,
+                "warden": 2
+              },
+              "maxDivers": 2,
+              "maxDiversBump": 3,
+              "captureRate": 9,
+              "continuousBombingAt": 7,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 0,
+              "maxDiversBump": 0,
+              "captureRate": 6,
+              "continuousBombingAt": 0,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 5,
+              "launchRates": {
+                "drone": 2,
+                "wing": 8,
+                "warden": 8
+              },
+              "maxDivers": 4,
+              "maxDiversBump": 6,
+              "captureRate": 3,
+              "continuousBombingAt": 10,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 5,
+              "launchRates": {
+                "drone": 2,
+                "wing": 8,
+                "warden": 8
+              },
+              "maxDivers": 5,
+              "maxDiversBump": 6,
+              "captureRate": 3,
+              "continuousBombingAt": 10,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 5,
+              "launchRates": {
+                "drone": 2,
+                "wing": 8,
+                "warden": 8
+              },
+              "maxDivers": 5,
+              "maxDiversBump": 6,
+              "captureRate": 3,
+              "continuousBombingAt": 12,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 0,
+              "maxDiversBump": 0,
+              "captureRate": 3,
+              "continuousBombingAt": 0,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 6,
+              "launchRates": {
+                "drone": 2,
+                "wing": 8,
+                "warden": 9
+              },
+              "maxDivers": 5,
+              "maxDiversBump": 7,
+              "captureRate": 3,
+              "continuousBombingAt": 12,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 6,
+              "launchRates": {
+                "drone": 2,
+                "wing": 9,
+                "warden": 9
+              },
+              "maxDivers": 5,
+              "maxDiversBump": 7,
+              "captureRate": 3,
+              "continuousBombingAt": 12,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 6,
+              "launchRates": {
+                "drone": 2,
+                "wing": 9,
+                "warden": 9
+              },
+              "maxDivers": 5,
+              "maxDiversBump": 7,
+              "captureRate": 3,
+              "continuousBombingAt": 12,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            }
+          ],
+          "repeatLast": 4
+        }
+      },
+      "B": {
+        "label": "B \u2014 2nd level of difficulty",
+        "stageTable": {
+          "rows": [
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 1,
+              "maxDiversBump": 2,
+              "captureRate": 12,
+              "continuousBombingAt": 6,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 1,
+                "warden": 1
+              },
+              "maxDivers": 2,
+              "maxDiversBump": 2,
+              "captureRate": 12,
+              "continuousBombingAt": 6,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 0,
+              "maxDiversBump": 0,
+              "captureRate": 12,
+              "continuousBombingAt": 0,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 1,
+              "launchRates": {
+                "drone": 1,
+                "wing": 1,
+                "warden": 2
+              },
+              "maxDivers": 2,
+              "maxDiversBump": 3,
+              "captureRate": 9,
+              "continuousBombingAt": 7,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 1,
+              "launchRates": {
+                "drone": 1,
+                "wing": 1,
+                "warden": 2
+              },
+              "maxDivers": 2,
+              "maxDiversBump": 3,
+              "captureRate": 9,
+              "continuousBombingAt": 7,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 1,
+                "warden": 1
+              },
+              "maxDivers": 2,
+              "maxDiversBump": 3,
+              "captureRate": 12,
+              "continuousBombingAt": 7,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 0,
+              "maxDiversBump": 0,
+              "captureRate": 9,
+              "continuousBombingAt": 0,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 2,
+              "launchRates": {
+                "drone": 1,
+                "wing": 2,
+                "warden": 3
+              },
+              "maxDivers": 3,
+              "maxDiversBump": 3,
+              "captureRate": 9,
+              "continuousBombingAt": 8,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 2,
+              "launchRates": {
+                "drone": 1,
+                "wing": 2,
+                "warden": 4
+              },
+              "maxDivers": 3,
+              "maxDiversBump": 3,
+              "captureRate": 9,
+              "continuousBombingAt": 8,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 2,
+              "launchRates": {
+                "drone": 1,
+                "wing": 2,
+                "warden": 5
+              },
+              "maxDivers": 3,
+              "maxDiversBump": 4,
+              "captureRate": 9,
+              "continuousBombingAt": 8,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 0,
+              "maxDiversBump": 0,
+              "captureRate": 6,
+              "continuousBombingAt": 0,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 2,
+              "launchRates": {
+                "drone": 2,
+                "wing": 2,
+                "warden": 5
+              },
+              "maxDivers": 3,
+              "maxDiversBump": 4,
+              "captureRate": 6,
+              "continuousBombingAt": 8,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 3,
+              "launchRates": {
+                "drone": 2,
+                "wing": 3,
+                "warden": 6
+              },
+              "maxDivers": 4,
+              "maxDiversBump": 4,
+              "captureRate": 6,
+              "continuousBombingAt": 8,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 1,
+              "launchRates": {
+                "drone": 1,
+                "wing": 1,
+                "warden": 1
+              },
+              "maxDivers": 2,
+              "maxDiversBump": 3,
+              "captureRate": 6,
+              "continuousBombingAt": 7,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 0,
+              "maxDiversBump": 0,
+              "captureRate": 6,
+              "continuousBombingAt": 0,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 3,
+              "launchRates": {
+                "drone": 2,
+                "wing": 3,
+                "warden": 6
+              },
+              "maxDivers": 4,
+              "maxDiversBump": 5,
+              "captureRate": 6,
+              "continuousBombingAt": 8,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 3,
+              "launchRates": {
+                "drone": 2,
+                "wing": 4,
+                "warden": 6
+              },
+              "maxDivers": 4,
+              "maxDiversBump": 5,
+              "captureRate": 6,
+              "continuousBombingAt": 9,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 3,
+              "launchRates": {
+                "drone": 2,
+                "wing": 6,
+                "warden": 7
+              },
+              "maxDivers": 4,
+              "maxDiversBump": 5,
+              "captureRate": 6,
+              "continuousBombingAt": 9,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 0,
+              "maxDiversBump": 0,
+              "captureRate": 6,
+              "continuousBombingAt": 0,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 4,
+              "launchRates": {
+                "drone": 2,
+                "wing": 6,
+                "warden": 7
+              },
+              "maxDivers": 4,
+              "maxDiversBump": 6,
+              "captureRate": 3,
+              "continuousBombingAt": 10,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 4,
+              "launchRates": {
+                "drone": 2,
+                "wing": 7,
+                "warden": 8
+              },
+              "maxDivers": 5,
+              "maxDiversBump": 6,
+              "captureRate": 3,
+              "continuousBombingAt": 10,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 5,
+              "launchRates": {
+                "drone": 2,
+                "wing": 7,
+                "warden": 8
+              },
+              "maxDivers": 5,
+              "maxDiversBump": 6,
+              "captureRate": 3,
+              "continuousBombingAt": 10,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 0,
+              "maxDiversBump": 0,
+              "captureRate": 3,
+              "continuousBombingAt": 0,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 5,
+              "launchRates": {
+                "drone": 2,
+                "wing": 8,
+                "warden": 8
+              },
+              "maxDivers": 5,
+              "maxDiversBump": 6,
+              "captureRate": 3,
+              "continuousBombingAt": 12,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 6,
+              "launchRates": {
+                "drone": 2,
+                "wing": 9,
+                "warden": 9
+              },
+              "maxDivers": 5,
+              "maxDiversBump": 7,
+              "captureRate": 3,
+              "continuousBombingAt": 12,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 6,
+              "launchRates": {
+                "drone": 2,
+                "wing": 9,
+                "warden": 9
+              },
+              "maxDivers": 5,
+              "maxDiversBump": 7,
+              "captureRate": 3,
+              "continuousBombingAt": 12,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            }
+          ],
+          "repeatLast": 4
+        }
+      },
+      "C": {
+        "label": "C \u2014 3rd level of difficulty",
+        "stageTable": {
+          "rows": [
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 2,
+              "maxDiversBump": 3,
+              "captureRate": 12,
+              "continuousBombingAt": 6,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 1,
+              "launchRates": {
+                "drone": 0,
+                "wing": 1,
+                "warden": 1
+              },
+              "maxDivers": 2,
+              "maxDiversBump": 3,
+              "captureRate": 9,
+              "continuousBombingAt": 7,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 0,
+              "maxDiversBump": 0,
+              "captureRate": 12,
+              "continuousBombingAt": 0,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 1,
+              "launchRates": {
+                "drone": 1,
+                "wing": 1,
+                "warden": 2
+              },
+              "maxDivers": 3,
+              "maxDiversBump": 3,
+              "captureRate": 9,
+              "continuousBombingAt": 8,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 2,
+              "launchRates": {
+                "drone": 1,
+                "wing": 2,
+                "warden": 3
+              },
+              "maxDivers": 3,
+              "maxDiversBump": 4,
+              "captureRate": 6,
+              "continuousBombingAt": 8,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 2,
+              "launchRates": {
+                "drone": 1,
+                "wing": 2,
+                "warden": 4
+              },
+              "maxDivers": 3,
+              "maxDiversBump": 4,
+              "captureRate": 6,
+              "continuousBombingAt": 8,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 0,
+              "maxDiversBump": 0,
+              "captureRate": 9,
+              "continuousBombingAt": 0,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 3,
+              "launchRates": {
+                "drone": 2,
+                "wing": 3,
+                "warden": 6
+              },
+              "maxDivers": 3,
+              "maxDiversBump": 4,
+              "captureRate": 6,
+              "continuousBombingAt": 7,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 3,
+              "launchRates": {
+                "drone": 2,
+                "wing": 4,
+                "warden": 6
+              },
+              "maxDivers": 4,
+              "maxDiversBump": 4,
+              "captureRate": 6,
+              "continuousBombingAt": 8,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 1,
+              "launchRates": {
+                "drone": 1,
+                "wing": 1,
+                "warden": 1
+              },
+              "maxDivers": 2,
+              "maxDiversBump": 3,
+              "captureRate": 9,
+              "continuousBombingAt": 7,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 0,
+              "maxDiversBump": 0,
+              "captureRate": 6,
+              "continuousBombingAt": 0,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 4,
+              "launchRates": {
+                "drone": 2,
+                "wing": 6,
+                "warden": 7
+              },
+              "maxDivers": 4,
+              "maxDiversBump": 5,
+              "captureRate": 6,
+              "continuousBombingAt": 8,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 4,
+              "launchRates": {
+                "drone": 2,
+                "wing": 6,
+                "warden": 7
+              },
+              "maxDivers": 4,
+              "maxDiversBump": 5,
+              "captureRate": 6,
+              "continuousBombingAt": 9,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 4,
+              "launchRates": {
+                "drone": 2,
+                "wing": 7,
+                "warden": 8
+              },
+              "maxDivers": 4,
+              "maxDiversBump": 6,
+              "captureRate": 6,
+              "continuousBombingAt": 9,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 0,
+              "maxDiversBump": 0,
+              "captureRate": 6,
+              "continuousBombingAt": 0,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 5,
+              "launchRates": {
+                "drone": 2,
+                "wing": 7,
+                "warden": 8
+              },
+              "maxDivers": 4,
+              "maxDiversBump": 6,
+              "captureRate": 3,
+              "continuousBombingAt": 10,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 5,
+              "launchRates": {
+                "drone": 2,
+                "wing": 8,
+                "warden": 8
+              },
+              "maxDivers": 5,
+              "maxDiversBump": 6,
+              "captureRate": 3,
+              "continuousBombingAt": 10,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 5,
+              "launchRates": {
+                "drone": 2,
+                "wing": 8,
+                "warden": 8
+              },
+              "maxDivers": 5,
+              "maxDiversBump": 6,
+              "captureRate": 3,
+              "continuousBombingAt": 10,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 0,
+              "maxDiversBump": 0,
+              "captureRate": 6,
+              "continuousBombingAt": 0,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 6,
+              "launchRates": {
+                "drone": 2,
+                "wing": 8,
+                "warden": 8
+              },
+              "maxDivers": 5,
+              "maxDiversBump": 6,
+              "captureRate": 3,
+              "continuousBombingAt": 12,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 6,
+              "launchRates": {
+                "drone": 2,
+                "wing": 8,
+                "warden": 9
+              },
+              "maxDivers": 5,
+              "maxDiversBump": 7,
+              "captureRate": 3,
+              "continuousBombingAt": 12,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 6,
+              "launchRates": {
+                "drone": 2,
+                "wing": 8,
+                "warden": 9
+              },
+              "maxDivers": 5,
+              "maxDiversBump": 7,
+              "captureRate": 3,
+              "continuousBombingAt": 14,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 0,
+              "maxDiversBump": 0,
+              "captureRate": 3,
+              "continuousBombingAt": 0,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 7,
+              "launchRates": {
+                "drone": 2,
+                "wing": 9,
+                "warden": 9
+              },
+              "maxDivers": 5,
+              "maxDiversBump": 7,
+              "captureRate": 3,
+              "continuousBombingAt": 14,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 7,
+              "launchRates": {
+                "drone": 2,
+                "wing": 9,
+                "warden": 9
+              },
+              "maxDivers": 6,
+              "maxDiversBump": 8,
+              "captureRate": 3,
+              "continuousBombingAt": 14,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 7,
+              "launchRates": {
+                "drone": 2,
+                "wing": 9,
+                "warden": 9
+              },
+              "maxDivers": 6,
+              "maxDiversBump": 8,
+              "captureRate": 3,
+              "continuousBombingAt": 14,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            }
+          ],
+          "repeatLast": 4
+        }
+      },
+      "D": {
+        "label": "D \u2014 most difficult",
+        "stageTable": {
+          "rows": [
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 2,
+              "maxDiversBump": 3,
+              "captureRate": 12,
+              "continuousBombingAt": 6,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 1,
+              "launchRates": {
+                "drone": 0,
+                "wing": 1,
+                "warden": 1
+              },
+              "maxDivers": 2,
+              "maxDiversBump": 3,
+              "captureRate": 9,
+              "continuousBombingAt": 7,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 0,
+              "maxDiversBump": 0,
+              "captureRate": 12,
+              "continuousBombingAt": 0,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 1,
+              "launchRates": {
+                "drone": 1,
+                "wing": 1,
+                "warden": 2
+              },
+              "maxDivers": 3,
+              "maxDiversBump": 4,
+              "captureRate": 9,
+              "continuousBombingAt": 8,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 2,
+              "launchRates": {
+                "drone": 1,
+                "wing": 2,
+                "warden": 3
+              },
+              "maxDivers": 3,
+              "maxDiversBump": 4,
+              "captureRate": 6,
+              "continuousBombingAt": 8,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 2,
+              "launchRates": {
+                "drone": 1,
+                "wing": 2,
+                "warden": 4
+              },
+              "maxDivers": 3,
+              "maxDiversBump": 4,
+              "captureRate": 6,
+              "continuousBombingAt": 8,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 0,
+              "maxDiversBump": 0,
+              "captureRate": 9,
+              "continuousBombingAt": 0,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 3,
+              "launchRates": {
+                "drone": 2,
+                "wing": 3,
+                "warden": 6
+              },
+              "maxDivers": 4,
+              "maxDiversBump": 5,
+              "captureRate": 6,
+              "continuousBombingAt": 7,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 3,
+              "launchRates": {
+                "drone": 2,
+                "wing": 4,
+                "warden": 6
+              },
+              "maxDivers": 4,
+              "maxDiversBump": 6,
+              "captureRate": 6,
+              "continuousBombingAt": 8,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 3,
+              "launchRates": {
+                "drone": 2,
+                "wing": 5,
+                "warden": 6
+              },
+              "maxDivers": 4,
+              "maxDiversBump": 6,
+              "captureRate": 6,
+              "continuousBombingAt": 9,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 0,
+              "maxDiversBump": 0,
+              "captureRate": 6,
+              "continuousBombingAt": 0,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 4,
+              "launchRates": {
+                "drone": 2,
+                "wing": 6,
+                "warden": 7
+              },
+              "maxDivers": 5,
+              "maxDiversBump": 6,
+              "captureRate": 6,
+              "continuousBombingAt": 10,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 4,
+              "launchRates": {
+                "drone": 2,
+                "wing": 6,
+                "warden": 7
+              },
+              "maxDivers": 5,
+              "maxDiversBump": 6,
+              "captureRate": 6,
+              "continuousBombingAt": 10,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 4,
+              "launchRates": {
+                "drone": 2,
+                "wing": 7,
+                "warden": 8
+              },
+              "maxDivers": 5,
+              "maxDiversBump": 7,
+              "captureRate": 6,
+              "continuousBombingAt": 10,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 0,
+              "maxDiversBump": 0,
+              "captureRate": 6,
+              "continuousBombingAt": 0,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 5,
+              "launchRates": {
+                "drone": 2,
+                "wing": 7,
+                "warden": 8
+              },
+              "maxDivers": 5,
+              "maxDiversBump": 7,
+              "captureRate": 3,
+              "continuousBombingAt": 10,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 5,
+              "launchRates": {
+                "drone": 2,
+                "wing": 8,
+                "warden": 8
+              },
+              "maxDivers": 5,
+              "maxDiversBump": 7,
+              "captureRate": 3,
+              "continuousBombingAt": 10,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 5,
+              "launchRates": {
+                "drone": 2,
+                "wing": 8,
+                "warden": 8
+              },
+              "maxDivers": 6,
+              "maxDiversBump": 8,
+              "captureRate": 3,
+              "continuousBombingAt": 12,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 0,
+              "maxDiversBump": 0,
+              "captureRate": 6,
+              "continuousBombingAt": 0,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 6,
+              "launchRates": {
+                "drone": 2,
+                "wing": 8,
+                "warden": 8
+              },
+              "maxDivers": 6,
+              "maxDiversBump": 8,
+              "captureRate": 3,
+              "continuousBombingAt": 12,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 6,
+              "launchRates": {
+                "drone": 2,
+                "wing": 8,
+                "warden": 9
+              },
+              "maxDivers": 6,
+              "maxDiversBump": 8,
+              "captureRate": 3,
+              "continuousBombingAt": 12,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 6,
+              "launchRates": {
+                "drone": 2,
+                "wing": 8,
+                "warden": 9
+              },
+              "maxDivers": 6,
+              "maxDiversBump": 8,
+              "captureRate": 3,
+              "continuousBombingAt": 14,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 0,
+              "launchRates": {
+                "drone": 0,
+                "wing": 0,
+                "warden": 0
+              },
+              "maxDivers": 0,
+              "maxDiversBump": 0,
+              "captureRate": 3,
+              "continuousBombingAt": 0,
+              "reloadAttackVectors": false,
+              "reloadBombVectors": false
+            },
+            {
+              "bombEnable": 7,
+              "launchRates": {
+                "drone": 2,
+                "wing": 9,
+                "warden": 9
+              },
+              "maxDivers": 6,
+              "maxDiversBump": 8,
+              "captureRate": 3,
+              "continuousBombingAt": 14,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 7,
+              "launchRates": {
+                "drone": 2,
+                "wing": 9,
+                "warden": 9
+              },
+              "maxDivers": 6,
+              "maxDiversBump": 8,
+              "captureRate": 3,
+              "continuousBombingAt": 14,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            },
+            {
+              "bombEnable": 7,
+              "launchRates": {
+                "drone": 2,
+                "wing": 9,
+                "warden": 9
+              },
+              "maxDivers": 6,
+              "maxDiversBump": 8,
+              "captureRate": 3,
+              "continuousBombingAt": 14,
+              "reloadAttackVectors": true,
+              "reloadBombVectors": true
+            }
+          ],
+          "repeatLast": 4
+        }
+      }
+    }
+  }
+}
