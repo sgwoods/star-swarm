@@ -1,0 +1,13 @@
+{
+  "id": "game-over",
+  "wave": "square",
+  "duty": 0.45,
+  "envelope": [0.008, 0.58, 0.412],
+  "volume": 0.38,
+  "sequence": [
+    { "freq": 783.99, "duration": 0.16 },
+    { "freq": 659.25, "duration": 0.16 },
+    { "freq": 523.25, "duration": 0.16 },
+    { "freq": [392.0, 196.0], "duration": 0.55 }
+  ]
+}

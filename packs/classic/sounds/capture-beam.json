@@ -1,0 +1,8 @@
+{
+  "id": "capture-beam",
+  "wave": "triangle",
+  "freq": [175, 1480],
+  "vibrato": { "rate": 31, "depth": 0.3 },
+  "envelope": [0.05, 0.72, 0.22],
+  "volume": 0.38
+}

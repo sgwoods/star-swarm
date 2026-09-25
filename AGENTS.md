@@ -62,6 +62,21 @@ Two consequences worth knowing before editing either:
 - `src/content/fs.ts` is the only file there that imports `node:fs`, and
   `index.ts` does not re-export it, so the platform stays browser-safe.
 
+## Audio is the other side of that boundary
+
+`src/audio/synth.ts` is in two halves on purpose: `buildSoundPlan` is pure and
+turns a `Sound` into the voices and scheduled parameters to build, and `playPlan`
+realises one against `SynthContext` — a structural subset of Web Audio that a
+real `AudioContext` satisfies and `tests/unit/helpers/fake-audio-context.ts`
+implements. That is the only reason the graph is testable on the Node-only test
+environment, so keep the split when editing.
+
+Two more things hold: no `AudioContext` exists until `Synth.unlock()` runs from a
+user gesture, and every call into Web Audio is wrapped — the game must run
+silently and correctly when audio is blocked. And **which event plays which sound
+is data**: `sounds` in a pack manifest maps simulation event names to sound ids,
+the loader checks every id, and `src/audio/sfx.ts` names no effect of its own.
+
 ## Layout
 
 `docs/DESIGN.md` section 9 fixes the source layout, and each directory carries a

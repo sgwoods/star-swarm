@@ -49,9 +49,13 @@ describe('the pack itself', () => {
     expect(rules.id).toBe('classic');
   });
 
-  it('is still a valid pack with every content directory empty', () => {
+  it('is still a valid pack with its unfilled content directories empty', () => {
     const { source } = readPackSource(PACK_DIR);
-    expect(source?.documents).toEqual([]);
+    // Sounds landed with the synth task; aliens, paths, stages and sprites are
+    // still the sibling tasks' to fill. `tests/unit/classic-sounds.test.ts`
+    // covers what is in `sounds/`.
+    const kinds = new Set(source?.documents.map((document) => document.kind));
+    expect([...kinds]).toEqual(['sounds']);
   });
 
   it('declares its own role vocabulary rather than borrowing the engine’s', () => {

@@ -243,6 +243,20 @@
       ]
     }
   },
+  "sounds": {
+    "stage-started": "stage-start",
+    "shot-fired": "fire",
+    "enemy-fired": "enemy-fire",
+    "target-destroyed": "enemy-hit",
+    "player-hit": "player-death",
+    "extra-life": "extra-life",
+    "game-over": "game-over",
+    "enemy-dived": "dive",
+    "capture-started": "capture-beam",
+    "fighter-rescued": "rescue",
+    "challenge-bonus": "challenge-bonus",
+    "challenge-perfect": "challenge-perfect"
+  },
   "stageSequence": {
     "normal": {
       "rows": [],

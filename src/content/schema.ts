@@ -548,6 +548,16 @@ export const packManifestSchema = z.strictObject({
   roles: z.record(idSchema, z.strictObject({ label: z.string().optional() })).default({}),
   /** Formation id → formation. The key must equal the formation's own `id`. */
   formations: z.record(idSchema, formationSchema).default({}),
+  /**
+   * Simulation event name → sound id: what the game sounds like, as data.
+   *
+   * `src/audio/sfx.ts` subscribes to simulation events and looks the event's
+   * name up here, so a pack decides which effect plays for firing, for a kill or
+   * for a stage start without a line of code naming any of them. Open-keyed for
+   * the same reason `alien.sounds` is — the event vocabulary belongs to the
+   * game, not to the platform.
+   */
+  sounds: z.record(z.string(), refSchema).default({}),
   stageSequence: stageSequenceSchema.default({
     normal: { rows: [], repeatLast: 1 },
     challenge: { rows: [], repeatLast: 1 },

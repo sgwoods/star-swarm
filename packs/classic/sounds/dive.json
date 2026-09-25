@@ -1,0 +1,9 @@
+{
+  "id": "dive",
+  "wave": "square",
+  "freq": [1480, 415],
+  "duty": 0.18,
+  "vibrato": { "rate": 23, "depth": 0.17 },
+  "envelope": [0.012, 0.16, 0.12],
+  "volume": 0.3
+}
