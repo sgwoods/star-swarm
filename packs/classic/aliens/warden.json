@@ -4,5 +4,7 @@
   "hp": 2,
   "sprite": "warden",
   "hitSprites": ["warden-hit"],
-  "score": { "base": 150 }
+  "score": { "base": 150 },
+  "fire": { "pattern": "aimed", "shotsPerDive": 2, "cooldownFrames": 40 },
+  "dive": { "paths": ["dive-warden"], "weight": 1 }
 }

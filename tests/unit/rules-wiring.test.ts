@@ -10,9 +10,10 @@ import {
 import type { Rules } from '../../src/content/schema.js';
 import { frameOf } from '../../src/engine/input.js';
 import { LOGICAL_HEIGHT, LOGICAL_WIDTH } from '../../src/render/canvas.js';
+import { armDives, maxDiversNow } from '../../src/sim/dive.js';
 import { shotsInFlight } from '../../src/sim/shots.js';
 import { createWorld, stepWorld } from '../../src/sim/world.js';
-import { classicRules, minimalRules } from '../helpers/rules.js';
+import { classicRules, classicStages, minimalRules } from '../helpers/rules.js';
 
 /**
  * The join between `src/content/` and `src/sim/`.
@@ -125,6 +126,71 @@ describe('a pack that overrides a rule changes what the simulation does', () => 
     if (speed === undefined) return;
     const raised: Rules = { ...rules, starfield: { speed: { ...speed, base: 0x80 } } };
     expect(starfieldSpeedByte(raised, 1)).toBe(starfieldSpeedByte(rules, 1) + 0x40);
+  });
+});
+
+describe('the attack takes its numbers from the loaded pack too', () => {
+  /** The Classic rules with the enemy block patched. */
+  function withEnemies(patch: Partial<Rules['enemies']>): Rules {
+    return { ...rules, enemies: { ...rules.enemies, ...patch } };
+  }
+
+  /**
+   * Frames from arming the dives to the first one, or `-1`.
+   *
+   * The *interval* rather than a count, because once the launcher is faster than
+   * the divers turn over it is the row's diver limit that binds and a count would
+   * measure that instead.
+   */
+  function framesToFirstDive(patched: Rules, steps = 1_200): number {
+    const world = createWorld({
+      seed: 'wiring',
+      rules: { ...patched, lives: { ...patched.lives, default: 400 } },
+      stages: classicStages(),
+    });
+    for (const enemy of world.fleet.enemies) enemy.state = 'home';
+    world.fleet.entryComplete = true;
+    if (world.formation !== undefined) world.formation.motion = 'breathe';
+    armDives(world.dive);
+    for (let i = 0; i < steps; i += 1) {
+      if (stepWorld(world, 0).some((event) => event.type === 'enemy-dived')) return i;
+    }
+    return -1;
+  }
+
+  it('launches dives at the cadence the pack’s launch cost sets', () => {
+    // The row's counters are the ramp; this is the pack-wide number that decodes
+    // them. Quadrupling it has to quadruple the gap before the first dive on every
+    // stage together — which is what makes it a rule rather than a difficulty knob
+    // hidden in the engine.
+    const dive = rules.enemies.dive;
+    const slow = withEnemies({ dive: { ...dive, launchCost: dive.launchCost * 4 } });
+    const shipped = framesToFirstDive(rules);
+    expect(shipped).toBeGreaterThan(0);
+    // Within one round robin of four times as long: the launcher only runs on one
+    // frame in four, so the exact frame is that grid rather than the arithmetic.
+    const phases = rules.enemies.updatePhases;
+    expect(framesToFirstDive(slow)).toBeGreaterThanOrEqual(shipped * 4 - phases);
+    expect(framesToFirstDive(slow)).toBeLessThanOrEqual(shipped * 4 + phases);
+  });
+
+  it('applies the row’s raised diver limit after the pack’s own delay', () => {
+    const dive = rules.enemies.dive;
+    const immediate = withEnemies({ dive: { ...dive, bumpAfterFrames: 0 } });
+    const world = createWorld({
+      seed: 'bump',
+      rules: immediate,
+      stages: classicStages(),
+      stage: 20,
+    });
+    // Stage 20's row is 4 rising to 6, and with no delay the 6 is in force at once.
+    expect(maxDiversNow(world.dive, immediate)).toBe(6);
+    expect(maxDiversNow(world.dive, rules)).toBe(4);
+  });
+
+  it('sizes the bomb pool from the pack, so a smaller cap really is smaller', () => {
+    const tight = withEnemies({ maxBullets: 3 });
+    expect(createWorld({ seed: 'bullets', rules: tight }).enemyBullets).toHaveLength(3);
   });
 });
 

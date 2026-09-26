@@ -370,9 +370,15 @@ export function loadPack(source: PackSource): LoadResult {
         message: `"${path}" does not name a field in ${RULES_FILE}`,
       });
     }
+    if (rules.enemies.dive.returnPath !== undefined) {
+      requireRef(RULES_FILE, 'enemies.dive.returnPath', 'paths', rules.enemies.dive.returnPath);
+    }
     if (rules.transform !== undefined) {
       rules.transform.types.forEach((id, index) => {
         requireRef(RULES_FILE, `transform.types[${String(index)}]`, 'aliens', id);
+      });
+      rules.transform.fromRoles.forEach((role, index) => {
+        requireRole(RULES_FILE, `transform.fromRoles[${String(index)}]`, role);
       });
     }
     const rankIds = Object.keys(rules.difficulty.ranks);

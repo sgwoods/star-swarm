@@ -8,8 +8,23 @@ Milestone 1 landed the player half: `world.ts`, `player.ts`, `shots.ts`,
 `collision.ts`, `lives.ts` and `events.ts`. Milestone 2's first task replaced
 the static stand-in with real enemies: `enemies.ts` (entry waves, the four-phase
 update, slot homing) and `formation.ts` (the coordinate axes, sway and breathe).
-Dive attacks, enemy fire, the capture beam and challenge stages are the sibling
-tasks that build on those two.
+The dive task added `dive.ts` — dive attacks, enemy fire and the difficulty ramp
+that drives both. The capture beam, the captured fighter, rescue, the dual
+fighter and the challenge stages are the sibling tasks that build on those.
+
+**The attack is one director, and dives are where capture hooks in.** `dive.ts`
+resolves the stage's difficulty row once and reads it: the per-role launch rates,
+the diver limit and its later bump, the continuous-bombing threshold. Diving
+begins from `formation-settled` and nowhere else, launch decisions are taken once
+per round robin, and each enemy's own bombing decision is taken on its own phase.
+A captor's dive is an ordinary dive with a beam on it, so it launches through
+`beginDive` like everything else.
+
+Two fields of a difficulty row are carried as data and **read by nothing yet**:
+`bombEnable` (the arcade's "parameter for set bomb drop enable flags") and
+`reloadAttackVectors`. The reference records the raw selectors but not what they
+select, so modelling them would be invention rather than reproduction; they stay
+verified data until the reference covers them.
 
 **The simulation has no rules of its own.** Every policy number it steps — the
 movement cadence, the travel limits, the shot cap, the hit windows, the

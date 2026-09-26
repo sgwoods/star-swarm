@@ -1,0 +1,4 @@
+{
+  "id": "dive-return",
+  "segments": [{ "type": "toSlot", "speed": 1.7 }]
+}

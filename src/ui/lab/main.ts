@@ -24,7 +24,15 @@ import { tryCompilePath } from '../../sim/paths.js';
 import { drawPathPreview, tracePath } from './path-preview.js';
 import { loadLabPacks } from './packs.js';
 
-/** Where `toSlot` aims until the canvas is clicked. Roughly a formation row. */
+/**
+ * Where `toSlot` aims until the canvas is clicked. Roughly a formation row.
+ *
+ * It doubles as the **starting point for a path that states none**, which is what
+ * every dive path does: a dive is flown from wherever the enemy already sits, so
+ * the slot marker is both where it would have come from and where it would go
+ * back to. Without that, a dive path is a compile error here — there is nowhere
+ * to begin — and the previewer could show only the entry paths.
+ */
 const DEFAULT_SLOT: Vec2 = [LOGICAL_WIDTH / 2, 72];
 /** Where `aimAtPlayer` aims until shift-click moves it. The player's row. */
 const DEFAULT_PLAYER: Vec2 = [LOGICAL_WIDTH / 2, 264];
@@ -151,6 +159,8 @@ function main(): void {
       playfield: { width: LOGICAL_WIDTH, height: LOGICAL_HEIGHT },
       slot,
       player,
+      // A path with no `start` of its own is a dive: it begins at the slot.
+      ...(path.start === undefined && { start: slot }),
     });
     if (!result.ok) {
       compiled = undefined;

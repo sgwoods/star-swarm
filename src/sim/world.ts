@@ -13,11 +13,13 @@
  * `src/content/`; neither is a pack, a registry or a file, which is what keeps the
  * simulation free of the content layer's plumbing.
  *
- * Milestone 2 scope so far: entry waves, formation sway and breathe, and slot
- * homing. Dive attacks, enemy fire, the capture beam and challenge stages are the
- * sibling tasks that build on this, and are deliberately absent rather than
- * stubbed — so the enemy bullet pool exists and is stepped, but nothing loads it
- * yet.
+ * Milestone 2 scope so far: entry waves, formation sway and breathe, slot homing,
+ * and — from the dive task — dive attacks, enemy fire and the difficulty ramp that
+ * drives both (`src/sim/dive.ts`). The capture beam, the captured fighter, rescue,
+ * the dual fighter and the challenge stages are the sibling tasks that build on
+ * this, and are deliberately absent rather than stubbed. The seam the capture task
+ * wants is {@link World.dive}: a captor's dive is an ordinary dive with a beam on
+ * it, so it launches through the same director and the same `beginDive`.
  */
 
 import { extraLivesEarned, starfieldSpeedByte } from '../content/rules.js';
@@ -27,12 +29,22 @@ import { EMPTY_STAGE_SOURCE } from '../content/stages.js';
 import { isDown, type InputFrame } from '../engine/input.js';
 import { createRng, type Rng, type RngState } from '../engine/rng.js';
 import { hitWindowIndex } from './collision.js';
+import type { DiveState } from './dive.js';
+import {
+  armDives,
+  createDiveState,
+  diveFingerprint,
+  noteDeparted,
+  noteDestroyed,
+  stepAttacks,
+} from './dive.js';
 import type { Enemy, Fleet } from './enemies.js';
 import { aliveEnemies, createFleet, enemyScore, isTargetable, stepFleet } from './enemies.js';
 import type { SimEvent } from './events.js';
 import type { FormationState } from './formation.js';
 import { createFormation, stepFormation } from './formation.js';
 import { createLives, type LivesState } from './lives.js';
+import type { Vec2 } from './paths.js';
 import { createPlayer, type PlayerState, shipAnchors, startX, stepPlayer } from './player.js';
 import {
   clearEnemyBullets,
@@ -57,6 +69,14 @@ export interface World {
   readonly rules: Rules;
   /** What plays as each stage. Also a value: see the file header. */
   readonly stages: StageSource;
+  /**
+   * The difficulty rank this run is played at — the cabinet's DIP setting.
+   *
+   * Rank selects whole data sets rather than scaling one (`docs/DESIGN.md`
+   * section 6), so it is carried here and handed to the rules layer on every
+   * lookup rather than folded into the rules when they load.
+   */
+  readonly rank: string | undefined;
   /** Simulation steps run. The only notion of time the sim has. */
   step: number;
   stage: number;
@@ -71,6 +91,8 @@ export interface World {
   /** The formation's coordinates and their motion. `undefined` with no stage. */
   formation: FormationState | undefined;
   fleet: Fleet;
+  /** Dives, enemy fire and the difficulty row in force. Replaced every stage. */
+  dive: DiveState;
   rng: Rng;
   /** Events raised by the step just run. Replaced every step, never appended to across steps. */
   events: SimEvent[];
@@ -87,6 +109,8 @@ export interface WorldOptions {
   readonly stages?: StageSource;
   readonly seed?: number | string | RngState;
   readonly stage?: number;
+  /** The difficulty rank. Omitted means the rules' own `defaultRank`. */
+  readonly rank?: string;
 }
 
 /** An empty fleet, for a stage the pack has no content for. */
@@ -107,6 +131,7 @@ export function createWorld(options: WorldOptions): World {
   const world: World = {
     rules,
     stages,
+    rank: options.rank,
     step: 0,
     stage,
     score: 0,
@@ -121,6 +146,7 @@ export function createWorld(options: WorldOptions): World {
         ? undefined
         : createFormation(content.formation, rules, content.stage.kind),
     fleet: content === undefined ? NO_FLEET() : createFleet(content, rules),
+    dive: createDiveState(rules, stage, options.rank),
     rng,
     events: [],
   };
@@ -176,6 +202,7 @@ function resolvePlayerShots(world: World): void {
         });
       } else {
         const score = enemyScore(enemy);
+        const bonus = noteDestroyed(world.dive, world.rules, world.stage, enemy);
         enemy.state = 'dead';
         world.fleet.flights.delete(enemy.id);
         world.events.push({
@@ -186,7 +213,11 @@ function resolvePlayerShots(world: World): void {
           y: enemy.y,
           score,
         });
+        // The kill and any bonus it completed are two channels, added in that
+        // order: every bonus in the game is the same 100-points-per-unit
+        // accumulator, and a group bonus is not part of the last member's value.
         addScore(world, score);
+        addScore(world, bonus);
       }
       break; // One shot, one target.
     }
@@ -249,6 +280,7 @@ function enterStage(world: World, stage: number): void {
       ? undefined
       : createFormation(world.content.formation, world.rules, world.content.stage.kind);
   world.fleet = world.content === undefined ? NO_FLEET() : createFleet(world.content, world.rules);
+  world.dive = createDiveState(world.rules, stage, world.rank);
   world.events.push({
     type: 'stage-started',
     stage,
@@ -273,13 +305,30 @@ function resolveStageEnd(world: World): void {
   enterStage(world, world.stage + 1);
 }
 
-/** The formation's coordinates, then every enemy that addresses them. */
+/**
+ * Where a dive aims: the fighter's anchor, or nothing while it is off the field.
+ *
+ * A dual fighter aims at the anchor rather than at either ship, which is the one
+ * the arcade's bomb vectors are measured from too.
+ */
+function playerTarget(world: World): Vec2 | undefined {
+  return world.player.alive ? [world.player.x, world.player.y] : undefined;
+}
+
+/**
+ * The formation's coordinates, then every enemy that addresses them, then the
+ * attack the difficulty row asks for.
+ *
+ * The order is load-bearing three times over. The formation moves first, so an
+ * enemy launching this frame predicts its slot from the offset the formation has
+ * *now*. The fleet flies next, so a dive launched below is compiled from where
+ * the enemy has just arrived. And `formation-settled` arms the dives on its own
+ * frame, so nothing peels off a formation that is not yet centred.
+ */
 function stepEnemies(world: World): void {
   const { content, formation } = world;
   if (content === undefined || formation === undefined) return;
 
-  // The formation first: an enemy launching this frame predicts its slot from the
-  // offset the formation has *now*, not the one it had last frame.
   const settled = stepFormation(formation, world.rules);
   if (settled) {
     world.events.push({
@@ -287,9 +336,13 @@ function stepEnemies(world: World): void {
       stage: world.stage,
       enemies: aliveEnemies(world.fleet.enemies).length,
     });
+    // Diving begins here — on the frame the sway passes back through zero — and
+    // not on the frame the last wave arrived. See `armDives`.
+    armDives(world.dive);
   }
 
-  const step = stepFleet(world.fleet, content, formation, world.rules);
+  const playerAt = playerTarget(world);
+  const step = stepFleet(world.fleet, content, formation, world.rules, playerAt);
   for (const enemy of step.launched) {
     world.events.push({
       type: 'enemy-launched',
@@ -298,6 +351,59 @@ function stepEnemies(world: World): void {
       wave: enemy.wave,
       x: enemy.x,
       y: enemy.y,
+    });
+  }
+  for (const enemy of step.departed) {
+    noteDeparted(world.dive, enemy);
+    world.events.push({
+      type: 'enemy-departed',
+      targetId: enemy.id,
+      alienId: enemy.alienId,
+      x: enemy.x,
+      y: enemy.y,
+    });
+  }
+
+  const attack = stepAttacks(world.dive, {
+    fleet: world.fleet,
+    content,
+    formation,
+    rules: world.rules,
+    stage: world.stage,
+    rng: world.rng,
+    bullets: world.enemyBullets,
+    playerAt,
+    scripted: step.fired,
+  });
+
+  for (const enemy of attack.dived) {
+    world.events.push({
+      type: 'enemy-dived',
+      targetId: enemy.id,
+      alienId: enemy.alienId,
+      x: enemy.x,
+      y: enemy.y,
+    });
+  }
+  for (const enemy of attack.fired) {
+    world.events.push({ type: 'enemy-fired', targetId: enemy.id, x: enemy.x, y: enemy.y });
+  }
+  if (attack.transforming !== undefined) {
+    const enemy = attack.transforming;
+    world.events.push({
+      type: 'enemy-transforming',
+      targetId: enemy.id,
+      x: enemy.x,
+      y: enemy.y,
+    });
+  }
+  if (attack.transformed.length > 0) {
+    const first = attack.transformed[0];
+    world.events.push({
+      type: 'enemy-transformed',
+      targetId: attack.transformedFrom ?? -1,
+      alienId: first?.alienId ?? '',
+      group: attack.transformed.map((enemy) => enemy.id),
     });
   }
 }
@@ -357,6 +463,10 @@ function enemyFingerprint(enemy: Enemy): readonly (string | number)[] {
     enemy.x,
     enemy.y,
     enemy.pathFrame,
+    // The bomb delay and the per-run allowance are the whole of enemy fire, so a
+    // run that agreed on positions but not on these would diverge a second later.
+    enemy.bombTimer,
+    enemy.bombsLeft,
   ];
 }
 
@@ -384,6 +494,7 @@ export function fingerprintWorld(world: World): string {
       vx,
       vy,
     ]),
+    dive: diveFingerprint(world.dive),
     formation: world.formation && [
       world.formation.frame,
       world.formation.motion,

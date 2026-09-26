@@ -28,9 +28,20 @@ const formation = classicFormation();
 const stage = pack.stages.get('stage-1');
 if (stage === undefined) throw new Error('the classic pack has no stage-1');
 
-describe('the three aliens', () => {
+describe('the aliens', () => {
   it('is exactly the roles the manifest declares', () => {
-    expect([...pack.aliens.keys()].sort()).toEqual(['drone', 'warden', 'wing']);
+    // The three formation roles, plus the three transform types — which are
+    // roles of their own rather than one shared "transform" role, because the
+    // pack's role vocabulary is what everything else keys by and a sprite, a
+    // score and a dive belong to each type separately.
+    expect([...pack.aliens.keys()].sort()).toEqual([
+      'drone',
+      'ensign',
+      'manta',
+      'scourge',
+      'warden',
+      'wing',
+    ]);
     for (const [id, alien] of pack.aliens) {
       expect(alien.role).toBe(id);
       expect(Object.keys(pack.manifest.roles)).toContain(alien.role);
@@ -44,6 +55,11 @@ describe('the three aliens', () => {
     expect(pack.aliens.get('drone')?.score.base).toBe(50);
     expect(pack.aliens.get('wing')?.score.base).toBe(80);
     expect(pack.aliens.get('warden')?.score.base).toBe(150);
+    // A transform is worth 160 diving, which is 80 doubled — the same rule, not
+    // a second stored number. Reference section 6, "Trio type and bonus".
+    for (const id of rules.transform?.types ?? []) {
+      expect([id, pack.aliens.get(id)?.score.base]).toEqual([id, 80]);
+    }
     for (const alien of pack.aliens.values()) {
       expect(alien.score.movingMultiplier).toBeUndefined();
     }
@@ -54,9 +70,10 @@ describe('the three aliens', () => {
     expect(warden?.hp).toBe(2);
     expect(warden?.hitSprites).toEqual(['warden-hit']);
     // Everything else dies to one shot.
-    expect(pack.aliens.get('drone')?.hp).toBe(1);
-    expect(pack.aliens.get('wing')?.hp).toBe(1);
-    expect(pack.aliens.get('drone')?.hitSprites).toEqual([]);
+    for (const id of ['drone', 'wing', 'scourge', 'manta', 'ensign']) {
+      expect([id, pack.aliens.get(id)?.hp]).toEqual([id, 1]);
+      expect([id, pack.aliens.get(id)?.hitSprites]).toEqual([id, []]);
+    }
   });
 
   it('names a sprite that exists, and no hitbox of its own', () => {
@@ -67,11 +84,29 @@ describe('the three aliens', () => {
     }
   });
 
-  it('declares nothing a sibling task owns yet', () => {
-    for (const alien of pack.aliens.values()) {
-      expect(alien.dive).toBeUndefined();
-      expect(alien.fire).toBeUndefined();
-      expect(alien.abilities).toEqual([]);
+  it('gives every alien a dive and a bomb, and no ability yet', () => {
+    for (const [id, alien] of pack.aliens) {
+      expect([id, alien.dive?.paths.length ?? 0]).toEqual([id, 1]);
+      expect([id, alien.fire?.pattern]).toEqual([id, 'aimed']);
+      // `cooldownFrames` *is* the per-enemy inter-shot delay of
+      // `docs/DESIGN.md` section 4. An alien without one would bomb every frame
+      // the global cap allowed, which is the failure this asserts against.
+      expect(alien.fire?.cooldownFrames ?? 0).toBeGreaterThan(0);
+      expect(alien.fire?.shotsPerDive ?? 0).toBeGreaterThan(0);
+      // Abilities are Milestone 3; the capture beam is the sibling task's.
+      expect([id, alien.abilities]).toEqual([id, []]);
+    }
+  });
+
+  it('brings the roles back from a dive and the transform trio not at all', () => {
+    // Reference section 5: divers that leave the bottom re-enter from the top.
+    // Reference section 6: the trio "exits the screen — unlike bees, it does not
+    // re-enter from the top". That difference is per-alien data, not a branch.
+    for (const id of ['drone', 'wing', 'warden']) {
+      expect([id, pack.aliens.get(id)?.dive?.returns]).toEqual([id, true]);
+    }
+    for (const id of rules.transform?.types ?? []) {
+      expect([id, pack.aliens.get(id)?.dive?.returns]).toEqual([id, false]);
     }
   });
 });

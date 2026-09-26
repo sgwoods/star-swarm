@@ -6,6 +6,7 @@ import { readPackSource } from '../../src/content/fs.js';
 import type { LoadedPack } from '../../src/content/loader.js';
 import { loadPack } from '../../src/content/loader.js';
 import {
+  allowsEntryBombing,
   averageStepDistance,
   challengeOrdinal,
   extraLivesEarned,
@@ -13,6 +14,7 @@ import {
   provenanceOf,
   resolveDifficultyRow,
   resolveExtraLifeAward,
+  resolveLaunchCredit,
   starfieldSpeedByte,
   unknownProvenancePaths,
 } from '../../src/content/rules.js';
@@ -57,9 +59,10 @@ describe('the pack itself', () => {
   it('loads with its rules', () => {
     expect(pack.id).toBe('classic');
     expect(rules.id).toBe('classic');
-    // The three roles, and one authored stage. `tests/unit/classic-content.test.ts`
-    // checks what is in them; here it is only that they are there.
-    expect(pack.aliens.size).toBe(3);
+    // The three formation roles plus the three transform types, and one authored
+    // stage. `tests/unit/classic-content.test.ts` checks what is in them; here it
+    // is only that they are there.
+    expect(pack.aliens.size).toBe(6);
     expect(pack.stages.size).toBe(1);
   });
 
@@ -95,7 +98,14 @@ describe('the pack itself', () => {
   });
 
   it('declares its own role vocabulary rather than borrowing the engine’s', () => {
-    expect(Object.keys(pack.manifest.roles).sort()).toEqual(['drone', 'warden', 'wing']);
+    expect(Object.keys(pack.manifest.roles).sort()).toEqual([
+      'drone',
+      'ensign',
+      'manta',
+      'scourge',
+      'warden',
+      'wing',
+    ]);
   });
 
   it('carries the 40-slot formation of docs/DESIGN.md section 4', () => {
@@ -416,8 +426,49 @@ describe('the rest of the Classic rules', () => {
     ]);
   });
 
-  it('has no transform aliens yet, which the loader is content with', () => {
-    expect(rules.transform?.types).toEqual([]);
+  it('names its own three transform types rather than the original’s', () => {
+    // Three types on a four-stage period is verified; the names are ours, because
+    // `docs/DESIGN.md` section 2 bars the original's. Reference section 6 records
+    // which is which.
+    expect(rules.transform?.types).toEqual(['scourge', 'manta', 'ensign']);
+    expect(rules.transform?.types).toHaveLength(
+      rules.scoring.transformGroupBonus?.rows.length ?? 0,
+    );
+    // A bee, or a butterfly if no bees remain — in that order.
+    expect(rules.transform?.fromRoles).toEqual(['drone', 'wing']);
+    expect(rules.transform?.perStage).toBe(1);
+  });
+
+  it('turns a difficulty row into dives without a multiplier anywhere', () => {
+    // The two numbers that decode a row's launch counters into a cadence. They
+    // are pack-wide, so changing one changes every stage together — which is the
+    // difference between a rule and the difficulty curve the tables are not.
+    expect(rules.enemies.dive.baseLaunchRate).toBeGreaterThan(0);
+    expect(rules.enemies.dive.launchCost).toBeGreaterThan(rules.enemies.dive.baseLaunchRate);
+    // Rank A stage 1 has all three launch counters at 0 and the original
+    // certainly dives, so a rate of 0 has to still launch.
+    expect(
+      resolveLaunchCredit(rules, resolveDifficultyRow(rules, 1, 'A'), 'drone'),
+    ).toBeGreaterThan(0);
+    // And a role the row says nothing about does not attack at all.
+    expect(resolveLaunchCredit(rules, resolveDifficultyRow(rules, 1, 'A'), 'scourge')).toBe(0);
+  });
+
+  it('bombs on entry from stage 2, and never on stage 1', () => {
+    expect(rules.enemies.bombing.entryFromStage).toBe(2);
+    expect(allowsEntryBombing(rules, 1)).toBe(false);
+    expect([2, 3, 20].every((stage) => allowsEntryBombing(rules, stage))).toBe(true);
+  });
+
+  it('flies divers back into the formation from above the top of the screen', () => {
+    // Confirmed behaviour (reference section 5): a diver that leaves the bottom
+    // re-enters from the top. The return path homes with `toSlot` and nothing
+    // else, which is what keeps one homing implementation in the simulation.
+    expect(rules.enemies.dive.returnPath).toBe('dive-return');
+    expect(rules.enemies.dive.reentryY).toBeLessThan(0);
+    const returnPath = pack.paths.get(rules.enemies.dive.returnPath ?? '');
+    expect(returnPath?.segments.map((segment) => segment.type)).toEqual(['toSlot']);
+    expect(returnPath?.start).toBeUndefined();
   });
 });
 
@@ -451,6 +502,15 @@ describe('how far each value may be trusted', () => {
       'player.shot.windows.dual[1].dxMin',
       'enemies.maxBullets',
       'enemies.bomberReadyTimers',
+      'enemies.updatePhases',
+      'enemies.dive.returnPath',
+      'enemies.bombing.entryFromStage',
+      'transform.fromStage',
+      'transform.remainingThreshold',
+      'transform.stagesPerType',
+      'transform.groupSize',
+      'transform.fromRoles',
+      'transform.perStage',
       'starfield.speed',
     ]) {
       expect([path, confidenceOf(path)]).toEqual([path, 'verified']);
@@ -473,6 +533,14 @@ describe('how far each value may be trusted', () => {
       'enemies.bullet.speed',
       'enemies.bullet.width',
       'enemies.bullet.height',
+      // The launcher that reads the row's counters is ours; the counters are not.
+      'enemies.dive.baseLaunchRate',
+      'enemies.dive.launchCost',
+      'enemies.dive.bumpAfterFrames',
+      'enemies.dive.reentryY',
+      'enemies.bombing.continuousCooldownFrames',
+      'transform.tellFrames',
+      'transform.types',
     ]) {
       expect([path, confidenceOf(path)]).toEqual([path, 'provisional']);
     }

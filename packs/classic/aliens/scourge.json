@@ -1,0 +1,9 @@
+{
+  "id": "scourge",
+  "role": "scourge",
+  "hp": 1,
+  "sprite": "scourge",
+  "score": { "base": 80 },
+  "fire": { "pattern": "aimed", "shotsPerDive": 2, "cooldownFrames": 36 },
+  "dive": { "paths": ["dive-transform"], "weight": 1, "returns": false }
+}

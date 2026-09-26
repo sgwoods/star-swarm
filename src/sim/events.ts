@@ -33,6 +33,54 @@ export interface EnemyFiredEvent {
   readonly y: number;
 }
 
+/**
+ * An enemy left the formation to attack.
+ *
+ * Raised on the frame the dive path is compiled, which is also the frame the
+ * arcade's dive sound starts — `packs/classic/pack.json` binds it to `dive`.
+ */
+export interface EnemyDivedEvent {
+  readonly type: 'enemy-dived';
+  readonly targetId: number;
+  readonly alienId: string;
+  readonly x: number;
+  readonly y: number;
+}
+
+/**
+ * An enemy finished a dive and left the field for good, undestroyed.
+ *
+ * Distinct from `target-destroyed` on purpose: nothing was shot, so nothing
+ * scores. The arcade's transformed trio leaves this way; its bees and butterflies
+ * re-enter from the top instead and raise nothing.
+ */
+export interface EnemyDepartedEvent {
+  readonly type: 'enemy-departed';
+  readonly targetId: number;
+  readonly alienId: string;
+  readonly x: number;
+  readonly y: number;
+}
+
+/** An enemy began the pulse that warns it is about to become a group. */
+export interface EnemyTransformingEvent {
+  readonly type: 'enemy-transforming';
+  readonly targetId: number;
+  readonly x: number;
+  readonly y: number;
+}
+
+/** One enemy became a group of another type, already diving. */
+export interface EnemyTransformedEvent {
+  readonly type: 'enemy-transformed';
+  /** The enemy that was replaced. It is off the field from this frame. */
+  readonly targetId: number;
+  /** The alien the group is made of. */
+  readonly alienId: string;
+  /** The ids of the group, in the order they were spawned. */
+  readonly group: readonly number[];
+}
+
 export interface TargetDestroyedEvent {
   readonly type: 'target-destroyed';
   readonly targetId: number;
@@ -116,6 +164,10 @@ export type SimEvent =
   | StageStartedEvent
   | ShotFiredEvent
   | EnemyFiredEvent
+  | EnemyDivedEvent
+  | EnemyDepartedEvent
+  | EnemyTransformingEvent
+  | EnemyTransformedEvent
   | EnemyLaunchedEvent
   | FormationSettledEvent
   | TargetDestroyedEvent

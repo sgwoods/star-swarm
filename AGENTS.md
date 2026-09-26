@@ -138,7 +138,30 @@ Two consequences when editing `src/sim/formation.ts` or `src/sim/enemies.ts`:
 Slot homing is `toSlot` and nothing else. It resolves its target when the path
 compiles, so an enemy entering a _swaying_ formation is handed where its slot
 **will be** on arrival (`slotPositionAhead`, solved as a fixed point), not where
-it is now. Writing a second homing routine is the wrong fix.
+it is now. Writing a second homing routine is the wrong fix — a diver returning
+from the bottom flies the pack's `enemies.dive.returnPath`, which is one
+`toSlot` segment and nothing else.
+
+## The attack reads one row of a table and never scales it
+
+`src/sim/dive.ts` resolves the stage's difficulty row once and obeys it: per-role
+launch rates, the simultaneous-diver limit and its later bump, the
+continuous-bombing threshold. The rows are **non-monotonic on purpose** — three
+of the four rank tables contain a stage markedly easier than the one before — so
+nothing interpolates between rows and there is no difficulty multiplier anywhere.
+`src/content/rules.ts` holds the resolvers (`resolveMaxDivers`,
+`resolveLaunchCredit`, `isContinuousBombing`, `resolveBombVectors`,
+`allowsTransform`, …) and is still the only place a row is interpreted.
+
+Two consequences when editing either:
+
+- **Diving begins from `formation-settled`**, the frame the sway passes back
+  through zero — not from the last wave arriving. `armDives` is called there and
+  nowhere else.
+- **Two row fields are read by nothing**: `bombEnable` and `reloadAttackVectors`.
+  The reference records the selectors but not what they select, so modelling them
+  would be invention. Leave them as data until the reference covers them, and do
+  not "wire them up" to something plausible.
 
 ## Audio is the other side of that boundary
 
@@ -225,7 +248,15 @@ and font through the real pipeline into `docs/media/`, which is the contact shee
   copy of the data: world-space targets reflect in, sampled positions reflect
   out, and arcs reverse their handedness because the reflection says so. A pack
   that ships a hand-mirrored twin of a path is working against
-  `src/sim/paths.ts`.
+  `src/sim/paths.ts`. A dive uses the same mechanism to fan outwards: the enemy's
+  side of the formation picks the flag (`isRightOfCentre`).
+- **A dive path states no `start` and may use no `line` or `bezier`.** It is
+  flown from wherever the enemy already sits, so every segment has to be relative
+  to the flyer's pose — `arc`, `loop`, `sine`, `aimAtPlayer`, `exitBottom`. A dive
+  authored with absolute targets drags all forty enemies through the same piece
+  of screen and no single-position test notices;
+  `tests/unit/classic-paths.test.ts` flies each one from six slots for that
+  reason. `/lab` starts such a path at its slot marker, so a dive previews there.
 - Vite's port is shared between checkouts, and `playwright.config.ts` reuses an
   existing dev server outside CI — so a second worktree's Playwright run
   silently tests the _first_ one's build: green, and meaningless. Set

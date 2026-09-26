@@ -11,6 +11,13 @@ join it in Milestone 4.
 - `path-preview.ts` — drawing one path onto the 224×288 backbuffer.
 - `packs.ts` — loads `packs/` through the same `loadPack` the game uses.
 
+Click the canvas to move the `toSlot` marker, shift-click to move the
+`aimAtPlayer` one. The slot marker is also **where a path that states no `start`
+begins**, which is every dive path: a dive is flown from wherever the enemy
+already sits, so moving the marker previews the same dive from a different
+formation slot — including the outermost column, which is the case whose sweep
+has to stay on screen.
+
 ## Dev build only
 
 `lab.html` at the repository root is the entry document, and Vite is never told
