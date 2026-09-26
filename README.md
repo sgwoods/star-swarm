@@ -9,15 +9,16 @@ How it all fits together, and how to run it:
 
 ## Status
 
-**Milestone 2 — the classic game, most of the way there.** It is playable: five
-scripted entry waves fly in and take formation, the formation sways into centre
-and then breathes, enemies dive and bomb in the arcade's difficulty ramp, and the
-fighter shoots back, through the Classic normal stages up to 8. Around that is a
-real front end — attract mode running the game as a replay, game over, the
-hit-ratio results card and a high-score table.
+**Milestone 2 — the classic game, complete.** Five scripted entry waves fly in
+and take formation, the formation sways into centre and then breathes, enemies
+dive and bomb in the arcade's difficulty ramp, and the fighter shoots back,
+through the Classic normal stages up to 8 and eight challenge stages. A captor's
+tractor beam can take the fighter, and shooting the captor while both are
+attacking rescues it to fly beside you as a dual. Around all of that is a real
+front end — attract mode running the game as a replay, the between-stage
+challenge card, game over, the hit-ratio results card and a high-score table.
 
-Still to come in this milestone: the capture beam and rescue, and the challenge
-stages. `docs/ARCHITECTURE.md` §5 has the full list.
+What is left is Milestone 3 and beyond: `docs/ARCHITECTURE.md` §5 has the list.
 
 ![Entry waves, formation and the fighter shooting](docs/media/arch-gameplay.gif)
 
