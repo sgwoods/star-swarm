@@ -5,7 +5,7 @@ import { EMPTY_FRAME, frameOf } from '../../src/engine/input.js';
 import type { Enemy } from '../../src/sim/enemies.js';
 import { eventsOfType, type SimEvent } from '../../src/sim/events.js';
 import { launchEnemyBullet } from '../../src/sim/shots.js';
-import { createWorld, stepWorld, type World } from '../../src/sim/world.js';
+import { createWorld, fingerprintWorld, stepWorld, type World } from '../../src/sim/world.js';
 import { classicRules, classicStages } from '../helpers/rules.js';
 
 const rules = classicRules();
@@ -332,5 +332,72 @@ describe('the simulation boundary', () => {
     const first = world.events;
     stepWorld(world, EMPTY_FRAME);
     expect(world.events).not.toBe(first);
+  });
+});
+
+describe('the fingerprint’s precision', () => {
+  /**
+   * `fingerprintWorld` quantises every number it serialises, which is what stops a
+   * golden recorded on one machine failing on another over a last-bit difference in
+   * `Math.sin`. That deliberately narrows what a golden detects, so both edges of
+   * the new mesh are pinned here: a difference no machine could disagree about
+   * meaningfully is absorbed, and a difference far below anything a player could
+   * see is still caught. Without the second half nobody could tell later whether
+   * the net still catches anything at all.
+   */
+  const nextUp = (value: number): number => {
+    const view = new DataView(new ArrayBuffer(8));
+    view.setFloat64(0, value);
+    view.setBigUint64(0, view.getBigUint64(0) + 1n);
+    return view.getFloat64(0);
+  };
+
+  /** A world with enemies in flight, so the fingerprint carries real positions. */
+  function flying(): { world: World; enemy: Enemy } {
+    const world = createWorld({ seed: 'fingerprint', rules, stages });
+    for (let i = 0; i < 200; i += 1) stepWorld(world, EMPTY_FRAME);
+    const enemy = world.fleet.enemies.find((candidate) => candidate.state !== 'standby');
+    if (enemy === undefined) throw new Error('no enemy had launched after 200 steps');
+    return { world, enemy };
+  }
+
+  // Sits on the quantiser's own grid, which is the middle of a rounding cell and
+  // therefore the honest place to measure from: a value parked on a cell boundary
+  // would straddle it, and that residual is named in `fingerprintWorld`'s comment
+  // rather than papered over here.
+  const ANCHOR = 123.456789;
+
+  it('absorbs a one-ULP difference, which is the cross-machine noise floor', () => {
+    const { world, enemy } = flying();
+    enemy.x = ANCHOR;
+    const before = fingerprintWorld(world);
+    enemy.x = nextUp(ANCHOR);
+    expect(enemy.x).not.toBe(ANCHOR);
+    expect(fingerprintWorld(world)).toBe(before);
+  });
+
+  it('still catches a thousandth of a pixel, far below anything drawable', () => {
+    const { world, enemy } = flying();
+    enemy.x = ANCHOR;
+    const before = fingerprintWorld(world);
+    enemy.x = ANCHOR + 0.001;
+    expect(fingerprintWorld(world)).not.toBe(before);
+  });
+
+  it('catches a millionth of a pixel too — the mesh is 1e-6, not a rounded pixel', () => {
+    const { world, enemy } = flying();
+    enemy.x = ANCHOR;
+    const before = fingerprintWorld(world);
+    enemy.x = ANCHOR + 0.000001;
+    expect(fingerprintWorld(world)).not.toBe(before);
+  });
+
+  it('leaves the RNG state exactly as it is, bit for bit', () => {
+    // The generator's four uint32s are part of the on-disk contract, so they must
+    // pass through the quantiser untouched — `2 ** 32 - 1` included.
+    const { world } = flying();
+    world.rng.setState([4294967295, 0, 2324523762, 1]);
+    const printed: unknown = JSON.parse(fingerprintWorld(world));
+    expect((printed as { rng: number[] }).rng).toEqual([4294967295, 0, 2324523762, 1]);
   });
 });

@@ -18,12 +18,13 @@ choreography, and it draws a sharp line:
 - **Not derived**: which of the ROM's **thirteen** combat scripts is which shape,
   and the choreography inside any of them. That needs the `db_2A3C` →
   `db_2A6C` flight-vector programs decoded, which the reference says it did not
-  open. So there are three paths here, not thirteen, and the per-stage script
-  table of reference section 5 lands with the stages in Milestone 2.
+  open. So there are three entry paths here, not thirteen. The per-stage script table
+  of reference section 5 is now wired up as far as stage 8; `../stages/README.md`
+  says which document plays when, and which shape each one reads as.
 
 The coordinates are this pack's rendition of a shape the reference describes in
 words; they are not measured from the original, and nothing here should be read
-as a ROM value. Every file ends in `toSlot`, which is how a path stays free of
+as a ROM value. Every entry path ends in `toSlot`, which is how it stays free of
 the formation's pixel grid — `pack.json` states slots as logical `(row, column)`
 precisely because their spacing is unconfirmed.
 
@@ -38,6 +39,14 @@ the right-hand half of a wave is the same data evaluated with the slot's
 `mirror` flag set, never a second file. Shape 1 is the one that needs both
 halves at once — that is what makes it the only pattern entering from both
 sides.
+
+One consequence for anyone authoring a stage: each file is a **single lane**, so
+two aliens can only fly abreast by taking opposite halves of it. Shape 2's
+"double-width rows" is therefore rendered as files of two that alternate side
+rather than as two ships side by side on one lane, which would be one sprite. A
+literal double-width row needs a second, inboard path, and its geometry would be
+as unsourced as these three — so it is not here. `../stages/README.md` has the
+flag patterns the three shapes are actually built from.
 
 ## Dive paths
 

@@ -1,9 +1,9 @@
 # `packs/classic/`
 
 The arcade-faithful pack. The manifest, the palette, the formation, the rules,
-the entry paths, the sprite set, the sound set, the three aliens and stage 1 are
-here; stages 2–8, dive paths and the challenge stages land with the sibling
-Milestone 2 tasks.
+the entry paths, the sprite set, the sound set, the three aliens and the normal
+stages through 8 are here; dive paths and the challenge stages land with the
+sibling Milestone 2 tasks.
 
 ## Roles
 
@@ -30,15 +30,20 @@ this project's own. For anyone checking a number against
   two-hit role: `hp: 2` and `hitSprites: ["warden-hit"]`, which is how its first
   hit changes its colour instead of destroying it. Enemy fire, dive paths and the
   capture beam are sibling tasks and are deliberately not declared here yet.
-- **`stages/stage-1.json`** — five waves of eight, as reference section 5's
-  `db_attk_wav_IDs` composes them: 4 `wing` + 4 `drone`, then all four `warden`s
-  with 4 `wing`, then 8 `wing`, then 8 `drone` twice over. Every slot names its
-  own `home`, so the waves are identity-addressed rather than "next free slot",
-  and the 40 homes cover the formation exactly once. The **choreography** —
-  which path each wave flies, the `mirror` and `trailing` flags and the wave
-  timings — is ours: the reference derives the composition but explicitly does
-  not derive which of the thirteen ROM scripts is which shape. See
-  `paths/README.md`.
+- **`stages/`** — five documents covering the normal stages through 8. Each is
+  five waves of eight, as reference section 5's `db_attk_wav_IDs` composes them:
+  4 `wing` + 4 `drone`, then all four `warden`s with 4 `wing`, then 8 `wing`,
+  then 8 `drone` twice over. Every slot names its own `home`, so the waves are
+  identity-addressed rather than "next free slot", and the 40 homes cover the
+  formation exactly once. That composition is the **same on every stage** —
+  `c_25A2` resets the wave-ID pointer at each one — so a document is really an
+  **entry script**, and stage 8 plays `stage-4` because both are script row 4
+  rather than shipping a second copy of it. The **choreography** — which path
+  each wave flies, the `mirror` and `trailing` flags and the wave timings — is
+  ours: the reference derives the composition but explicitly does not derive
+  which of the thirteen ROM scripts is which shape. `stages/README.md` carries
+  the decode of every `home` back to the ROM table, the script-row mapping and
+  what is still missing; `paths/README.md` covers the three shapes.
 - **`rules.json`** — all four difficulty ranks as 26 literal rows each, from
   `docs/reference/arcade-reference.md` section 6, plus the shot caps, extra-life
   settings, challenge cadence, capture rules and scoring rules from sections 3,
@@ -112,10 +117,13 @@ value unmarked.
 
 - `stageSequence.challenge.rows`, with its `repeatLast: 8` already stated because
   the two sequences plateau on _different_ periods and that is easy to lose. The
-  normal half lists `stage-1` alone and so states `repeatLast: 1`: cycling the
-  last three is a property of the seventeen-entry table, and it returns with
-  stages 2–8. The per-rank sequences of reference section 5 land at the same
-  time, as each rank's `stageSequence.normal`.
+  normal half now lists the six normal stages through 8 — the first six of the
+  reference's seventeen — and still states `repeatLast: 1`: cycling the last
+  three is a property of the whole table, so claiming it three rows early would
+  assert a plateau that is not there. The per-rank sequences of reference
+  section 5 cannot land until more script rows exist, and
+  `stages/README.md` says why in detail: through stage 8 alone the four ranks
+  need ten of the thirteen documents, and per-stage ids collide between them.
 - Dive paths in `paths/`, and the `dive`, `fire` and `abilities` blocks of the
   three aliens. All four belong to sibling tasks. `paths/README.md` says which
   entry choreography is authored and why there are three paths rather than
@@ -140,5 +148,7 @@ ROM closed them, and both changed a shape rather than a number:
   four home slots are one per possible captor, not four simultaneous captives.
   `docs/reference/arcade-reference.md` section 7.
 
-One narrower question is still open and does not touch this pack's data: see
-`docs/reference/arcade-reference.md` section 11.
+One narrower question is still open. It does not touch any value in this pack,
+but it is one of the two things holding up the challenge stages, because it
+decides what a challenge stage's second wave contains: see
+`docs/reference/arcade-reference.md` section 11, and `stages/README.md`.

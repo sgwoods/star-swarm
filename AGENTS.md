@@ -82,6 +82,21 @@ Practical consequences:
 - `1/60` is not representable in binary floating point. `src/engine/loop.ts`
   accumulates in _steps_ and carries a tolerance for exactly this reason; naive
   millisecond subtraction silently loses a step per burst.
+- **The simulation is not bit-identical across machines, and the fingerprint is
+  rounded so that this does not reach the test suite.** `src/sim/paths.ts` notes
+  that `Math.sin`, `Math.cos` and `Math.atan2` are engine-defined; they can also
+  differ by one ULP between CPU architectures, and a golden re-recorded on an
+  arm64 Mac did fail CI on x86-64 Linux over a single bit in one enemy's frozen
+  position. `fingerprintWorld` therefore quantises every number it serialises to
+  six decimal places — 1.8e7 times the measured noise, and 5e5 times finer than
+  the half pixel that is the finest difference anyone could see. Entry paths were
+  never exposed (a bezier is multiplies and adds); dive paths are.
+  **What that does not do:** make the simulation portable, or remove the problem.
+  Rounding is discontinuous, so two values straddling a grid line still differ —
+  roughly 1e-5 odds across a whole fingerprint rather than the near-certainty it
+  replaced. Cross-platform bit-identical simulation is still open; this only makes
+  it irrelevant to the goldens. `tests/unit/world.test.ts` pins both edges of the
+  mesh, so loosening it further cannot pass unnoticed.
 - Golden replays live in `tests/sim/golden/`, written by
   `npx tsx scripts/record-replay.ts` and compared byte for byte (so the
   directory is in `.prettierignore`). A PR that changes one either meant to or
@@ -134,6 +149,18 @@ Two consequences when editing `src/sim/formation.ts` or `src/sim/enemies.ts`:
   `rules.enemies.updatePhases` is 4 for Classic: each enemy's state machine runs
   on one frame in four, while every enemy's position moves every frame. A launch
   therefore lands within `updatePhases` frames of when it was due, on purpose.
+
+**A stage document is an entry script, not a stage.** The arcade keeps a library of
+13 combat scripts and selects one per stage through a per-rank 17-entry index list,
+so several stage numbers play one document: `stageSequence.normal.rows` names
+`stage-4` twice because stage 8 is the same script row. Never ship a copy.
+`packs/classic/stages/README.md` carries the mapping, the decode of every `home`
+back to the ROM's wave table, and what the reference does not settle.
+
+**A simultaneous pair in a wave must differ in `mirror`.** One path plus a reflection
+is a single lane, so two same-handed slots launching on the same frame fly as one
+sprite. `trailing` on the second of a pair is what makes a wave a file;
+`tests/unit/classic-content.test.ts` fails on the collision.
 
 Slot homing is `toSlot` and nothing else. It resolves its target when the path
 compiles, so an enemy entering a _swaying_ formation is handed where its slot

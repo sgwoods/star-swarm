@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
+import { isChallengeStage, normalStageOrdinal, resolveStageId } from '../../src/content/rules.js';
 import { formationAxes } from '../../src/content/schema.js';
 import { waveLaunchFrames } from '../../src/sim/enemies.js';
 import { classicFormation, classicPack, classicRules } from '../helpers/rules.js';
 
 /**
- * `packs/classic/aliens/` and `packs/classic/stages/stage-1.json`, against
+ * `packs/classic/aliens/` and `packs/classic/stages/`, against
  * `docs/reference/arcade-reference.md`.
  *
  * The reference draws a sharp line through entry choreography, and this file
@@ -17,6 +18,13 @@ import { classicFormation, classicPack, classicRules } from '../helpers/rules.js
  * scripts to a shape was not derived, so a test that pinned our choreography to
  * the arcade would be asserting a fiction.
  *
+ * The composition assertions run over **every** normal stage the pack ships, not
+ * stage 1 alone. That is not thoroughness for its own sake: `c_25A2` resets the
+ * wave-ID pointer to the top of `db_attk_wav_IDs` at every stage, so the forty
+ * objects and the order they are grouped into five waves are the *same* on every
+ * stage. A stage that composed its waves differently would be wrong, and only a
+ * test over all of them says so.
+ *
  * `tests/unit/classic-pack.test.ts` covers the manifest, the formation and the
  * rank tables; this file covers the content those two put on the field.
  */
@@ -25,8 +33,20 @@ const pack = classicPack();
 const rules = classicRules();
 const formation = classicFormation();
 
-const stage = pack.stages.get('stage-1');
-if (stage === undefined) throw new Error('the classic pack has no stage-1');
+/**
+ * Every normal stage the pack ships, in sequence order and de-duplicated.
+ *
+ * De-duplicated because a stage document is an **entry script**, not a stage: the
+ * reference's selection table gives stage 8 script row 4, the same row as stage 4,
+ * so `stage-4` plays twice and shipping a `stage-8.json` copy of it would be two
+ * files that have to stay in step. See `packs/classic/README.md`.
+ */
+const normalStages = [...new Set(pack.manifest.stageSequence.normal.rows)].map((id) => {
+  const document = pack.stages.get(id);
+  if (document === undefined) throw new Error(`the classic pack has no ${id}`);
+  return { id, stage: document };
+});
+if (normalStages.length === 0) throw new Error('the classic pack ships no normal stage');
 
 describe('the aliens', () => {
   it('is exactly the roles the manifest declares', () => {
@@ -111,7 +131,7 @@ describe('the aliens', () => {
   });
 });
 
-describe('stage 1', () => {
+describe.each(normalStages)('$id', ({ stage }) => {
   it('is five waves of eight on the 40-slot formation', () => {
     expect(stage.kind).toBe('normal');
     expect(stage.formation).toBe('classic40');
@@ -192,12 +212,91 @@ describe('stage 1', () => {
       });
     }
   });
+});
 
-  it('plays as stage 1, through the pack’s own sequence', () => {
-    expect(pack.manifest.stageSequence.normal.rows).toEqual(['stage-1']);
-    // Until the stages 2–8 task lands there is one row, so cycling the last three
-    // is not yet expressible — and `repeatLast` may not exceed the row count.
+describe('the normal stage sequence', () => {
+  /**
+   * Reference section 5's per-stage script assignment, rank A, as far as this
+   * pack authors it. A stage document is named for the *first* stage that plays
+   * its script row, which is why stage 8 plays `stage-4`: both are script row 4.
+   */
+  const rankA: readonly (readonly [stage: number, script: number, plays: string])[] = [
+    [1, 0, 'stage-1'],
+    [2, 1, 'stage-2'],
+    [4, 4, 'stage-4'],
+    [5, 3, 'stage-5'],
+    [6, 2, 'stage-6'],
+    [8, 4, 'stage-4'],
+  ];
+
+  it.each(rankA)('plays stage %i (script row %i) as %s', (stage, _script, plays) => {
+    expect(isChallengeStage(rules, stage)).toBe(false);
+    expect(resolveStageId(pack.manifest, rules, stage)).toBe(plays);
+  });
+
+  it('indexes the sequence exactly as the ROM indexes its own', () => {
+    // `adj − (adj >> 2) − 1` for a non-challenge stage, which is what
+    // `normalStageOrdinal` has to agree with for the rows to line up at all.
+    for (const [stage] of rankA) {
+      expect(normalStageOrdinal(rules, stage)).toBe(stage - (stage >> 2) - 1);
+    }
+  });
+
+  it('leaves stages 3 and 7 to the challenge task', () => {
+    // `(stage + 1) mod 4 == 0` is the ROM's own test, so the cadence is settled
+    // even though the content is not. `challenge.rows` is still empty, which is
+    // why these resolve to nothing rather than to a normal stage.
+    expect([3, 7].map((stage) => isChallengeStage(rules, stage))).toEqual([true, true]);
+    expect([3, 7].map((stage) => resolveStageId(pack.manifest, rules, stage))).toEqual([
+      undefined,
+      undefined,
+    ]);
+    expect(pack.manifest.stageSequence.challenge.rows).toEqual([]);
+  });
+
+  it('cycles one row past stage 8, because the rest of the table is not authored', () => {
+    // The arcade cycles the last *three* from stage 24, a property of the whole
+    // 17-entry table. Until rows 7–17 land, `repeatLast: 1` is the honest
+    // statement: nothing is claimed about a plateau that is not there yet.
+    expect(pack.manifest.stageSequence.normal.rows).toEqual([
+      'stage-1',
+      'stage-2',
+      'stage-4',
+      'stage-5',
+      'stage-6',
+      'stage-4',
+    ]);
     expect(pack.manifest.stageSequence.normal.repeatLast).toBe(1);
+  });
+
+  it('composes every stage identically — the same forty homes in the same order', () => {
+    // `c_25A2` resets the wave-ID pointer at every stage, so `db_attk_wav_IDs`
+    // is the composition of *all* of them. Only the choreography is per-stage.
+    const order = (id: string) =>
+      (pack.stages.get(id)?.waves ?? []).map((wave) =>
+        wave.slots.map((slot) => `${slot.alien}@${String(slot.home)}`),
+      );
+    const first = order(normalStages[0]?.id ?? '');
+    expect(first.flat()).toHaveLength(40);
+    for (const { id } of normalStages) expect(order(id)).toEqual(first);
+  });
+
+  it('gives every stage its own choreography', () => {
+    // Ours, not the arcade's — so this only asks that the stages differ, which is
+    // what stops a copied document going unnoticed. Paths *and* flags, because two
+    // stages can fly the same three shapes in the same order and still read
+    // differently: one side at a time is a mirror pattern, not a path.
+    const choreography = normalStages.map(({ stage }) =>
+      stage.waves
+        .map(
+          (wave) =>
+            `${wave.entryPath ?? ''}:${wave.slots
+              .map((slot) => `${slot.mirror ? 'R' : 'L'}${slot.trailing ? 'T' : '-'}`)
+              .join('')}`,
+        )
+        .join(','),
+    );
+    expect(new Set(choreography).size).toBe(choreography.length);
   });
 });
 
