@@ -57,4 +57,5 @@ Seams left for the tasks that follow, so they attach without editing a screen:
   and provisional; `createHighScoreBoard({ defaults })` already takes one.
 
 `menus.ts` (player settings) arrives with Milestone 3. See `docs/DESIGN.md`
-sections 4, 6 and 9.
+sections 4, 6 and 9, and `docs/ROADMAP.md` for when.
+<!-- check:absent src/ui/menus.ts -->

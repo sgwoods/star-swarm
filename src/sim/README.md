@@ -8,6 +8,8 @@ placeholder README until Milestone 3, and `scoring.ts` and `stages.ts` were neve
 written — scoring lives in `enemies.ts` and `world.ts`, and resolving a stage
 number to its documents is content work in `src/content/stages.ts`.
 `docs/ARCHITECTURE.md` §5 records both divergences.
+<!-- check:absent src/sim/scoring.ts src/sim/stages.ts -->
+<!-- check:count sim.modules 12 sim.abilities.modules 0 -->
 
 Milestone 1 landed the player half: `world.ts`, `player.ts`, `shots.ts`,
 `collision.ts`, `lives.ts` and `events.ts`. Milestone 2's first task replaced

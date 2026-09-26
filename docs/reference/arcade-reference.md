@@ -1,3 +1,5 @@
+<!-- doc:layer reference -->
+
 # Arcade reference — the 1981 Namco formation shooter
 
 ## What this document is, and how much to trust it
@@ -52,6 +54,8 @@ Referred to below by the bracketed tag.
 | **[SW]**     | StrategyWiki, _Galaga/Gameplay_ and _Galaga/Walkthrough_, `https://strategywiki.org/wiki/Galaga/Gameplay`, `https://strategywiki.org/wiki/Galaga/Walkthrough`. Retrieved 2026-09-24.                                                                                                                                                                                                                                                                                                                                                  | Secondary, long-standing and unusually detailed for this title. Used for player-observable behaviour and as a cross-check; not relied on alone for a number where a ROM or manual figure exists.         |
 | **[05XX]**   | R. Hildinger, "Starfield generator documentation … based on RE effort Aug. 2019" — the header comment block of MAME's `src/mame/namco/starfield_05xx.cpp`, lines 1–140. A pin-level reverse engineering of a physical Namco 05XX taken from an original 1981 board. Retrieved 2026-09-25.                                                                                                                                                                                                                                             | **Primary-grade for the chip's behaviour**: a direct measurement of the hardware, published in MAME's tree.                                                                                              |
 | **[AQM]**    | Arcade Quartermaster, "Galaga — Stages & Bosses", `https://www.arcadequartermaster.com/galaga_bosses.html`. Retrieved 2026-09-24.                                                                                                                                                                                                                                                                                                                                                                                                     | Secondary. Used only as corroboration.                                                                                                                                                                   |
+
+<!-- check:foreign src/mame/namco/galaga.cpp src/mame/namco/starfield_05xx.cpp -->
 
 Character encoding used when quoting ROM text tables: `$00`–`$09` are the digits `0`–`9`, `$0A`–`$23`
 are `A`–`Z`, `$24` is a space.

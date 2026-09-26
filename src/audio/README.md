@@ -17,4 +17,7 @@ Two things worth knowing before editing:
 No audio context exists until `Synth.unlock()` runs, which belongs in a user
 gesture (`unlockOnFirstGesture`). Everything is silent and harmless without one.
 
+`music.ts`, the jingles of section 5, is not written yet.
+<!-- check:absent src/audio/music.ts -->
+
 See `docs/DESIGN.md` sections 3, 5 and 9.
