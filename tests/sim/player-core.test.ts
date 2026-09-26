@@ -3,9 +3,10 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { resolveDifficultyRow } from '../../src/content/rules.js';
-import { EMPTY_FRAME, frameOf } from '../../src/engine/input.js';
+import { EMPTY_FRAME, frameOf, isDown } from '../../src/engine/input.js';
 import { createReplaySource, parseReplay, recordInput } from '../../src/engine/replay.js';
 import { eventsOfType, type SimEvent } from '../../src/sim/events.js';
+import { startX } from '../../src/sim/player.js';
 import type { World } from '../../src/sim/world.js';
 import { createWorld, fingerprintWorld, stepWorld } from '../../src/sim/world.js';
 import {
@@ -203,6 +204,107 @@ describe('what the goldens actually cover', () => {
     expect(rules.transform?.types).toContain(transformed[0]?.alienId);
     // The trio leaves the screen rather than rejoining the formation.
     expect(eventsOfType(events, 'enemy-departed').length).toBeGreaterThan(0);
+  });
+
+  /**
+   * The two quality-bar items of `docs/DESIGN.md` section 11 that are golden
+   * replays: a perfect run of the first two challenge stages **without moving**,
+   * and the 19,000 a perfect first challenge stage pays.
+   *
+   * The 19,000 is asserted from the events rather than from the score alone, so a
+   * failure says which of the three awards moved. And the input log is checked
+   * for direction bits: "without moving" is the claim, and a log that had learned
+   * to nudge left would pass every other assertion here.
+   */
+  describe.each([
+    { golden: 'challenge-one-perfect', stage: 3, ordinal: 0, impact: 100, group: 1_000 },
+    { golden: 'challenge-two-perfect', stage: 7, ordinal: 1, impact: 160, group: 1_000 },
+  ])('$golden', ({ golden, stage, ordinal, impact, group }) => {
+    it('never touches a direction, in the log or on the field', () => {
+      const replay = parseReplay(readFileSync(goldenPath(golden), 'utf8'));
+      for (const [frame] of replay.runs) {
+        expect(isDown(frame, 'left')).toBe(false);
+        expect(isDown(frame, 'right')).toBe(false);
+      }
+      const { world } = replayEvents(golden);
+      // The fighter is still on the column it started a life on: the exact centre
+      // of its travel (`startX` in `src/sim/player.ts`).
+      expect(world.player.x).toBe(startX(rules));
+      expect(world.player.stepFlag).toBe(0);
+    });
+
+    it('destroys all forty and pays the perfect bonus instead of the per-hit one', () => {
+      const { events } = replayEvents(golden);
+
+      expect(eventsOfType(events, 'enemy-launched')).toHaveLength(40);
+      const destroyed = eventsOfType(events, 'target-destroyed');
+      expect(destroyed).toHaveLength(40);
+      // Every kill on a challenge stage is worth the stage's own impact award,
+      // whatever alien it was: the value belongs to the stage, not the enemy.
+      expect(new Set(destroyed.map((event) => event.score))).toEqual(new Set([impact]));
+
+      // Five groups of eight, each paying the challenge stage's group bonus.
+      const groups = eventsOfType(events, 'challenge-group-cleared');
+      expect(groups.map((event) => event.group)).toEqual([0, 1, 2, 3, 4]);
+      expect(groups.every((event) => event.bonus === group)).toBe(true);
+
+      // The perfect branch, and *only* the perfect branch: 100 x hits is the
+      // other one and they are mutually exclusive.
+      expect(eventsOfType(events, 'challenge-bonus')).toHaveLength(0);
+      const perfect = eventsOfType(events, 'challenge-perfect');
+      expect(perfect).toHaveLength(1);
+      expect(perfect[0]).toMatchObject({ stage, ordinal, hits: 40, bonus: 10_000 });
+
+      const ended = eventsOfType(events, 'challenge-ended');
+      expect(ended).toHaveLength(1);
+      expect(ended[0]).toMatchObject({
+        stage,
+        ordinal,
+        hits: 40,
+        total: 40,
+        perfect: true,
+        impactScore: 40 * impact,
+        groupBonus: 5 * group,
+        endBonus: 10_000,
+      });
+    });
+
+    it('is not fought back against, for the whole recorded stage', () => {
+      // The acceptance claim is "perfect without moving", and it only means
+      // anything if nothing was shooting at the stationary fighter. The dive task
+      // landed between this golden being written and being re-recorded, so this
+      // is the assertion that says the run is still the run it claims.
+      //
+      // The events are the evidence, not `world.dive`: by the last step the stage
+      // has been cleared and the world holds the *next* stage's director, which
+      // attacks like any other. `tests/unit/challenge.test.ts` is where the flag
+      // itself is read, at the stage it belongs to.
+      const events = replayEvents(golden).events;
+      expect(eventsOfType(events, 'enemy-fired')).toHaveLength(0);
+      expect(eventsOfType(events, 'enemy-dived')).toHaveLength(0);
+      expect(eventsOfType(events, 'enemy-transformed')).toHaveLength(0);
+      expect(eventsOfType(events, 'player-hit')).toHaveLength(0);
+    });
+
+    it('rolls on to the next stage once the last of them is gone', () => {
+      const { events, world } = replayEvents(golden);
+      expect(eventsOfType(events, 'stage-cleared').map((event) => event.stage)).toEqual([stage]);
+      expect(world.stage).toBe(stage + 1);
+      // Nothing settles into formation on a challenge stage, so nothing sways or
+      // breathes and `formation-settled` is never raised for one.
+      const settled = eventsOfType(events, 'formation-settled');
+      expect(settled.every((event) => event.stage !== stage)).toBe(true);
+    });
+  });
+
+  it('pays exactly 19,000 for a perfect first challenge stage', () => {
+    // `docs/DESIGN.md` section 11: 40 x 100 on impact, 5 x 1,000 in group
+    // bonuses, and a 10,000 perfect bonus that *replaces* the 100 x hits bonus.
+    // Adding the two instead gives 23,000, which is the error this guards.
+    const { events } = replayEvents('challenge-one-perfect');
+    const deltas = eventsOfType(events, 'score-changed');
+    expect(deltas.reduce((sum, event) => sum + event.delta, 0)).toBe(19_000);
+    expect(deltas.at(-1)?.score).toBe(19_000);
   });
 });
 

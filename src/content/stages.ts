@@ -80,12 +80,13 @@ export function resolveStageContent(
 /**
  * Build a stage source over a loaded pack or registry.
  *
- * **Temporary bridge:** a stage number that resolves to nothing — which is every
- * challenge stage until the challenge-stage task fills `stageSequence.challenge`
- * — falls back to the normal sequence, so the game keeps playing rather than
- * meeting an empty screen. Remove the fallback once the challenge stages exist;
- * the `stageFor` contract is already "undefined when the pack has none", and the
- * simulation handles that by sitting still rather than by looping.
+ * A stage number that resolves to nothing gets `undefined`, which the simulation
+ * handles by putting no enemies on the field and sitting still rather than
+ * rolling the counter forward for ever. There is deliberately no fallback to the
+ * other half of the sequence: the challenge-stage bridge that used to live here
+ * is gone now that `stageSequence.challenge` is populated, and a silent fallback
+ * would hide a pack that had lost its challenge scripts behind a combat stage
+ * playing on stage 3.
  */
 export function createStageSource(
   lookup: StageLookup,
@@ -97,21 +98,9 @@ export function createStageSource(
     stageFor(stage: number): StageContent | undefined {
       if (rules === undefined) return undefined;
       const id = resolveStageId(manifest, rules, stage, options.rank);
-      const document =
-        (id === undefined ? undefined : lookup.stages.get(id)) ?? fallbackStage(lookup, stage);
+      const document = id === undefined ? undefined : lookup.stages.get(id);
       if (document === undefined) return undefined;
       return resolveStageContent(lookup, document);
     },
   };
-}
-
-/** @see createStageSource — the challenge-stage bridge, and nothing else. */
-function fallbackStage(lookup: StageLookup, stage: number): Stage | undefined {
-  const { manifest, rules } = lookup;
-  if (rules === undefined) return undefined;
-  const rows = manifest.stageSequence.normal.rows;
-  if (rows.length === 0) return undefined;
-  // Index by the stage number so successive stages still differ; the sequence's
-  // own plateau is handled by `resolveStageId`, which this path has bypassed.
-  return lookup.stages.get(rows[(stage - 1) % rows.length] ?? '');
 }

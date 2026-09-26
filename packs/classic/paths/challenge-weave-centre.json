@@ -1,0 +1,10 @@
+{
+  "id": "challenge-weave-centre",
+  "start": [216, -16],
+  "segments": [
+    { "type": "bezier", "to": [103, 40], "c1": [216, 76], "c2": [152, 4], "speed": 1.4 },
+    { "type": "line", "to": [103, 56], "speed": 1.4 },
+    { "type": "sine", "amplitude": 4, "wavelength": 72, "duration": 168, "speed": 1.4 },
+    { "type": "exitBottom", "speed": 1.4 }
+  ]
+}

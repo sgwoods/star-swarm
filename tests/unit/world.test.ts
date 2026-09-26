@@ -34,6 +34,7 @@ function enemyAt(overrides: Partial<Enemy> = {}): Enemy {
     launchFrame: 0,
     path: 'entry-side-file',
     mirror: false,
+    homes: true,
     trailing: false,
     wave: 0,
     hp: 1,

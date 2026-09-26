@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  extraLifeThresholdCeiling,
   extraLivesEarnedAt,
   extraLivesEarnedBetween,
   NO_EXTRA_LIFE_AWARD,
@@ -85,7 +86,7 @@ describe('the two threshold tables', () => {
 
 describe('awarding extra lives', () => {
   const classic = resolveExtraLifeAward(rules);
-  const ceiling = rules.extraLives.stopAfterScore;
+  const ceiling = extraLifeThresholdCeiling(rules);
 
   it('counts the awards a score has earned', () => {
     const at = (score: number) => extraLivesEarnedAt(classic, score, ceiling);
@@ -127,11 +128,39 @@ describe('awarding extra lives', () => {
     expect(extraLivesEarnedBetween(NO_EXTRA_LIFE_AWARD, 0, 999_999)).toBe(0);
   });
 
-  it('stops awarding past the ceiling the pack states', () => {
+  it('stops at the last threshold the two score digits can hold', () => {
+    // Reference section 3: the check compares floor(score / 10,000) mod 100 with
+    // the pending threshold, so the factory default's thresholds run 2, 7, 14 …
+    // 98 and then 105, which never matches. 980,000 is the last award, and the
+    // ceiling is the mechanism rather than the round million it works out to.
     expect(ceiling).toBe(1_000_000);
-    const atCeiling = extraLivesEarnedAt(classic, 1_000_000, ceiling);
-    expect(extraLivesEarnedAt(classic, 5_000_000, ceiling)).toBe(atCeiling);
-    expect(extraLivesEarnedBetween(classic, 1_000_000, 5_000_000, ceiling)).toBe(0);
+    expect(extraLivesEarnedAt(classic, 979_999, ceiling)).toBe(14);
+    expect(extraLivesEarnedAt(classic, 980_000, ceiling)).toBe(15);
+    expect(extraLivesEarnedAt(classic, 5_000_000, ceiling)).toBe(15);
+    expect(extraLivesEarnedBetween(classic, 980_000, 5_000_000, ceiling)).toBe(0);
+  });
+
+  it('puts a five-fighter cabinet’s last award at 960,000', () => {
+    // The other threshold table, on the same ceiling: 3, 12, 24 … 96, then 108.
+    const forFive = resolveExtraLifeAward(rules, 5);
+    expect(forFive).toMatchObject({ first: 30_000, second: 120_000, repeat: 120_000 });
+    expect(extraLivesEarnedAt(forFive, 959_999, ceiling)).toBe(8);
+    expect(extraLivesEarnedAt(forFive, 960_000, ceiling)).toBe(9);
+    expect(extraLivesEarnedAt(forFive, 5_000_000, ceiling)).toBe(9);
+  });
+
+  it('rules out a threshold that lands exactly on the ceiling', () => {
+    // A score cap would pay this one; the digits cannot hold 100, so the ROM
+    // does not. The two models differ only here, which is why the ceiling is
+    // exclusive rather than a maximum score.
+    const decimal: ExtraLifeAward = {
+      mode: 'thresholds',
+      first: 20_000,
+      second: 100_000,
+      repeat: 100_000,
+    };
+    expect(extraLivesEarnedAt(decimal, 990_000, ceiling)).toBe(10);
+    expect(extraLivesEarnedAt(decimal, 1_000_000, ceiling)).toBe(10);
   });
 
   it('never stops when the rules state no ceiling', () => {

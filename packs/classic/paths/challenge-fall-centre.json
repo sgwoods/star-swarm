@@ -1,0 +1,9 @@
+{
+  "id": "challenge-fall-centre",
+  "start": [8, -16],
+  "segments": [
+    { "type": "bezier", "to": [103, 36], "c1": [8, 68], "c2": [48, 4], "speed": 1.3 },
+    { "type": "line", "to": [103, 56], "speed": 1.3 },
+    { "type": "exitBottom", "speed": 1.3 }
+  ]
+}

@@ -16,7 +16,8 @@
       "second": 70000,
       "repeat": 70000
     },
-    "stopAfterScore": 1000000,
+    "thresholdUnit": 10000,
+    "thresholdModulus": 100,
     "setting": 1,
     "options": [
       {
@@ -1828,9 +1829,13 @@
       "confidence": "verified",
       "note": "Both threshold tables, eight settings each: one set for a 2-, 3- or 4-fighter cabinet and a different set for a 5-fighter one. The available thresholds depend on the starting-fighter count, so one table keyed by setting alone awards the wrong bonuses."
     },
-    "extraLives.stopAfterScore": {
-      "confidence": "provisional",
-      "note": "No further extra life past 1,000,000. Arcade reference section 5 rates this medium confidence: a secondary source consistent with the six-digit score display, not confirmed in the ROM."
+    "extraLives.thresholdUnit": {
+      "confidence": "verified",
+      "note": "The bonus check reads two score digits and compares floor(score / 10,000) mod 100 with the pending threshold, which is carried in the same units of 10,000. Arcade reference section 3, the tail of `gctl_supv_score`."
+    },
+    "extraLives.thresholdModulus": {
+      "confidence": "verified",
+      "note": "Two digits, so a threshold that reaches 100 can never match and the awards stop: with the factory default they run 2, 7, 14 \u2026 98 and then 105, making 980,000 the last extra life (960,000 on a 5-fighter cabinet). The score itself does not roll over there. Arcade reference section 3."
     },
     "player.stepPattern": {
       "confidence": "verified",
@@ -2059,6 +2064,38 @@
     "formation.animatedStageKinds": {
       "confidence": "verified",
       "note": "Reference section 5: neither motion runs on a challenge stage, because nothing settles into formation there, so f_2A90 never reaches the exit that enables the breathe."
+    },
+    "challengeStages.firstStage": {
+      "confidence": "verified",
+      "note": "The ROM\u2019s own test is `(stage + 1) mod 4 == 0`, so the first challenge stage is 3. Arcade reference section 8."
+    },
+    "challengeStages.everyStages": {
+      "confidence": "verified",
+      "note": "And then every fourth stage \u2014 7, 11, 15 \u2026 \u2014 from the same test. Arcade reference section 8 also records why the operator manual\u2019s \u201cevery third STAGE\u201d reads otherwise."
+    },
+    "scoring.movingMultiplier": {
+      "confidence": "verified",
+      "note": "A target that is neither at home in the formation nor rotating back into its slot scores exactly twice its formation value; the ROM stashes the test at `$078D` and consumes it at `$080D`. Arcade reference section 9."
+    },
+    "scoring.challenge.groupBonus": {
+      "confidence": "verified",
+      "note": "`d_stage_chllg_rnd_attrib` = {10, 15, 20, 30} units of 100, indexed `(stage >> 3) AND 3` and clamped to 3 from stage 32 \u2014 1,000 / 1,000 / 1,500 / 1,500 / 2,000 / 2,000 / 3,000 by challenge-stage ordinal, then held. Arcade reference section 8."
+    },
+    "scoring.challenge.perHit": {
+      "confidence": "verified",
+      "note": "100 \u00d7 the number of hits, awarded once at the end of the stage. Arcade reference section 8, `gctl_chllng_stg_end`."
+    },
+    "scoring.challenge.perfect": {
+      "confidence": "verified",
+      "note": "A flat 10,000 for all 40. Arcade reference section 8."
+    },
+    "scoring.challenge.perfectReplacesPerHit": {
+      "confidence": "verified",
+      "note": "The perfect branch loads 100 units and the ordinary branch loads the hit count; both join the same adder, so they are mutually exclusive. Adding them instead is 4,000 points too many on every perfect stage. Arcade reference section 8."
+    },
+    "scoring.challenge.impactAward": {
+      "confidence": "verified",
+      "note": "Every hit scores at the moment of impact, at the enemy\u2019s score group doubled \u2014 and each challenge stage overwrites every enemy\u2019s score group from `d_290E`, indexed `(stage >> 2) AND 7` with no clamp. So 100 on the 1st challenge stage, 160 on the 2nd\u20138th, and 100 again on the 9th as the index wraps while the group bonus stays clamped. The table cycles rather than plateauing for exactly that reason. Arcade reference section 8."
     },
     "starfield.speed": {
       "confidence": "verified",

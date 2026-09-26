@@ -1,0 +1,10 @@
+{
+  "id": "challenge-cross-centre",
+  "start": [8, 24],
+  "segments": [
+    { "type": "bezier", "to": [176, 36], "c1": [64, 92], "c2": [144, 92], "speed": 1.5 },
+    { "type": "bezier", "to": [103, 60], "c1": [200, 12], "c2": [128, 12], "speed": 1.5 },
+    { "type": "line", "to": [103, 76], "speed": 1.5 },
+    { "type": "exitBottom", "speed": 1.5 }
+  ]
+}

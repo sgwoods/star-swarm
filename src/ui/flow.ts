@@ -1,17 +1,26 @@
 /**
  * The game-state machine (docs/DESIGN.md section 4, "Game flow").
  *
- * One explicit machine rather than flags spread through the loop. There are five
+ * One explicit machine rather than flags spread through the loop. There are six
  * phases and every transition is named here:
  *
  * ```
  *   attract ──start──▶ playing ──sim: game-over──▶ game-over
- *      ▲                                              │ timer or button
- *      │                                              ▼
- *      ├────────────────── no ◀── qualifies? ◀───── results
+ *      ▲                 │  ▲                         │ timer or button
+ *      │                 │  │ timer or button         ▼
+ *      │                 └──┴── challenge-results   results
+ *      │                    sim: challenge-ended      │
+ *      ├────────────────── no ◀── qualifies? ◀────────┘
  *      │                            │ yes
  *      └──── submitted ◀──── high-score-entry ◀──────┘
  * ```
+ *
+ * `challenge-results` is the original's between-stage screen, and it is the one
+ * phase that goes *back* to `playing`: the stage is over and the next one is
+ * already on the field, so the world simply stops being stepped while the card
+ * is up. That is also why it is a phase rather than a flag — a machine where
+ * "playing" sometimes means "not stepping the world" is the thing this file
+ * exists to avoid.
  *
  * Two properties this file exists to keep:
  *
@@ -21,16 +30,6 @@
  * - **Time is measured in simulation steps, never the wall clock.** Every timer
  *   here counts steps, so a screen looks the same at the same step on any
  *   machine, and a test can run a phase out by calling `step` in a loop.
- *
- * Seams for work that lands after this (named in the PR body):
- *
- * - **Challenge-stage results.** {@link FlowOptions.resultRowsFor} replaces the
- *   rows the results screen shows, so challenge totals are appended there rather
- *   than by editing the screen. {@link RunStats} is where new counters go.
- * - **Stage badges.** `src/ui/hud.ts` already draws them from the stage number;
- *   the flow passes the live world's stage through unchanged.
- * - **Extra lives.** The sim raises `extra-life`; {@link RunStats.extraLives}
- *   counts them, so the rule can change without touching a screen.
  */
 
 import type { Rules } from '../content/schema.js';
@@ -48,7 +47,8 @@ import {
 } from './highscores.js';
 import { countEvents, EMPTY_STATS, type ResultRow, resultRows, type RunStats } from './results.js';
 
-export type GamePhase = 'attract' | 'playing' | 'game-over' | 'results' | 'high-score-entry';
+export type GamePhase =
+  'attract' | 'playing' | 'challenge-results' | 'game-over' | 'results' | 'high-score-entry';
 
 /** How long each waiting phase holds, in simulation steps. Ours, not arcade values. */
 export interface FlowTimings {
@@ -56,6 +56,8 @@ export interface FlowTimings {
   readonly gameOver: number;
   /** The results screen before the table or attract mode. */
   readonly results: number;
+  /** The between-stage card after a challenge stage, before play resumes. */
+  readonly challengeResults: number;
   /** Entry times out and submits whatever has been chosen, as a cabinet does. */
   readonly entry: number;
 }
@@ -63,6 +65,7 @@ export interface FlowTimings {
 export const DEFAULT_TIMINGS: FlowTimings = Object.freeze({
   gameOver: 3 * STEP_HZ,
   results: 7 * STEP_HZ,
+  challengeResults: 5 * STEP_HZ,
   entry: 30 * STEP_HZ,
 });
 
@@ -82,8 +85,14 @@ export interface FlowOptions {
   readonly timings?: Partial<FlowTimings>;
   /** Overridable so a test can run a short demo log. */
   readonly demo?: AttractDemo;
-  /** Seam: challenge-stage results append their rows here. */
+  /** Replaces the rows the end-of-game results screen shows. */
   readonly resultRowsFor?: (stats: RunStats) => readonly ResultRow[];
+  /**
+   * Fighters a game starts with, from the cabinet settings. Passed to every
+   * world the flow creates, because it selects the extra-life thresholds as well
+   * as the reserve count. Omitted means the rules' own default.
+   */
+  readonly lives?: number;
 }
 
 /** What one call to {@link GameFlow.step} did. */
@@ -134,6 +143,7 @@ export function createGameFlow(options: FlowOptions): GameFlow {
    * on, so `stages: undefined` is not the same as leaving it out.
    */
   const stageOption = options.stages === undefined ? {} : { stages: options.stages };
+  const livesOption = options.lives === undefined ? {} : { lives: options.lives };
   const { seed = 'star-swarm', resultRowsFor = resultRows } = options;
   const timings: FlowTimings = { ...DEFAULT_TIMINGS, ...options.timings };
   const highScores = options.highScores ?? createHighScoreBoard();
@@ -159,7 +169,12 @@ export function createGameFlow(options: FlowOptions): GameFlow {
   /** Start a game. Its opening events are this step's events. */
   const startGame = (): readonly SimEvent[] => {
     games += 1;
-    const world = createWorld({ seed: `${seed}:game-${String(games)}`, rules, ...stageOption });
+    const world = createWorld({
+      seed: `${seed}:game-${String(games)}`,
+      rules,
+      ...stageOption,
+      ...livesOption,
+    });
     game = world;
     stats = { ...EMPTY_STATS, stage: world.stage };
     lastRank = undefined;
@@ -249,7 +264,19 @@ export function createGameFlow(options: FlowOptions): GameFlow {
           }
           events = stepWorld(world, frame);
           stats = countEvents(stats, events);
-          if (events.some((event) => event.type === 'game-over')) enter('game-over');
+          // Game over first: a challenge stage cannot end on the same step as a
+          // game over, but if the two ever met, the run being over wins.
+          if (events.some((event) => event.type === 'game-over')) {
+            enter('game-over');
+          } else if (events.some((event) => event.type === 'challenge-ended')) {
+            enter('challenge-results');
+          }
+          break;
+        }
+
+        case 'challenge-results': {
+          // Back to play, on the stage the world already rolled on to.
+          if (phaseSteps + 1 >= timings.challengeResults || pressedAny(frame)) enter('playing');
           break;
         }
 

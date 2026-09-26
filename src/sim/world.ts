@@ -14,10 +14,11 @@
  * simulation free of the content layer's plumbing.
  *
  * Milestone 2 scope so far: entry waves, formation sway and breathe, slot homing,
- * and — from the dive task — dive attacks, enemy fire and the difficulty ramp that
- * drives both (`src/sim/dive.ts`). The capture beam, the captured fighter, rescue,
- * the dual fighter and the challenge stages are the sibling tasks that build on
- * this, and are deliberately absent rather than stubbed. The seam the capture task
+ * dive attacks, enemy fire and the difficulty ramp that drives both
+ * (`src/sim/dive.ts`), challenge stages and their three awards
+ * (`src/sim/challenge.ts`), and extra lives. The capture beam, the captured
+ * fighter, rescue and the dual fighter are the sibling tasks that build on this,
+ * and are deliberately absent rather than stubbed. The seam the capture task
  * wants is {@link World.dive}: a captor's dive is an ordinary dive with a beam on
  * it, so it launches through the same director and the same `beginDive`.
  */
@@ -28,6 +29,8 @@ import type { StageContent, StageSource } from '../content/stages.js';
 import { EMPTY_STAGE_SOURCE } from '../content/stages.js';
 import { isDown, type InputFrame } from '../engine/input.js';
 import { createRng, type Rng, type RngState } from '../engine/rng.js';
+import type { ChallengeStage } from './challenge.js';
+import { createChallengeStage, endChallengeStage, recordChallengeHit } from './challenge.js';
 import { hitWindowIndex } from './collision.js';
 import type { DiveState } from './dive.js';
 import {
@@ -82,6 +85,15 @@ export interface World {
   stage: number;
   score: number;
   status: WorldStatus;
+  /**
+   * Fighters the run began on, including the one on the field.
+   *
+   * Part of the world because the extra-life thresholds depend on it: the arcade
+   * offers a *different* set to a five-fighter cabinet, so a run that forgot what
+   * it started with would award the wrong bonuses for its whole length
+   * (`resolveExtraLifeAward` in `src/content/rules.ts`).
+   */
+  readonly startingLives: number;
   player: PlayerState;
   lives: LivesState;
   shots: ShotPool;
@@ -90,6 +102,11 @@ export interface World {
   content: StageContent | undefined;
   /** The formation's coordinates and their motion. `undefined` with no stage. */
   formation: FormationState | undefined;
+  /**
+   * The challenge stage in progress, or `undefined` on an ordinary stage. The
+   * cadence in the rules decides which, never a stage number (`./challenge.js`).
+   */
+  challenge: ChallengeStage | undefined;
   fleet: Fleet;
   /** Dives, enemy fire and the difficulty row in force. Replaced every stage. */
   dive: DiveState;
@@ -111,6 +128,13 @@ export interface WorldOptions {
   readonly stage?: number;
   /** The difficulty rank. Omitted means the rules' own `defaultRank`. */
   readonly rank?: string;
+  /**
+   * Fighters to start with, including the one on the field. Defaults to
+   * `rules.lives.default`. It is an option rather than always the default
+   * because it selects which extra-life threshold set is in force, so a cabinet
+   * set to five fighters is a different run and not just a longer one.
+   */
+  readonly lives?: number;
 }
 
 /** An empty fleet, for a stage the pack has no content for. */
@@ -127,6 +151,7 @@ export function createWorld(options: WorldOptions): World {
   const stage = options.stage ?? rules.stages.firstStage;
   const stages = options.stages ?? EMPTY_STAGE_SOURCE;
   const content = stages.stageFor(stage);
+  const startingLives = options.lives ?? rules.lives.default;
 
   const world: World = {
     rules,
@@ -136,8 +161,9 @@ export function createWorld(options: WorldOptions): World {
     stage,
     score: 0,
     status: 'playing',
+    startingLives,
     player: createPlayer(rules),
-    lives: createLives(rules),
+    lives: createLives(rules, startingLives),
     shots: createShots(rules),
     enemyBullets: createEnemyBullets(rules),
     content,
@@ -145,6 +171,7 @@ export function createWorld(options: WorldOptions): World {
       content === undefined
         ? undefined
         : createFormation(content.formation, rules, content.stage.kind),
+    challenge: createChallengeStage(rules, stage, content),
     fleet: content === undefined ? NO_FLEET() : createFleet(content, rules),
     dive: createDiveState(rules, stage, options.rank),
     rng,
@@ -165,7 +192,10 @@ function addScore(world: World, delta: number): void {
   world.score += delta;
   world.events.push({ type: 'score-changed', score: world.score, delta });
 
-  const awards = extraLivesEarned(world.rules, previous, world.score);
+  // Totals, not crossings: one bonus that carries the score past two thresholds
+  // pays both, and the count is against the threshold set this run's starting
+  // fighter count selects rather than against the rules' default.
+  const awards = extraLivesEarned(world.rules, previous, world.score, world.startingLives);
   for (let i = 0; i < awards; i += 1) {
     world.lives.reserve += 1;
     world.lives.bonusesAwarded += 1;
@@ -174,11 +204,56 @@ function addScore(world: World, delta: number): void {
 }
 
 /**
+ * What destroying this enemy pays, and whatever bonus it also triggers.
+ *
+ * Two rules, and which applies is the stage's business rather than the enemy's:
+ *
+ * - On an ordinary stage the value comes from the enemy's *state* — doubled
+ *   unless it is at home or rotating back into its slot (see {@link enemyScore}).
+ * - On a challenge stage it comes from the **stage**, because the original
+ *   overwrites every enemy's score group at the start of one; a challenge flyer
+ *   is worth 100 on the first challenge stage and 160 on the second whatever
+ *   alien it is (`./challenge.js`).
+ */
+function destroyAward(
+  world: World,
+  enemy: Enemy,
+): { readonly score: number; readonly groupBonus: number } {
+  const challenge = world.challenge;
+  if (challenge === undefined) return { score: enemyScore(enemy), groupBonus: 0 };
+  const hit = recordChallengeHit(challenge, enemy.wave);
+  return { score: hit.impact, groupBonus: hit.groupBonus };
+}
+
+/**
+ * Pay the group of eight that hit emptied.
+ *
+ * A separate award from the target's own value rather than folded into it: in
+ * the original every bonus is the same channel of 100-point units arriving
+ * beside the kill, and a `target-destroyed` claiming 1,100 would make the eighth
+ * of a group look like a differently valuable enemy. It is also the only
+ * challenge-stage award the original shows a score tile for.
+ */
+function payChallengeGroup(world: World, enemy: Enemy, bonus: number): void {
+  const challenge = world.challenge;
+  if (challenge === undefined || bonus <= 0) return;
+  world.events.push({
+    type: 'challenge-group-cleared',
+    stage: challenge.stage,
+    ordinal: challenge.ordinal,
+    group: enemy.wave,
+    bonus,
+  });
+  addScore(world, bonus);
+}
+
+/**
  * Player shots against the fleet.
  *
- * The score is read from the enemy's *state*, not from a table: an enemy shot
- * during its entry wave is worth the doubled value and one shot while rotating
- * back into its slot is worth the plain one. See {@link enemyScore}.
+ * On an ordinary stage the score is read from the enemy's *state*, not from a
+ * table: an enemy shot during its entry wave is worth the doubled value and one
+ * shot while rotating back into its slot is worth the plain one. A challenge
+ * stage overrides both. See {@link destroyAward}.
  */
 function resolvePlayerShots(world: World): void {
   for (const shot of world.shots) {
@@ -201,8 +276,8 @@ function resolvePlayerShots(world: World): void {
           hitsRemaining: enemy.hitsRemaining,
         });
       } else {
-        const score = enemyScore(enemy);
-        const bonus = noteDestroyed(world.dive, world.rules, world.stage, enemy);
+        const award = destroyAward(world, enemy);
+        const transformBonus = noteDestroyed(world.dive, world.rules, world.stage, enemy);
         enemy.state = 'dead';
         world.fleet.flights.delete(enemy.id);
         world.events.push({
@@ -211,13 +286,17 @@ function resolvePlayerShots(world: World): void {
           alienId: enemy.alienId,
           x: enemy.x,
           y: enemy.y,
-          score,
+          score: award.score,
         });
         // The kill and any bonus it completed are two channels, added in that
         // order: every bonus in the game is the same 100-points-per-unit
         // accumulator, and a group bonus is not part of the last member's value.
-        addScore(world, score);
-        addScore(world, bonus);
+        // A transform trio and a challenge group of eight are the same mechanism
+        // and only one of them can be in play, since neither exists on the
+        // other's stage.
+        addScore(world, award.score);
+        addScore(world, transformBonus);
+        payChallengeGroup(world, enemy, award.groupBonus);
       }
       break; // One shot, one target.
     }
@@ -279,6 +358,7 @@ function enterStage(world: World, stage: number): void {
     world.content === undefined
       ? undefined
       : createFormation(world.content.formation, world.rules, world.content.stage.kind);
+  world.challenge = createChallengeStage(world.rules, stage, world.content);
   world.fleet = world.content === undefined ? NO_FLEET() : createFleet(world.content, world.rules);
   world.dive = createDiveState(world.rules, stage, world.rank);
   world.events.push({
@@ -289,7 +369,49 @@ function enterStage(world: World, stage: number): void {
 }
 
 /**
- * Clearing the fleet rolls on to the next stage.
+ * Pay the end-of-stage award and report what the stage amounted to.
+ *
+ * Raised before `stage-cleared`, because these numbers belong to the stage that
+ * just finished. The perfect branch and the ordinary one are separate events
+ * because they are separate branches in the original and a pack binds a
+ * different melody to each — and because they are mutually exclusive: the
+ * perfect bonus *replaces* `perHit × hits`, it is not added to it.
+ */
+function resolveChallengeEnd(world: World): void {
+  const challenge = world.challenge;
+  if (challenge === undefined || challenge.ended) return;
+
+  const end = endChallengeStage(challenge, world.rules);
+  const award = {
+    stage: challenge.stage,
+    ordinal: challenge.ordinal,
+    hits: end.hits,
+    bonus: end.endBonus,
+  } as const;
+  world.events.push(
+    end.perfect ? { type: 'challenge-perfect', ...award } : { type: 'challenge-bonus', ...award },
+  );
+  addScore(world, end.endBonus);
+
+  world.events.push({
+    type: 'challenge-ended',
+    stage: challenge.stage,
+    ordinal: challenge.ordinal,
+    hits: end.hits,
+    total: end.total,
+    perfect: end.perfect,
+    impactScore: end.impactScore,
+    groupBonus: end.groupBonus,
+    endBonus: end.endBonus,
+  });
+}
+
+/**
+ * Emptying the field rolls on to the next stage.
+ *
+ * "Empty" is destroyed **or flown away**: both ways off the field reach `dead`,
+ * so a challenge stage whose forty enemies sailed past untouched ends on the
+ * same test a combat stage does (`aliveEnemies` in `./enemies.js`).
  *
  * A stage the pack has no content for puts no enemies on the field, and the world
  * sits on it rather than rolling forward every frame — "the sequence ran out" is a
@@ -299,6 +421,7 @@ function resolveStageEnd(world: World): void {
   if (world.fleet.enemies.length === 0) return;
   if (aliveEnemies(world.fleet.enemies).length > 0) return;
 
+  resolveChallengeEnd(world);
   world.events.push({ type: 'stage-cleared', stage: world.stage });
   clearShots(world.shots);
   clearEnemyBullets(world.enemyBullets);
@@ -553,6 +676,14 @@ export function fingerprintWorld(world: World): string {
         world.formation.breatheStep,
         world.formation.breatheDirection,
         world.formation.entryComplete,
+      ],
+      challenge: world.challenge && [
+        world.challenge.ordinal,
+        world.challenge.hits,
+        world.challenge.impactScore,
+        world.challenge.groupBonusPaid,
+        world.challenge.groupHits,
+        world.challenge.ended,
       ],
       fleet: [world.fleet.frame, world.fleet.entryComplete],
       enemies: world.fleet.enemies.map(enemyFingerprint),

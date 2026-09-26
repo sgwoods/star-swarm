@@ -240,6 +240,10 @@ export function loadPack(source: PackSource): LoadResult {
     formations.set(key, formation);
   }
 
+  manifest.stageBadges.forEach((badge, index) => {
+    requireRef(MANIFEST_FILE, `stageBadges[${String(index)}].sprite`, 'sprites', badge.sprite);
+  });
+
   for (const [id, alien] of aliens) {
     const file = fileOf('aliens', id);
     requireRole(file, 'role', alien.role);

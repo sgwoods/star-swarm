@@ -47,6 +47,9 @@ function classicPack() {
 
 const CLASSIC = classicPack();
 
+/** Fire held, sticks untouched: see {@link GoldenSpec.hold}. */
+const FIRE_ONLY: InputFrame = frameOf('fire');
+
 export function classicRules(): Rules {
   return CLASSIC.rules;
 }
@@ -85,6 +88,13 @@ export function scriptedPilot(seed: string, holdSteps = 48): InputSource {
       return frame;
     },
   };
+}
+
+export interface RunOptions {
+  readonly rules?: Rules;
+  readonly stages?: StageSource;
+  /** Stage to start on. A challenge-stage golden starts on one. */
+  readonly stage?: number;
 }
 
 /**
@@ -146,12 +156,18 @@ export interface GoldenSpec {
   /** The stage to start on. Omitted means the rules' own `firstStage`. */
   readonly stage?: number;
   /**
-   * `true` records with the sticks and the button untouched. A golden of the
-   * entry choreography wants exactly that: nothing the player does can change
-   * where a wave flies, so an empty log makes the file a record of the fleet and
-   * the formation alone.
+   * Hold this exact frame for the whole recording, instead of running the
+   * scripted pilot.
+   *
+   * `hold: 0` is the empty log: nothing the player does can change where an entry
+   * wave flies, so a golden of the choreography with the controls untouched is a
+   * record of the fleet and the formation alone. `hold: frameOf('fire')` is the
+   * other case this exists for — the acceptance test that the first two challenge
+   * stages can be perfected **without moving**, from the exact centre of the
+   * screen (`docs/DESIGN.md` section 11). A log that never sets a direction bit
+   * is what makes "without moving" a property of the file rather than a claim.
    */
-  readonly idle?: boolean;
+  readonly hold?: InputFrame;
   /**
    * Reverse every this many steps, with the button held, instead of playing the
    * scripted pilot. See {@link sweepingPilot}.
@@ -184,7 +200,7 @@ export const GOLDENS: readonly GoldenSpec[] = [
     seed: 'golden-stage-entry',
     inputSeed: 'idle',
     steps: 1_400,
-    idle: true,
+    hold: 0,
   },
   // Three minutes of ordinary play. Covers movement, the shot cap, collisions and
   // the score rule against enemy state — and now dives, bombing and losing the
@@ -226,15 +242,40 @@ export const GOLDENS: readonly GoldenSpec[] = [
     sweepPeriod: 110,
     rules: fiveShipCabinet(),
   },
+  // `docs/DESIGN.md` section 11, twice over: a perfect run of the first two
+  // challenge stages, achieved **without moving** from the exact centre of the
+  // screen, and the 19,000 a perfect first challenge stage pays. The input log
+  // holds fire and never touches a direction, which is the whole point — if the
+  // challenge data or the flight paths stop allowing it, these fail rather than
+  // quietly needing a nudge. Each starts on its own challenge stage because the
+  // combat stages between them cannot be cleared from a standstill.
+  {
+    name: 'challenge-one-perfect',
+    seed: 'golden-challenge-one',
+    inputSeed: 'fire-only',
+    // The exact step the stage ends on, so the golden is about that stage and
+    // nothing else: one step more and the score carries kills from stage 4.
+    steps: 1_582,
+    stage: 3,
+    hold: FIRE_ONLY,
+  },
+  {
+    name: 'challenge-two-perfect',
+    seed: 'golden-challenge-two',
+    inputSeed: 'fire-only',
+    steps: 1_574,
+    stage: 7,
+    hold: FIRE_ONLY,
+  },
 ];
 
 export function goldenPath(name: string): string {
   return join(GOLDEN_DIR, `${name}.replay.json`);
 }
 
-/** The input a golden is recorded with: nothing, a steady sweep, or the pilot. */
+/** The input a golden is recorded with: one held frame, a steady sweep, or the pilot. */
 export function pilotFor(spec: GoldenSpec): InputSource {
-  if (spec.idle === true) return constantInput(0);
+  if (spec.hold !== undefined) return constantInput(spec.hold);
   if (spec.sweepPeriod !== undefined) return sweepingPilot(spec.sweepPeriod);
   return scriptedPilot(spec.inputSeed);
 }

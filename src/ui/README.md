@@ -10,8 +10,12 @@ and events and draws; it never writes back, and `src/sim/` never imports it.
 `hud.ts` landed with Milestone 1: score, reserve fighters and the stage badges.
 The front-end shell around it landed with Milestone 2:
 
-- **`flow.ts` is the one state machine.** Five phases — attract, playing, game
-  over, results, high-score entry — and every transition is in that file. A
+- **`flow.ts` is the one state machine.** Six phases — attract, playing, the
+  between-stage challenge card, game over, results, high-score entry — and every
+  transition is in that file. `challenge-results` is the one that goes _back_ to
+  playing: the stage is over and the next is already on the field, so the world
+  simply stops being stepped while the card is up. That is why it is a phase and
+  not a flag — "playing" must never sometimes mean "not stepping the world". A
   phase flag anywhere else is a bug: `src/main.ts` owns the display, the input
   device and the starfield, calls `flow.step(frame)` once per simulation step,
   and draws whatever phase says. Time is counted in **simulation steps**, never
@@ -32,16 +36,22 @@ The front-end shell around it landed with Milestone 2:
   path, including the property access itself, and falls back to a session-only
   table that behaves identically. A blocked storage API must never take the game
   down.
+- **The between-stage challenge card reuses the results screen.** `drawResults`
+  takes the rows, the heading and the footer it is given, so `drawChallengeResults`
+  is those three plus the blinking "PERFECT !" banner rather than a second
+  layout. The rows it shows are the original's: the hit count, and the
+  end-of-stage award under a label that changes with the branch — "SPECIAL BONUS"
+  when the perfect bonus _replaced_ the per-hit one, "BONUS" when it did not.
+- **The badge denominations are pack data.** `pack.json`'s `stageBadges` pairs
+  each value with the sprite that draws it, and `badgesForStage` decomposes a
+  stage number greedily over whatever it is handed — sorting first, because
+  greedy is only correct largest-first and a pack's ordering is not a rule.
 
 Seams left for the tasks that follow, so they attach without editing a screen:
 
-- **Challenge-stage results** — `FlowOptions.resultRowsFor` replaces the rows
-  `results.ts` draws, and `RunStats` is where new counters go. The card grows
-  with the rows it is given.
-- **Stage badges** — `hud.ts` already draws them from the stage number, which
-  the flow passes through from whichever world is on screen.
-- **Extra lives** — the sim raises `extra-life`; `RunStats.extraLives` counts
-  them, so the rule can change without touching a screen.
+- **`FlowOptions.resultRowsFor`** replaces the rows the end-of-game results
+  screen draws, and `RunStats` is where new counters go. The card grows with the
+  rows it is given.
 - **A pack-supplied default high-score table** — `DEFAULT_HIGH_SCORES` is ours
   and provisional; `createHighScoreBoard({ defaults })` already takes one.
 

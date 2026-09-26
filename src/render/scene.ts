@@ -56,9 +56,9 @@ function drawPlayer(ctx: CanvasRenderingContext2D, world: World, sheet?: SpriteS
 }
 
 /**
- * The fleet. A `standby` enemy has not launched and is not on the field, so it
- * is not drawn — the simulation's own state is what decides that, not a flag
- * here.
+ * The fleet. A `standby` enemy has not launched and a `dead` one is off the
+ * field — shot down, or flown away alive — so neither is drawn. The simulation's
+ * own state is what decides that, not a flag here.
  */
 function drawEnemies(ctx: CanvasRenderingContext2D, world: World, sheet?: SpriteSheet): void {
   for (const enemy of world.fleet.enemies) {

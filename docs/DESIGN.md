@@ -229,7 +229,8 @@ src/
   engine/      loop.ts (fixed step), rng.ts (seeded), input.ts, replay.ts
   sim/         world.ts, player.ts, shots.ts, enemies.ts, formation.ts,
                paths.ts (segment interpreter), dive.ts, capture.ts,
-               abilities/ (one file per ability), scoring.ts, stages.ts
+               challenge.ts, abilities/ (one file per ability), scoring.ts,
+               stages.ts
   render/      canvas.ts, sprites.ts (data→bitmap cache), starfield.ts, text.ts, crt.ts
   audio/       synth.ts, sfx.ts, music.ts
   content/     schema.ts, loader.ts, registry.ts

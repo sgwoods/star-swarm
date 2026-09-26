@@ -15,6 +15,7 @@ import {
   resolveDifficultyRow,
   resolveExtraLifeAward,
   resolveLaunchCredit,
+  resolveStageId,
   starfieldSpeedByte,
   unknownProvenancePaths,
 } from '../../src/content/rules.js';
@@ -59,13 +60,13 @@ describe('the pack itself', () => {
   it('loads with its rules', () => {
     expect(pack.id).toBe('classic');
     expect(rules.id).toBe('classic');
-    // The three formation roles plus the three transform types, and the five entry
-    // scripts the normal stages through 8 play — five rather than six because
-    // stage 8 replays stage 4's script row.
+    // The three formation roles plus the three transform types; and five entry
+    // scripts for the normal stages through 8 — five rather than six because
+    // stage 8 replays stage 4's script row — plus the eight challenge scripts.
     // `tests/unit/classic-content.test.ts` checks what is in them; here it is only
     // that they are there.
     expect(pack.aliens.size).toBe(6);
-    expect(pack.stages.size).toBe(5);
+    expect(pack.stages.size).toBe(13);
   });
 
   it('holds exactly the content its landed tasks put there, and loads all of it', () => {
@@ -174,6 +175,97 @@ describe('the pack itself', () => {
     // asserting a plateau three rows early.
     expect(pack.manifest.stageSequence.normal.rows).toHaveLength(6);
     expect(pack.manifest.stageSequence.normal.repeatLast).toBe(1);
+  });
+});
+
+/**
+ * The challenge-stage scripts, against reference section 8.
+ *
+ * Structure is confirmed there — eight distinct scripts cycling every eight
+ * challenge stages, forty enemies in five groups of eight, never shooting. The
+ * geometry is not: the ROM's flight vectors were never decoded, so the shapes are
+ * this pack's. What this holds is the structure and the one engine-visible
+ * property the shapes have to have.
+ */
+describe('the eight challenge scripts', () => {
+  // `pack` is loaded in `beforeAll`, so the ids are read per test, not per file.
+  const challengeIds = (): readonly string[] => pack.manifest.stageSequence.challenge.rows;
+
+  it('ships eight, one per challenge stage of the cycle', () => {
+    expect(challengeIds()).toEqual([
+      'challenge-1',
+      'challenge-2',
+      'challenge-3',
+      'challenge-4',
+      'challenge-5',
+      'challenge-6',
+      'challenge-7',
+      'challenge-8',
+    ]);
+    // And the cycle has the same period as the impact-award table, because the
+    // original selects both with `(stage >> 2) AND 7`.
+    expect(pack.manifest.stageSequence.challenge.repeatLast).toBe(challengeIds().length);
+    expect(rules.scoring.challenge?.impactAward?.rows).toHaveLength(challengeIds().length);
+  });
+
+  it('plays one on every challenge stage, cycling on the ninth', () => {
+    const at = (stage: number) => resolveStageId(pack.manifest, rules, stage);
+    expect([3, 7, 11, 15, 19, 23, 27, 31].map(at)).toEqual(challengeIds());
+    expect(at(35)).toBe('challenge-1');
+    expect(at(39)).toBe('challenge-2');
+  });
+
+  it('is forty enemies in five groups of eight', () => {
+    for (const id of challengeIds()) {
+      const stage = pack.stages.get(id);
+      expect([id, stage?.kind]).toEqual([id, 'challenge']);
+      expect([id, stage?.waves.length]).toEqual([id, 5]);
+      expect([id, stage?.waves.map((wave) => wave.slots.length)]).toEqual([id, [8, 8, 8, 8, 8]]);
+    }
+  });
+
+  it('never shoots, and never asks for a formation slot', () => {
+    // Reference section 8: "They do not drop any bombs." No `fire` segment in a
+    // challenge script, and no `toSlot` either — a challenge flyer leaves.
+    for (const id of challengeIds()) {
+      for (const wave of pack.stages.get(id)?.waves ?? []) {
+        for (const slot of wave.slots) {
+          const path = pack.paths.get(slot.path ?? wave.entryPath ?? '');
+          expect([id, path]).not.toEqual([id, undefined]);
+          const kinds = path?.segments.map((segment) => segment.type) ?? [];
+          expect([id, kinds.includes('fire')]).toEqual([id, false]);
+          expect([id, kinds.includes('toSlot')]).toEqual([id, false]);
+        }
+      }
+    }
+  });
+
+  it('authors all forty slots as single-hit aliens', () => {
+    // The reference's one remaining open question is whether four of a challenge
+    // stage's forty are two-hit bosses (section 11). The scout report recommends
+    // authoring every slot single-hit and building to 19,000 regardless, because
+    // the engine rule is what must be right and which aliens a challenge stage
+    // holds is one line of pack data. This test is that decision, written down.
+    for (const id of challengeIds()) {
+      for (const wave of pack.stages.get(id)?.waves ?? []) {
+        for (const slot of wave.slots) {
+          expect([id, slot.alien, pack.aliens.get(slot.alien)?.hp]).toEqual([id, slot.alien, 1]);
+        }
+      }
+    }
+  });
+
+  it('launches them in single file, which is what `trailing` means on a pair', () => {
+    // The ROM's trailing flag lives on the second bug of a pair only, so a file of
+    // eight sets it on the odd slots and nowhere else.
+    for (const id of challengeIds()) {
+      for (const wave of pack.stages.get(id)?.waves ?? []) {
+        expect([id, wave.slots.map((slot) => slot.trailing)]).toEqual([
+          id,
+          [false, true, false, true, false, true, false, true],
+        ]);
+      }
+    }
   });
 });
 
@@ -305,7 +397,10 @@ describe('the rest of the Classic rules', () => {
     expect(rules.lives.default).toBe(3);
     expect(rules.lives.options).toEqual([2, 3, 4, 5]);
     expect(rules.extraLives.setting).toBe(1);
-    expect(rules.extraLives.stopAfterScore).toBe(1_000_000);
+    // The award ceiling is the two score digits the ROM compares, not a score:
+    // floor(score / 10,000) mod 100 (reference section 3).
+    expect(rules.extraLives.thresholdUnit).toBe(10_000);
+    expect(rules.extraLives.thresholdModulus).toBe(100);
   });
 
   it('resolves the setting against the starting-fighter count, not against itself', () => {
@@ -335,10 +430,13 @@ describe('the rest of the Classic rules', () => {
     expect(rules.enemies.bomberReadyTimers).toEqual({ drone: 22, wing: 2, warden: 2 });
   });
 
-  it('awards extra lives at 20,000 and 70,000, then every 70,000, stopping at a million', () => {
+  it('awards extra lives at 20,000 and 70,000, then every 70,000, ending at 980,000', () => {
     expect(rules.extraLives.award).toMatchObject({ first: 20000, second: 70000, repeat: 70000 });
     expect(extraLivesEarned(rules, 0, 70000)).toBe(2);
-    expect(extraLivesEarned(rules, 1000000, 2000000)).toBe(0);
+    // `docs/DESIGN.md` section 11: the award at 980,000 is the last, because the
+    // next threshold needs a third digit and can never match.
+    expect(extraLivesEarned(rules, 979_999, 980_000)).toBe(1);
+    expect(extraLivesEarned(rules, 980_000, 5_000_000)).toBe(0);
   });
 
   it('offers a threshold set per starting-ship count, because the cabinet did', () => {
@@ -458,10 +556,14 @@ describe('the rest of the Classic rules', () => {
     expect(resolveLaunchCredit(rules, resolveDifficultyRow(rules, 1, 'A'), 'scourge')).toBe(0);
   });
 
-  it('bombs on entry from stage 2, and never on stage 1', () => {
+  it('bombs on entry from stage 2, never on stage 1, and never on a challenge stage', () => {
     expect(rules.enemies.bombing.entryFromStage).toBe(2);
     expect(allowsEntryBombing(rules, 1)).toBe(false);
-    expect([2, 3, 20].every((stage) => allowsEntryBombing(rules, stage))).toBe(true);
+    expect([2, 4, 5, 20].every((stage) => allowsEntryBombing(rules, stage))).toBe(true);
+    // A challenge flyer is `entering` for its whole life, which is the one state
+    // entry bombing applies to — so without this the forty of them would bomb
+    // (reference section 8: "They do not drop any bombs").
+    expect([3, 7, 11, 35].some((stage) => allowsEntryBombing(rules, stage))).toBe(false);
   });
 
   it('flies divers back into the formation from above the top of the screen', () => {
@@ -516,6 +618,16 @@ describe('how far each value may be trusted', () => {
       'transform.fromRoles',
       'transform.perStage',
       'starfield.speed',
+      'extraLives.thresholdUnit',
+      'extraLives.thresholdModulus',
+      'challengeStages.firstStage',
+      'challengeStages.everyStages',
+      'scoring.movingMultiplier',
+      'scoring.challenge.groupBonus',
+      'scoring.challenge.perHit',
+      'scoring.challenge.perfect',
+      'scoring.challenge.perfectReplacesPerHit',
+      'scoring.challenge.impactAward',
     ]) {
       expect([path, confidenceOf(path)]).toEqual([path, 'verified']);
     }
@@ -523,7 +635,6 @@ describe('how far each value may be trusted', () => {
 
   it('keeps the values the reference does not cover legibly provisional', () => {
     for (const path of [
-      'extraLives.stopAfterScore',
       'player.y',
       'player.width',
       'player.height',

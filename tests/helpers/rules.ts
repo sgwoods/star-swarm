@@ -10,6 +10,9 @@
  * - {@link minimalRules} is the least a `rules.json` can say and still load. It
  *   exists so a schema or loader test can state one field and leave everything
  *   else alone, and so adding a required field is one edit rather than five.
+ * - {@link classicStagesWith} is the shipped content resolved against rules a test
+ *   has bent, which is what a test that moves the challenge cadence needs: the
+ *   stage source reads rules too, and two sets silently disagree.
  * - {@link stageSourceOf} wraps a hand-written stage in a {@link StageSource}, for
  *   a test that needs a shape the Classic pack does not ship — a challenge stage,
  *   a one-enemy wave, a formation with no grid.
@@ -54,6 +57,27 @@ export function classicRules(): Rules {
 /** What plays as each stage in the shipped Classic pack. */
 export function classicStages(): StageSource {
   return createStageSource(createRegistry([classicPack()]));
+}
+
+/**
+ * The shipped content, resolved against rules a test has bent.
+ *
+ * A stage *number* means nothing without rules — the challenge cadence decides
+ * which half of the sequence it reads — so a test that moves the cadence has to
+ * move it for the stage source too. {@link classicStages} reads the pack's own
+ * rules, and handing the world one set while the source uses another silently
+ * plays a combat stage where a challenge stage was asked for.
+ */
+export function classicStagesWith(rules: Rules): StageSource {
+  const registry = createRegistry([classicPack()]);
+  return createStageSource({
+    manifest: registry.manifest,
+    rules,
+    stages: registry.stages,
+    formations: registry.formations,
+    aliens: registry.aliens,
+    paths: registry.paths,
+  });
 }
 
 /** The shipped `classic40` formation. */

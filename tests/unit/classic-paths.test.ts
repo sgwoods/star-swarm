@@ -55,6 +55,24 @@ const DIVE_STARTS: readonly { readonly at: Vec2; readonly mirror: boolean }[] = 
 const PLAYER: Vec2 = [112, 248];
 
 /**
+ * The challenge-stage scripts. A different kind of path: nothing settles into
+ * formation on a challenge stage, so none of these ends in `toSlot` and every
+ * one of them leaves the screen. Five of them converge on the player's home
+ * column and two on the columns either side of it, which is what makes the first
+ * two challenge stages clearable without moving and the rest not
+ * (`docs/reference/arcade-reference.md` section 8, "Difficulty of aiming").
+ */
+const CHALLENGE_PATHS = [
+  'challenge-fall-centre',
+  'challenge-weave-centre',
+  'challenge-cross-centre',
+  'challenge-fall-outer-left',
+  'challenge-fall-inner-left',
+  'challenge-fall-inner-right',
+  'challenge-fall-outer-right',
+] as const;
+
+/**
  * Somewhere plausible in the formation for `toSlot` to aim at. `pack.json`
  * states slots as logical `(row, column)` because their pixel spacing is
  * unconfirmed, so a preview or a test has to supply pixels of its own.
@@ -78,9 +96,9 @@ function compile(path: MovementPath, mirror: boolean): CompiledPath {
 }
 
 describe('the Classic entry paths', () => {
-  it('ships one path per perceived entry shape, plus the attack paths', () => {
+  it('ships one path per entry shape, plus the attack paths and the challenge scripts', () => {
     expect([...pack.paths.keys()].sort()).toEqual(
-      [...ENTRY_PATHS, ...DIVE_PATHS, 'dive-return'].sort(),
+      [...ENTRY_PATHS, ...DIVE_PATHS, 'dive-return', ...CHALLENGE_PATHS].sort(),
     );
   });
 
@@ -255,5 +273,74 @@ describe('the Classic dive paths', () => {
     const end = samplePath(compiled, compiled.totalFrames);
     expect(end.x).toBeCloseTo(SLOT[0], 6);
     expect(end.y).toBeCloseTo(SLOT[1], 6);
+  });
+});
+
+/**
+ * The challenge scripts, flown by the same interpreter.
+ *
+ * Their contract is the opposite of an entry path's: they must **not** address a
+ * formation slot, and they must end off the bottom of the screen, because that is
+ * what makes their flyers leave the field — reported as a departure, not a kill
+ * — rather than parking in a slot that a challenge stage does not fill
+ * (`src/sim/enemies.ts`).
+ */
+describe('the Classic challenge-stage scripts', () => {
+  const compileFree = (path: MovementPath): CompiledPath =>
+    compilePath(path, { playfield: DEFAULT_PLAYFIELD });
+
+  it.each(CHALLENGE_PATHS)('%s flies from off screen and leaves by the bottom', (id) => {
+    const path = pack.paths.get(id);
+    expect(path).toBeDefined();
+    if (path === undefined) return;
+
+    const compiled = compileFree(path);
+    expect(Number.isFinite(compiled.totalFrames)).toBe(true);
+    expect(compiled.totalFrames).toBeGreaterThan(60);
+    expect(compiled.totalFrames).toBeLessThan(600);
+
+    const end = samplePath(compiled, compiled.totalFrames);
+    expect(end.done).toBe(true);
+    expect(end.y).toBeGreaterThanOrEqual(DEFAULT_PLAYFIELD.height);
+
+    const bounds = pathBounds(compiled);
+    expect(bounds.minX).toBeGreaterThanOrEqual(-OFF_SCREEN_MARGIN);
+    expect(bounds.maxX).toBeLessThanOrEqual(DEFAULT_PLAYFIELD.width + OFF_SCREEN_MARGIN);
+    expect(bounds.minY).toBeGreaterThanOrEqual(-OFF_SCREEN_MARGIN);
+    expect(bounds.maxY).toBeLessThanOrEqual(DEFAULT_PLAYFIELD.height + OFF_SCREEN_MARGIN);
+  });
+
+  it('never addresses a formation slot', () => {
+    // A `toSlot` segment is exactly what would park a challenge flyer in the
+    // formation instead of letting it leave, and it is also the test
+    // `src/sim/enemies.ts` reads to decide which happens.
+    for (const id of CHALLENGE_PATHS) {
+      const path = pack.paths.get(id);
+      if (path === undefined) throw new Error(`missing path ${id}`);
+      expect(path.segments.map((segment) => segment.type)).not.toContain('toSlot');
+    }
+  });
+
+  it('declares no mirrored variant, because the mirror axis is not the player', () => {
+    // Mirroring reflects about the playfield's centre line, x = 112 for an
+    // anchor. The fighter's home column is 103 — the travel limits are the ROM's
+    // and are not symmetric — and the shot window is only +/-5 wide, so the
+    // reflection of a path that passes over the fighter does not. A challenge
+    // script's whole point is passing over the fighter, so these are authored per
+    // column rather than mirrored.
+    for (const id of CHALLENGE_PATHS) expect(pack.paths.get(id)?.mirror).toBe(false);
+  });
+
+  it('moves on every frame of its flight', () => {
+    for (const id of CHALLENGE_PATHS) {
+      const path = pack.paths.get(id);
+      if (path === undefined) throw new Error(`missing path ${id}`);
+      const compiled = compileFree(path);
+      for (let frame = 1; frame < Math.floor(compiled.totalFrames); frame += 1) {
+        const a = samplePath(compiled, frame - 1);
+        const b = samplePath(compiled, frame);
+        expect(Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2)).toBeGreaterThan(0.5);
+      }
+    }
   });
 });

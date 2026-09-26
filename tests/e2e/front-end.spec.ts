@@ -89,3 +89,31 @@ test('the high-score table survives a reload', async ({ page }) => {
   await page.waitForFunction(() => (window.starSwarm?.step ?? 0) > 0);
   expect(await page.evaluate(() => window.starSwarm?.highScore)).toBe(123_450);
 });
+
+/**
+ * The stage badges, in a real browser.
+ *
+ * The denominations and their art are pack data now, and a sprite the pack does
+ * not have is a load-time throw from `createSpriteSheet` — so a boot that draws
+ * the row at all is what proves the pack reached the HUD. The decomposition
+ * itself is `tests/unit/hud.test.ts`.
+ *
+ * The challenge stage is deliberately *not* driven from here. Stages 1 and 2 have
+ * to be cleared to reach one and nothing dives yet, so the journey takes about
+ * three minutes of real time — a poor trade for a suite whose job is wiring
+ * (`tests/unit/challenge.test.ts` and the two golden replays in
+ * `tests/sim/player-core.test.ts` prove the behaviour, and the PR carries a clip).
+ */
+test('draws the stage badges the pack declares', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+
+  await page.goto('/');
+  await page.waitForFunction(() => (window.starSwarm?.step ?? 0) > 0);
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => window.starSwarm?.phase === 'playing');
+
+  // Stage 1 shows a single 1-point badge; the denominations are the pack's.
+  expect(await page.evaluate(() => window.starSwarm?.badges)).toEqual([1]);
+  expect(errors).toEqual([]);
+});

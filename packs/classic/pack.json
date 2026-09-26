@@ -286,17 +286,35 @@
     "enemy-transformed": "dive",
     "capture-started": "capture-beam",
     "fighter-rescued": "rescue",
+    "challenge-group-cleared": "challenge-bonus",
     "challenge-bonus": "challenge-bonus",
     "challenge-perfect": "challenge-perfect",
     "target-hit": "enemy-hit"
   },
+  "stageBadges": [
+    { "value": 50, "sprite": "badge-50" },
+    { "value": 30, "sprite": "badge-30" },
+    { "value": 20, "sprite": "badge-20" },
+    { "value": 10, "sprite": "badge-10" },
+    { "value": 5, "sprite": "badge-5" },
+    { "value": 1, "sprite": "badge-1" }
+  ],
   "stageSequence": {
     "normal": {
       "rows": ["stage-1", "stage-2", "stage-4", "stage-5", "stage-6", "stage-4"],
       "repeatLast": 1
     },
     "challenge": {
-      "rows": [],
+      "rows": [
+        "challenge-1",
+        "challenge-2",
+        "challenge-3",
+        "challenge-4",
+        "challenge-5",
+        "challenge-6",
+        "challenge-7",
+        "challenge-8"
+      ],
       "repeatLast": 8
     }
   }

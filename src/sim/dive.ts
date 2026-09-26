@@ -35,6 +35,7 @@
  */
 
 import {
+  allowsAttacks,
   allowsEntryBombing,
   allowsTransform,
   isContinuousBombing,
@@ -74,6 +75,12 @@ export interface DiveState {
    * fact about this file rather than a claim.
    */
   readonly row: DifficultyRow | undefined;
+  /**
+   * Whether this stage's enemies attack at all, resolved once when the stage is
+   * entered. `false` on a challenge stage, where the whole director is inert —
+   * see {@link allowsAttacks} for why that is stated rather than inferred.
+   */
+  readonly attacks: boolean;
   /** Set by `formation-settled`. Nothing dives before it. */
   armed: boolean;
   /** Frames since diving began. The only clock the director has. */
@@ -99,6 +106,7 @@ export function createDiveState(rules: Rules, stage: number, rank?: string): Div
   const row = resolveDifficultyRow(rules, stage, rank);
   return {
     row,
+    attacks: allowsAttacks(rules, stage),
     armed: false,
     frame: 0,
     credit: new Map(),
@@ -174,6 +182,15 @@ export interface AttackStep {
   readonly transforming: Enemy | undefined;
 }
 
+/** Nothing happened, because nothing may. Frozen: callers only read it. */
+const NO_ATTACK: AttackStep = Object.freeze({
+  dived: Object.freeze([]),
+  fired: Object.freeze([]),
+  transformed: Object.freeze([]),
+  transformedFrom: undefined,
+  transforming: undefined,
+});
+
 /**
  * Advance the attack by one frame.
  *
@@ -182,6 +199,10 @@ export interface AttackStep {
  * replay has to agree on who got there first.
  */
 export function stepAttacks(state: DiveState, ctx: AttackContext): AttackStep {
+  // A challenge stage has no attack at all: no dive, no bomb, no transform, and
+  // no scripted fire either. One test at the top rather than three gates further
+  // down, so there is one place to read the answer and one place to break it.
+  if (!state.attacks) return NO_ATTACK;
   if (state.armed) state.frame += 1;
 
   const alive = aliveEnemies(ctx.fleet.enemies).length;

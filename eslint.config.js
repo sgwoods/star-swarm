@@ -50,7 +50,16 @@ const NO_MATH_RANDOM = {
 
 export default tseslint.config(
   {
-    ignores: ['dist/', 'coverage/', 'playwright-report/', 'test-results/', 'node_modules/'],
+    ignores: [
+      'dist/',
+      'coverage/',
+      'playwright-report/',
+      'test-results/',
+      'node_modules/',
+      // Git-excluded scratch space: probes, one-off harnesses and video frames.
+      // See `.prettierignore` for the same entry and the same reason.
+      '.scratch/',
+    ],
   },
 
   js.configs.recommended,

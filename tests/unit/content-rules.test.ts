@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Rules } from '../../src/content/schema.js';
 import { packManifestSchema, rulesSchema } from '../../src/content/schema.js';
 import {
+  allowsAttacks,
   allowsEntryBombing,
   allowsTransform,
   challengeOrdinal,
@@ -302,7 +303,9 @@ describe('reading a row into an attack', () => {
   });
 
   it('allows entry bombing only from the stage the pack names', () => {
-    expect([1, 2, 3, 40].map((stage) => allowsEntryBombing(rules, stage))).toEqual([
+    // Stages 3 and 7 are challenge stages under these rules and are excluded
+    // whatever the pack names, which is the next assertion's business.
+    expect([1, 2, 4, 40].map((stage) => allowsEntryBombing(rules, stage))).toEqual([
       false,
       true,
       true,
@@ -310,6 +313,15 @@ describe('reading a row into an attack', () => {
     ]);
     // Omitted means an entering enemy never bombs, on any stage.
     expect(allowsEntryBombing(rulesWith(), 40)).toBe(false);
+  });
+
+  it('never allows it on a challenge stage, whatever the stage number', () => {
+    // A challenge flyer never settles, so it is `entering` for its whole life —
+    // the one state entry bombing applies to. Without the stage-kind gate the
+    // forty of them would bomb from the second challenge stage onwards.
+    expect([3, 7, 11, 35].some((stage) => allowsEntryBombing(rules, stage))).toBe(false);
+    expect([3, 7, 11, 35].some((stage) => allowsAttacks(rules, stage))).toBe(false);
+    expect([1, 2, 4, 5, 40].every((stage) => allowsAttacks(rules, stage))).toBe(true);
   });
 });
 
@@ -361,7 +373,8 @@ describe('extra lives', () => {
   const rules = rulesWith({
     extraLives: {
       award: { mode: 'thresholds', first: 20000, second: 70000, repeat: 70000 },
-      stopAfterScore: 1000000,
+      thresholdUnit: 10000,
+      thresholdModulus: 100,
     },
   });
 
@@ -379,8 +392,11 @@ describe('extra lives', () => {
     expect(extraLivesEarned(rules, 0, 70000)).toBe(2);
   });
 
-  it('stops awarding past the ceiling', () => {
-    expect(extraLivesEarned(rules, 999999, 5000000)).toBe(0);
+  it('stops once the threshold outgrows the digits it is compared against', () => {
+    // 980,000 is the last one these thresholds reach: the next is 1,050,000,
+    // which `floor(score / 10,000) mod 100` can never produce.
+    expect(extraLivesEarned(rules, 979999, 980000)).toBe(1);
+    expect(extraLivesEarned(rules, 980000, 5000000)).toBe(0);
   });
 
   it('awards nothing at all when the rules say none', () => {

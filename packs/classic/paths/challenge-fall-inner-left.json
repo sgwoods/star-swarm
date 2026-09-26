@@ -1,0 +1,9 @@
+{
+  "id": "challenge-fall-inner-left",
+  "start": [8, -16],
+  "segments": [
+    { "type": "bezier", "to": [64, 44], "c1": [8, 56], "c2": [16, 8], "speed": 1.3 },
+    { "type": "line", "to": [64, 64], "speed": 1.3 },
+    { "type": "exitBottom", "speed": 1.3 }
+  ]
+}

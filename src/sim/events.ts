@@ -160,6 +160,71 @@ export interface StageClearedEvent {
   readonly stage: number;
 }
 
+/**
+ * Challenge-stage events.
+ *
+ * Four, because the original's challenge stage pays in four distinguishable
+ * moments and the sounds differ: each group of eight cleared, then — mutually
+ * exclusively — either the ordinary end-of-stage award or the perfect one, and
+ * finally the summary the between-stage screen reads. `challenge-bonus` and
+ * `challenge-perfect` are the ROM's own two branches (`cp #40`), which is why
+ * they are separate types rather than one event with a flag: a pack binds a
+ * different melody to each (`docs/reference/arcade-reference.md` section 8).
+ *
+ * Every one carries `ordinal` — the zero-based challenge-stage index — because
+ * that, not the stage number, is what the award tables are keyed by.
+ */
+export interface ChallengeGroupClearedEvent {
+  readonly type: 'challenge-group-cleared';
+  readonly stage: number;
+  readonly ordinal: number;
+  /** Which group of eight, zero-based: the entry wave it was. */
+  readonly group: number;
+  readonly bonus: number;
+}
+
+/** The end-of-stage award on a stage that was not perfect: `perHit × hits`. */
+export interface ChallengeBonusEvent {
+  readonly type: 'challenge-bonus';
+  readonly stage: number;
+  readonly ordinal: number;
+  readonly hits: number;
+  readonly bonus: number;
+}
+
+/** The end-of-stage award on a perfect stage, which *replaces* the above. */
+export interface ChallengePerfectEvent {
+  readonly type: 'challenge-perfect';
+  readonly stage: number;
+  readonly ordinal: number;
+  readonly hits: number;
+  readonly bonus: number;
+}
+
+/**
+ * A challenge stage is over — every enemy destroyed or flown away, and the
+ * end-of-stage award already in the score.
+ *
+ * The numbers the original's between-stage screen shows, plus the two running
+ * totals a results row wants, so the screen counts nothing itself.
+ */
+export interface ChallengeEndedEvent {
+  readonly type: 'challenge-ended';
+  readonly stage: number;
+  readonly ordinal: number;
+  /** Enemies destroyed, which is the "NUMBER OF HITS" the original displays. */
+  readonly hits: number;
+  /** Enemies the stage put on the field. 40 in the arcade. */
+  readonly total: number;
+  readonly perfect: boolean;
+  /** Points scored at the moment of impact, across the whole stage. */
+  readonly impactScore: number;
+  /** Group bonuses awarded during the stage. */
+  readonly groupBonus: number;
+  /** The end-of-stage award: the perfect bonus, or `perHit × hits`. */
+  readonly endBonus: number;
+}
+
 export type SimEvent =
   | StageStartedEvent
   | ShotFiredEvent
@@ -177,7 +242,11 @@ export type SimEvent =
   | PlayerHitEvent
   | PlayerReadyEvent
   | GameOverEvent
-  | StageClearedEvent;
+  | StageClearedEvent
+  | ChallengeGroupClearedEvent
+  | ChallengeBonusEvent
+  | ChallengePerfectEvent
+  | ChallengeEndedEvent;
 
 export type SimEventType = SimEvent['type'];
 
