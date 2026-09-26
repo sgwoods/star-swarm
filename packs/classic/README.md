@@ -1,8 +1,9 @@
 # `packs/classic/`
 
 The arcade-faithful pack. The manifest, the palette, the formation, the rules,
-the entry paths, the sprite set and the sound set are here; aliens and stages
-land with the sibling Milestone 2 tasks.
+the entry paths, the sprite set, the sound set, the three aliens and stage 1 are
+here; stages 2–8, dive paths and the challenge stages land with the sibling
+Milestone 2 tasks.
 
 ## Roles
 
@@ -19,15 +20,35 @@ this project's own. For anyone checking a number against
 ## What is already populated
 
 - **`pack.json`** — the 40-slot `classic40` formation and its four captive slots
-  (one per `warden`, one row above it). Slots are logical `(row, column)`; the
-  pixel grid is deliberately absent, because the column positions are confirmed
-  and their spacing is not.
+  (one per `warden`, one row above it). Slots are logical `(row, column)` and
+  `grid` turns each index into a pixel; see _The formation's pixel grid_ below.
+- **`aliens/`** — `drone`, `wing` and `warden`, each naming its sprite and its
+  **base** score only (50, 80, 150). The diving value is the base times the rules
+  layer's `scoring.movingMultiplier`, applied on the alien's motion _state_, so
+  50/100 is never stored as two numbers — `docs/DESIGN.md` section 4 explains why
+  a flat pair gets a captor's latched escort bonus wrong. The `warden` is the
+  two-hit role: `hp: 2` and `hitSprites: ["warden-hit"]`, which is how its first
+  hit changes its colour instead of destroying it. Enemy fire, dive paths and the
+  capture beam are sibling tasks and are deliberately not declared here yet.
+- **`stages/stage-1.json`** — five waves of eight, as reference section 5's
+  `db_attk_wav_IDs` composes them: 4 `wing` + 4 `drone`, then all four `warden`s
+  with 4 `wing`, then 8 `wing`, then 8 `drone` twice over. Every slot names its
+  own `home`, so the waves are identity-addressed rather than "next free slot",
+  and the 40 homes cover the formation exactly once. The **choreography** —
+  which path each wave flies, the `mirror` and `trailing` flags and the wave
+  timings — is ours: the reference derives the composition but explicitly does
+  not derive which of the thirteen ROM scripts is which shape. See
+  `paths/README.md`.
 - **`rules.json`** — all four difficulty ranks as 26 literal rows each, from
   `docs/reference/arcade-reference.md` section 6, plus the shot caps, extra-life
   settings, challenge cadence, capture rules and scoring rules from sections 3,
   7, 8 and 9. It also carries everything the simulation steps: the movement
   cadence and travel limits, the fighter and shot geometry, both hit-window
-  sets, the enemy bullet, the starfield speed formula and the playfield. The
+  sets, the enemy bullet, the starfield speed formula and the playfield — and,
+  from the formation task, `enemies.updatePhases` (the four-frame round robin the
+  enemy state machine runs on) and the whole `formation` block: the sway's ±32 px
+  triangle at 1 px per 4 frames, the breathe's 32-step accordion with its
+  per-coordinate displacements, and the stage kinds on which neither runs. The
   simulation reads this file through the loader and holds no copy of any of it.
 - **`palette`** in `pack.json` — the pack-wide palette of `docs/DESIGN.md`
   section 5. Every colour a sprite uses has to be one of these; the renderer
@@ -47,6 +68,32 @@ this project's own. For anyone checking a number against
 plan, the reference and the data are three legs of the same stool: change one
 and the test says so.
 
+## The formation's pixel grid
+
+`classic40` states `grid`, and the two axes are not equally well sourced.
+
+**Columns are verified.** Reference section 5 traces the ten column origins to
+screen x 32…176 at a pitch of 16 px — a 160 px formation on the 224 px playfield
+with 32 px of margin each side. Slot columns are the arcade's own indices
+`0, 2 … 18`, so `columnSpacing` is 8 and `originX` is 32. The margin is not a
+coincidence: both the sway's ±32 px and the breathe's outermost ±32 px take the
+edge columns to exactly x 0 and x 208, which is a 16 px sprite touching each
+edge. Change the grid and both motions stop landing there.
+
+**Rows are ours, from a derivation rather than a routine.** The reference gives
+the breathe's per-row displacements but not the rows' resting positions; the
+rules-and-scoring investigation reports the resting row gaps as 16, 16, 12, 12,
+12 px, which is why slot rows step by 4, 3, 3, 3 in a 4 px `rowSpacing` rather
+than sitting one apart. `originY` (56, putting the `warden` row there and the
+captive row at 40) is a choice, not a measurement. The formation therefore spans
+y 40…108, and the breathe pushes the bottom row to 140 at full expansion.
+
+The grid is the reason nothing else needs to know any of this: the formation is
+ten column coordinates and six row coordinates, every enemy addresses them by
+index, and `rules.json`'s `formation.breathe` tables are indexed the same way —
+left to right and top to bottom. A pack that reshapes the formation gets both
+motions for free as long as the two tables keep its axis lengths.
+
 ## How far each value may be trusted
 
 `provenance` maps a field path in this file to `verified` or `provisional` with
@@ -63,13 +110,16 @@ value unmarked.
 
 ## What is deliberately empty
 
-- `aliens/` and `stages/`. Siblings fill them. `paths/` has landed — see its own
-  README for which entry choreography is authored and which is deliberately left
-  for Milestone 2.
-- `stageSequence.normal.rows` and `.challenge.rows`. Their `repeatLast` values —
-  3 and 8 — are already stated, because the two sequences plateau on _different_
-  periods and that is easy to lose. The per-rank sequences of reference section 5
-  land with the stages in Milestone 2, as each rank's `stageSequence.normal`.
+- `stageSequence.challenge.rows`, with its `repeatLast: 8` already stated because
+  the two sequences plateau on _different_ periods and that is easy to lose. The
+  normal half lists `stage-1` alone and so states `repeatLast: 1`: cycling the
+  last three is a property of the seventeen-entry table, and it returns with
+  stages 2–8. The per-rank sequences of reference section 5 land at the same
+  time, as each rank's `stageSequence.normal`.
+- Dive paths in `paths/`, and the `dive`, `fire` and `abilities` blocks of the
+  three aliens. All four belong to sibling tasks. `paths/README.md` says which
+  entry choreography is authored and why there are three paths rather than
+  thirteen.
 - `transform.types`. Three alien ids, cycling on a four-stage period; the bonus
   they earn (1,000 / 2,000 / 3,000) is already in `scoring.transformGroupBonus`.
 

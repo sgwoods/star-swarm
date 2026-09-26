@@ -1,0 +1,7 @@
+{
+  "id": "drone",
+  "role": "drone",
+  "hp": 1,
+  "sprite": "drone",
+  "score": { "base": 50 }
+}

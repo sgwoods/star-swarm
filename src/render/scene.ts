@@ -1,33 +1,50 @@
 /**
- * Placeholder playfield art.
+ * Drawing the playfield.
  *
- * Milestone 1's sprite-pipeline task turns pack data into cached bitmaps and
- * gives the fighter, the aliens and the explosions their real 16x16 designs.
- * Until it lands, the playable core still has to be playable, so this file draws
- * the simulation as flat shapes: enough to see where everything is, deliberately
- * not enough to be mistaken for finished art.
+ * Nothing here decides anything: it reads a {@link World} and draws it. Which
+ * pixels an alien is made of is pack data the sprite pipeline rasterised when the
+ * pack loaded (`./sprites.ts`), and which sprite an enemy shows for its current
+ * damage comes from the simulation, so this file names no art and no colours of
+ * its own beyond the placeholder fallback.
  *
- * Nothing here decides anything. It reads a {@link World} and draws it.
+ * The sheet is optional. A caller without one — a test, or a build before the
+ * pack has loaded — gets flat shapes: enough to see where everything is,
+ * deliberately not enough to be mistaken for finished art.
  */
 
+import { enemySprite } from '../sim/enemies.js';
 import { shipAnchors } from '../sim/player.js';
 import type { World } from '../sim/world.js';
+import { drawSprite, type SpriteSheet } from './sprites.js';
 
 const PLAYER_COLOR = '#e8eaff';
 const PLAYER_ACCENT = '#4d9bff';
 const SHOT_COLOR = '#fff6a5';
 const BULLET_COLOR = '#ff5a5a';
 
+/** Placeholder colours, used only when no sprite sheet was supplied. */
 const ROLE_COLORS: Readonly<Record<string, string>> = Object.freeze({
   drone: '#4fc3f7',
   wing: '#ff7043',
   warden: '#66bb6a',
 });
 
+/** The fighter's sprite id. A pack-facing name would be a rules field; it is not one yet. */
+const PLAYER_SPRITE = 'player';
+
+export interface SceneOptions {
+  /** The pack's rasterised sprites. Omitted draws placeholder shapes. */
+  readonly sheet?: SpriteSheet;
+}
+
 /** The fighter, drawn from its anchor — two ships when it is a dual fighter. */
-function drawPlayer(ctx: CanvasRenderingContext2D, world: World): void {
+function drawPlayer(ctx: CanvasRenderingContext2D, world: World, sheet?: SpriteSheet): void {
   if (!world.player.alive) return;
   for (const { x, y } of shipAnchors(world.player, world.rules)) {
+    if (sheet?.has(PLAYER_SPRITE) === true) {
+      drawSprite(ctx, sheet, PLAYER_SPRITE, x, y);
+      continue;
+    }
     ctx.fillStyle = PLAYER_COLOR;
     ctx.fillRect(x + 7, y + 2, 2, 6);
     ctx.fillRect(x + 4, y + 8, 8, 4);
@@ -38,16 +55,23 @@ function drawPlayer(ctx: CanvasRenderingContext2D, world: World): void {
   }
 }
 
-function drawTargets(ctx: CanvasRenderingContext2D, world: World): void {
-  for (const target of world.targets) {
-    if (!target.alive) continue;
-    ctx.fillStyle = ROLE_COLORS[target.role] ?? '#ffffff';
-    ctx.fillRect(target.x, target.y, 8, 8);
-    // A warden that has taken its first hit changes colour, as a boss does.
-    if (target.role === 'warden' && target.hitsRemaining < 2) {
-      ctx.fillStyle = '#4050ff';
-      ctx.fillRect(target.x + 1, target.y + 1, 6, 6);
+/**
+ * The fleet. A `standby` enemy has not launched and is not on the field, so it
+ * is not drawn — the simulation's own state is what decides that, not a flag
+ * here.
+ */
+function drawEnemies(ctx: CanvasRenderingContext2D, world: World, sheet?: SpriteSheet): void {
+  for (const enemy of world.fleet.enemies) {
+    if (enemy.state === 'standby' || enemy.state === 'dead') continue;
+    const id = enemySprite(enemy);
+    if (sheet?.has(id) === true) {
+      // The wing flap comes from the sprite's own `frameDuration`, so a pack sets
+      // the animation speed and the renderer only supplies the clock.
+      drawSprite(ctx, sheet, id, enemy.x, enemy.y, sheet.frameAt(id, world.step));
+      continue;
     }
+    ctx.fillStyle = ROLE_COLORS[enemy.role] ?? '#ffffff';
+    ctx.fillRect(enemy.x + 4, enemy.y + 4, 8, 8);
   }
 }
 
@@ -80,9 +104,13 @@ function drawEnemyBullets(ctx: CanvasRenderingContext2D, world: World): void {
 }
 
 /** Draw the simulation. Call after the starfield, before the HUD. */
-export function drawScene(ctx: CanvasRenderingContext2D, world: World): void {
-  drawTargets(ctx, world);
+export function drawScene(
+  ctx: CanvasRenderingContext2D,
+  world: World,
+  options: SceneOptions = {},
+): void {
+  drawEnemies(ctx, world, options.sheet);
   drawShots(ctx, world);
   drawEnemyBullets(ctx, world);
-  drawPlayer(ctx, world);
+  drawPlayer(ctx, world, options.sheet);
 }

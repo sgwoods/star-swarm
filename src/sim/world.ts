@@ -1,24 +1,37 @@
 /**
  * The world: one simulation step, start to finish (docs/DESIGN.md sections 4, 9).
  *
- * Everything the playable core does happens here, in a fixed order, driven by
- * exactly one {@link InputFrame} per step and one seeded generator. No wall
- * clock, no DOM, no canvas, no audio — what happened comes out as a list of
- * {@link SimEvent}s that `src/render/`, `src/ui/` and `src/audio/` read. That is
- * what makes `tests/sim/` able to prove behaviour without a browser, and what
- * makes a recorded run replay to the same state every time.
+ * Everything the game does happens here, in a fixed order, driven by exactly one
+ * {@link InputFrame} per step and one seeded generator. No wall clock, no DOM, no
+ * canvas, no audio — what happened comes out as a list of {@link SimEvent}s that
+ * `src/render/`, `src/ui/` and `src/audio/` read. That is what makes `tests/sim/`
+ * able to prove behaviour without a browser, and what makes a recorded run replay
+ * to the same state every time.
  *
- * Milestone 1 scope: the player half. Enemies are a static stand-in
- * (`targets.ts`); entry waves, dives, capture and challenge stages are
- * Milestone 2 and are deliberately absent rather than stubbed.
+ * The world is handed two resolved values and loads nothing itself: a `Rules`, and
+ * a {@link StageSource} that answers "what plays as stage *n*". Both come from
+ * `src/content/`; neither is a pack, a registry or a file, which is what keeps the
+ * simulation free of the content layer's plumbing.
+ *
+ * Milestone 2 scope so far: entry waves, formation sway and breathe, and slot
+ * homing. Dive attacks, enemy fire, the capture beam and challenge stages are the
+ * sibling tasks that build on this, and are deliberately absent rather than
+ * stubbed — so the enemy bullet pool exists and is stepped, but nothing loads it
+ * yet.
  */
 
 import { extraLivesEarned, starfieldSpeedByte } from '../content/rules.js';
 import type { Rules } from '../content/schema.js';
+import type { StageContent, StageSource } from '../content/stages.js';
+import { EMPTY_STAGE_SOURCE } from '../content/stages.js';
 import { isDown, type InputFrame } from '../engine/input.js';
 import { createRng, type Rng, type RngState } from '../engine/rng.js';
 import { hitWindowIndex } from './collision.js';
+import type { Enemy, Fleet } from './enemies.js';
+import { aliveEnemies, createFleet, enemyScore, isTargetable, stepFleet } from './enemies.js';
 import type { SimEvent } from './events.js';
+import type { FormationState } from './formation.js';
+import { createFormation, stepFormation } from './formation.js';
 import { createLives, type LivesState } from './lives.js';
 import { createPlayer, type PlayerState, shipAnchors, startX, stepPlayer } from './player.js';
 import {
@@ -28,17 +41,10 @@ import {
   createShots,
   type EnemyBulletPool,
   fireShot,
-  launchEnemyBullet,
   type ShotPool,
   stepEnemyBullets,
   stepShots,
 } from './shots.js';
-import {
-  aliveTargets,
-  createStandInFormation,
-  STAND_IN_FIRE_RATE,
-  type Target,
-} from './targets.js';
 
 export type WorldStatus = 'playing' | 'game-over';
 
@@ -49,8 +55,8 @@ export interface World {
    * test swap a single field and watch behaviour follow.
    */
   readonly rules: Rules;
-  /** @see STAND_IN_FIRE_RATE — Milestone 1 scaffolding, and it goes with it. */
-  readonly standInFireRate: number;
+  /** What plays as each stage. Also a value: see the file header. */
+  readonly stages: StageSource;
   /** Simulation steps run. The only notion of time the sim has. */
   step: number;
   stage: number;
@@ -60,7 +66,11 @@ export interface World {
   lives: LivesState;
   shots: ShotPool;
   enemyBullets: EnemyBulletPool;
-  targets: Target[];
+  /** The stage on the field, or `undefined` when the pack has none for it. */
+  content: StageContent | undefined;
+  /** The formation's coordinates and their motion. `undefined` with no stage. */
+  formation: FormationState | undefined;
+  fleet: Fleet;
   rng: Rng;
   /** Events raised by the step just run. Replaced every step, never appended to across steps. */
   events: SimEvent[];
@@ -69,21 +79,34 @@ export interface World {
 export interface WorldOptions {
   /** A loaded pack's rules. Required: the simulation has no rules of its own. */
   readonly rules: Rules;
+  /**
+   * What plays as each stage, from `createStageSource` in `src/content/`.
+   * Omitted means a world with no enemies at all, which is what a test of the
+   * player half on its own wants.
+   */
+  readonly stages?: StageSource;
   readonly seed?: number | string | RngState;
   readonly stage?: number;
-  /** @see STAND_IN_FIRE_RATE */
-  readonly standInFireRate?: number;
 }
+
+/** An empty fleet, for a stage the pack has no content for. */
+const NO_FLEET: () => Fleet = () => ({
+  enemies: [],
+  flights: new Map(),
+  frame: 0,
+  entryComplete: true,
+});
 
 export function createWorld(options: WorldOptions): World {
   const { rules } = options;
   const rng = createRng(options.seed ?? 'star-swarm');
   const stage = options.stage ?? rules.stages.firstStage;
-  const standInFireRate = options.standInFireRate ?? STAND_IN_FIRE_RATE;
+  const stages = options.stages ?? EMPTY_STAGE_SOURCE;
+  const content = stages.stageFor(stage);
 
   const world: World = {
     rules,
-    standInFireRate,
+    stages,
     step: 0,
     stage,
     score: 0,
@@ -92,7 +115,12 @@ export function createWorld(options: WorldOptions): World {
     lives: createLives(rules),
     shots: createShots(rules),
     enemyBullets: createEnemyBullets(rules),
-    targets: createStandInFormation(rng, { fireRate: standInFireRate }),
+    content,
+    formation:
+      content === undefined
+        ? undefined
+        : createFormation(content.formation, rules, content.stage.kind),
+    fleet: content === undefined ? NO_FLEET() : createFleet(content, rules),
     rng,
     events: [],
   };
@@ -119,54 +147,49 @@ function addScore(world: World, delta: number): void {
   }
 }
 
-/** Player shots against the formation. */
+/**
+ * Player shots against the fleet.
+ *
+ * The score is read from the enemy's *state*, not from a table: an enemy shot
+ * during its entry wave is worth the doubled value and one shot while rotating
+ * back into its slot is worth the plain one. See {@link enemyScore}.
+ */
 function resolvePlayerShots(world: World): void {
   for (const shot of world.shots) {
     if (!shot.active) continue;
-    for (const target of world.targets) {
-      if (!target.alive) continue;
-      if (hitWindowIndex(shot, target, shot.windows, target.hitPadding) < 0) continue;
+    for (const enemy of world.fleet.enemies) {
+      if (!isTargetable(enemy)) continue;
+      if (hitWindowIndex(shot, enemy, shot.windows, enemy.hitPadding) < 0) continue;
 
       shot.active = false;
-      target.hitsRemaining -= 1;
-      if (target.hitsRemaining > 0) {
+      enemy.hitsRemaining -= 1;
+      if (enemy.hitsRemaining > 0) {
+        // A two-hit enemy's first hit scores nothing and only changes its
+        // colour; the whole value lands on the hit that destroys it.
         world.events.push({
           type: 'target-hit',
-          targetId: target.id,
-          x: target.x,
-          y: target.y,
-          hitsRemaining: target.hitsRemaining,
+          targetId: enemy.id,
+          alienId: enemy.alienId,
+          x: enemy.x,
+          y: enemy.y,
+          hitsRemaining: enemy.hitsRemaining,
         });
       } else {
-        target.alive = false;
+        const score = enemyScore(enemy);
+        enemy.state = 'dead';
+        world.fleet.flights.delete(enemy.id);
         world.events.push({
           type: 'target-destroyed',
-          targetId: target.id,
-          x: target.x,
-          y: target.y,
-          score: target.score,
+          targetId: enemy.id,
+          alienId: enemy.alienId,
+          x: enemy.x,
+          y: enemy.y,
+          score,
         });
-        addScore(world, target.score);
+        addScore(world, score);
       }
       break; // One shot, one target.
     }
-  }
-}
-
-/** The stand-in formation shooting back, inside the global 8-bullet cap. */
-function fireEnemyBullets(world: World): void {
-  const { speed } = world.rules.enemies.bullet;
-  for (const target of world.targets) {
-    if (!target.alive || target.fireIntervalSteps === 0) continue;
-    target.fireTimer -= 1;
-    if (target.fireTimer > 0) continue;
-    target.fireTimer = target.fireIntervalSteps;
-
-    // The cap is global and hard: a refused launch simply does not happen, which
-    // is what stops a full formation drowning the screen.
-    const bullet = launchEnemyBullet(world.enemyBullets, target.x, target.y + 8, 0, speed);
-    if (bullet === null) continue;
-    world.events.push({ type: 'enemy-fired', targetId: target.id, x: bullet.x, y: bullet.y });
   }
 }
 
@@ -217,19 +240,66 @@ function resolveRespawn(world: World): void {
   world.events.push({ type: 'player-ready', x: world.player.x, y: world.player.y });
 }
 
-/** Clearing the stand-in formation rolls on to the next stage. */
-function resolveStageEnd(world: World): void {
-  if (aliveTargets(world.targets).length > 0) return;
-  world.events.push({ type: 'stage-cleared', stage: world.stage });
-  world.stage += 1;
-  clearShots(world.shots);
-  clearEnemyBullets(world.enemyBullets);
-  world.targets = createStandInFormation(world.rng, { fireRate: world.standInFireRate });
+/** Load the stage content for `stage`, replacing the formation and the fleet. */
+function enterStage(world: World, stage: number): void {
+  world.stage = stage;
+  world.content = world.stages.stageFor(stage);
+  world.formation =
+    world.content === undefined
+      ? undefined
+      : createFormation(world.content.formation, world.rules, world.content.stage.kind);
+  world.fleet = world.content === undefined ? NO_FLEET() : createFleet(world.content, world.rules);
   world.events.push({
     type: 'stage-started',
-    stage: world.stage,
-    starfieldSpeed: starfieldSpeedByte(world.rules, world.stage),
+    stage,
+    starfieldSpeed: starfieldSpeedByte(world.rules, stage),
   });
+}
+
+/**
+ * Clearing the fleet rolls on to the next stage.
+ *
+ * A stage the pack has no content for puts no enemies on the field, and the world
+ * sits on it rather than rolling forward every frame — "the sequence ran out" is a
+ * halt, not an infinite stage counter.
+ */
+function resolveStageEnd(world: World): void {
+  if (world.fleet.enemies.length === 0) return;
+  if (aliveEnemies(world.fleet.enemies).length > 0) return;
+
+  world.events.push({ type: 'stage-cleared', stage: world.stage });
+  clearShots(world.shots);
+  clearEnemyBullets(world.enemyBullets);
+  enterStage(world, world.stage + 1);
+}
+
+/** The formation's coordinates, then every enemy that addresses them. */
+function stepEnemies(world: World): void {
+  const { content, formation } = world;
+  if (content === undefined || formation === undefined) return;
+
+  // The formation first: an enemy launching this frame predicts its slot from the
+  // offset the formation has *now*, not the one it had last frame.
+  const settled = stepFormation(formation, world.rules);
+  if (settled) {
+    world.events.push({
+      type: 'formation-settled',
+      stage: world.stage,
+      enemies: aliveEnemies(world.fleet.enemies).length,
+    });
+  }
+
+  const step = stepFleet(world.fleet, content, formation, world.rules);
+  for (const enemy of step.launched) {
+    world.events.push({
+      type: 'enemy-launched',
+      targetId: enemy.id,
+      alienId: enemy.alienId,
+      wave: enemy.wave,
+      x: enemy.x,
+      y: enemy.y,
+    });
+  }
 }
 
 /**
@@ -263,10 +333,11 @@ export function stepWorld(world: World, frame: InputFrame): readonly SimEvent[] 
     }
   }
 
+  stepEnemies(world);
+
   stepShots(world.shots, world.rules);
   resolvePlayerShots(world);
 
-  fireEnemyBullets(world);
   stepEnemyBullets(world.enemyBullets, world.rules);
   resolveEnemyBullets(world);
 
@@ -274,6 +345,19 @@ export function stepWorld(world: World, frame: InputFrame): readonly SimEvent[] 
 
   world.step += 1;
   return world.events;
+}
+
+/** One enemy, reduced to the numbers a golden replay has to agree on. */
+function enemyFingerprint(enemy: Enemy): readonly (string | number)[] {
+  return [
+    enemy.id,
+    enemy.state,
+    enemy.home,
+    enemy.hitsRemaining,
+    enemy.x,
+    enemy.y,
+    enemy.pathFrame,
+  ];
 }
 
 /**
@@ -300,12 +384,17 @@ export function fingerprintWorld(world: World): string {
       vx,
       vy,
     ]),
-    targets: world.targets.map(({ id, alive, hitsRemaining, fireTimer }) => [
-      id,
-      alive,
-      hitsRemaining,
-      fireTimer,
-    ]),
+    formation: world.formation && [
+      world.formation.frame,
+      world.formation.motion,
+      world.formation.swayOffset,
+      world.formation.swayDirection,
+      world.formation.breatheStep,
+      world.formation.breatheDirection,
+      world.formation.entryComplete,
+    ],
+    fleet: [world.fleet.frame, world.fleet.entryComplete],
+    enemies: world.fleet.enemies.map(enemyFingerprint),
     rng: world.rng.getState(),
   });
 }

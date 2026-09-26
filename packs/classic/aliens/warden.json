@@ -1,0 +1,8 @@
+{
+  "id": "warden",
+  "role": "warden",
+  "hp": 2,
+  "sprite": "warden",
+  "hitSprites": ["warden-hit"],
+  "score": { "base": 150 }
+}

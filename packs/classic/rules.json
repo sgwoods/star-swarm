@@ -203,6 +203,7 @@
   },
   "enemies": {
     "maxBullets": 8,
+    "updatePhases": 4,
     "bomberReadyTimers": {
       "drone": 22,
       "wing": 2,
@@ -216,6 +217,20 @@
   },
   "stages": {
     "firstStage": 1
+  },
+  "formation": {
+    "sway": {
+      "amplitude": 32,
+      "stepPixels": 1,
+      "stepFrames": 4
+    },
+    "breathe": {
+      "steps": 32,
+      "stepFrames": 4,
+      "columns": [-32, -25, -18, -11, -4, 4, 11, 18, 25, 32],
+      "rows": [0, 4, 11, 18, 25, 32]
+    },
+    "animatedStageKinds": ["normal", "boss"]
   },
   "starfield": {
     "speed": {
@@ -1932,6 +1947,34 @@
     "enemies.bullet.height": {
       "confidence": "provisional",
       "note": "As enemies.bullet.width."
+    },
+    "enemies.updatePhases": {
+      "confidence": "verified",
+      "note": "Reference section 2: enemy object state advances on a four-frame round robin at 15 Hz, with the objects split across the four frames. Positions still move every frame; it is the state machine that takes turns."
+    },
+    "formation.sway": {
+      "confidence": "verified",
+      "note": "Reference section 5, f_2A90: 1 px every 4 frames, a triangle reversing at ±32 px — exactly the margin between the 160 px formation and the 224 px playfield, which is why the sway just touches each edge."
+    },
+    "formation.breathe.steps": {
+      "confidence": "verified",
+      "note": "Reference section 5, f_1DE6: 32 steps out and 32 back, one step every 4 frames — a 256-frame cycle."
+    },
+    "formation.breathe.stepFrames": {
+      "confidence": "verified",
+      "note": "Reference section 5: the same 15 Hz task rate as the sway, on the opposite phase of the same 4-frame counter."
+    },
+    "formation.breathe.columns": {
+      "confidence": "verified",
+      "note": "Reference section 5: 32/25/18/11/4 px outward per column pair, signed here so the left half moves left. The ramp between rest and full expansion is ours — the ROM’s selection bitmaps are ROM data, which docs/DESIGN.md section 2 bars copying — but the totals, and so the positions at rest and at full expansion, are the verified ones."
+    },
+    "formation.breathe.rows": {
+      "confidence": "verified",
+      "note": "Reference section 5: 0/4/11/18/25/32 px downward per row, captured-fighter row first and never moving."
+    },
+    "formation.animatedStageKinds": {
+      "confidence": "verified",
+      "note": "Reference section 5: neither motion runs on a challenge stage, because nothing settles into formation there, so f_2A90 never reaches the exit that enables the breathe."
     },
     "starfield.speed": {
       "confidence": "verified",

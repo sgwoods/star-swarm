@@ -39,6 +39,8 @@ export interface TargetDestroyedEvent {
   readonly x: number;
   readonly y: number;
   readonly score: number;
+  /** Which alien died, so audio can pick its own death sound (`src/audio/sfx.ts`). */
+  readonly alienId: string;
 }
 
 export interface TargetHitEvent {
@@ -47,6 +49,32 @@ export interface TargetHitEvent {
   readonly x: number;
   readonly y: number;
   readonly hitsRemaining: number;
+  readonly alienId: string;
+}
+
+export interface EnemyLaunchedEvent {
+  readonly type: 'enemy-launched';
+  readonly targetId: number;
+  readonly alienId: string;
+  /** The entry wave it belongs to, zero-based. */
+  readonly wave: number;
+  readonly x: number;
+  readonly y: number;
+}
+
+/**
+ * The formation has finished filling and is centred.
+ *
+ * Raised on the one frame the entry sway ends — which in the arcade is also the
+ * frame the pulsing-formation sound starts and the breathe begins
+ * (`docs/reference/arcade-reference.md` section 5). Emitting it makes that
+ * coincidence something a test can assert rather than something to eyeball.
+ */
+export interface FormationSettledEvent {
+  readonly type: 'formation-settled';
+  readonly stage: number;
+  /** Enemies still alive when it settled. */
+  readonly enemies: number;
 }
 
 export interface ScoreChangedEvent {
@@ -88,6 +116,8 @@ export type SimEvent =
   | StageStartedEvent
   | ShotFiredEvent
   | EnemyFiredEvent
+  | EnemyLaunchedEvent
+  | FormationSettledEvent
   | TargetDestroyedEvent
   | TargetHitEvent
   | ScoreChangedEvent

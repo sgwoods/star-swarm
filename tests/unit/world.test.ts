@@ -2,37 +2,60 @@ import { describe, expect, it } from 'vitest';
 
 import { starfieldSpeedByte } from '../../src/content/rules.js';
 import { EMPTY_FRAME, frameOf } from '../../src/engine/input.js';
+import type { Enemy } from '../../src/sim/enemies.js';
 import { eventsOfType, type SimEvent } from '../../src/sim/events.js';
 import { launchEnemyBullet } from '../../src/sim/shots.js';
-import type { Target } from '../../src/sim/targets.js';
 import { createWorld, stepWorld, type World } from '../../src/sim/world.js';
-import { classicRules } from '../helpers/rules.js';
+import { classicRules, classicStages } from '../helpers/rules.js';
 
 const rules = classicRules();
+const stages = classicStages();
 
 const FIRE = frameOf('fire');
 
-/** A world with the stand-in formation replaced by exactly the given targets. */
-function worldWith(targets: Target[], seed = 'world-test'): World {
-  const world = createWorld({ seed, rules });
-  world.targets = targets;
-  return world;
-}
-
-function target(overrides: Partial<Target> = {}): Target {
+/**
+ * One enemy, standing still exactly where the test puts it.
+ *
+ * `returning` is the state to use for that, and not by accident: it is the one
+ * targetable state whose position the fleet does not drive, because an enemy
+ * rotating back into its slot is steered by the dive that is bringing it home
+ * rather than by the formation. It also scores the *formation* value, which is
+ * the arcade rule (`docs/reference/arcade-reference.md` section 9).
+ */
+function enemyAt(overrides: Partial<Enemy> = {}): Enemy {
   return {
     id: 0,
+    alienId: 'drone',
     role: 'drone',
+    sprite: 'drone',
+    hitSprites: [],
+    home: 20,
+    phase: 0,
+    launchFrame: 0,
+    path: 'entry-side-file',
+    mirror: false,
+    trailing: false,
+    wave: 0,
+    hp: 1,
+    scoreBase: 50,
+    movingMultiplier: 2,
+    hitPadding: { x: 0, y: 0 },
+    state: 'returning',
     x: 0,
     y: 0,
+    heading: 0,
     hitsRemaining: 1,
-    alive: true,
-    score: 50,
-    hitPadding: { x: 0, y: 0 },
-    fireIntervalSteps: 0,
-    fireTimer: 0,
+    pathFrame: 0,
     ...overrides,
   };
+}
+
+/** A world whose fleet is exactly the given enemies. */
+function worldWith(enemies: Enemy[], seed = 'world-test'): World {
+  const world = createWorld({ seed, rules, stages });
+  world.fleet.enemies.splice(0, world.fleet.enemies.length, ...enemies);
+  world.fleet.entryComplete = true;
+  return world;
 }
 
 /** Step until `predicate` holds, collecting every event; fails if it never does. */
@@ -50,32 +73,31 @@ function runUntil(
   throw new Error(`Condition not reached within ${String(limit)} steps`);
 }
 
-describe('player shots against targets', () => {
-  it('destroys a target the shot flies into, and scores it', () => {
-    const world = worldWith([target({ x: 0, y: 120, score: 80 })]);
+describe('player shots against the fleet', () => {
+  it('destroys an enemy the shot flies into, and scores it', () => {
+    const world = worldWith([enemyAt({ x: 0, y: 120, alienId: 'wing', scoreBase: 80 })]);
     world.player.x = 0;
 
-    // Clearing the stand-in formation rolls on to a fresh one, so wait on the
-    // score rather than on the target list.
     const events = runUntil(world, FIRE, (w) => w.score > 0);
     const destroyed = eventsOfType(events, 'target-destroyed');
     expect(destroyed).toHaveLength(1);
     expect(destroyed[0]?.score).toBe(80);
+    expect(destroyed[0]?.alienId).toBe('wing');
     expect(world.score).toBe(80);
   });
 
-  it('misses a target outside the window, however long it flies', () => {
+  it('misses an enemy outside the window, however long it flies', () => {
     // Δx = +6 is one past the single fighter's verified [−5, +5].
-    const world = worldWith([target({ x: 6, y: 120 })]);
+    const world = worldWith([enemyAt({ x: 6, y: 120 })]);
     world.player.x = 0;
     for (let i = 0; i < 300; i += 1) stepWorld(world, FIRE);
-    expect(world.targets[0]?.alive).toBe(true);
+    expect(world.fleet.enemies[0]?.state).toBe('returning');
     expect(world.score).toBe(0);
   });
 
   it('takes two hits to destroy a warden, and scores only the second', () => {
     const world = worldWith([
-      target({ role: 'warden', x: 0, y: 120, hitsRemaining: 2, score: 150 }),
+      enemyAt({ alienId: 'warden', x: 0, y: 120, hp: 2, hitsRemaining: 2, scoreBase: 150 }),
     ]);
     world.player.x = 0;
 
@@ -85,25 +107,44 @@ describe('player shots against targets', () => {
     expect(world.score).toBe(150);
   });
 
-  it('spends one shot on one target, not on everything in its path', () => {
-    const world = worldWith([target({ id: 0, x: 0, y: 120 }), target({ id: 1, x: 0, y: 121 })]);
+  it('spends one shot on one enemy, not on everything in its path', () => {
+    const world = worldWith([enemyAt({ id: 0, x: 0, y: 120 }), enemyAt({ id: 1, x: 0, y: 121 })]);
     world.player.x = 0;
-    runUntil(world, FIRE, (w) => w.targets.some((t) => !t.alive));
-    expect(world.targets.filter((t) => t.alive)).toHaveLength(1);
+    runUntil(world, FIRE, (w) => w.fleet.enemies.some((e) => e.state === 'dead'));
+    expect(world.fleet.enemies.filter((e) => e.state !== 'dead')).toHaveLength(1);
   });
 
-  it("widens the window by the target's own padding, not by a constant", () => {
-    // Δx = +8 misses the verified [−5, +5] outright; a target padded by 3 px a
-    // side is hit anyway, and the padding comes from the target's data.
-    const narrow = worldWith([target({ x: 8, y: 120 })]);
+  it("widens the window by the enemy's own padding, not by a constant", () => {
+    // Δx = +8 misses the verified [−5, +5] outright; an alien padded by 3 px a
+    // side is hit anyway, and the padding comes from the alien's own data.
+    const narrow = worldWith([enemyAt({ x: 8, y: 120 })]);
     narrow.player.x = 0;
     for (let i = 0; i < 200; i += 1) stepWorld(narrow, FIRE);
     expect(narrow.score).toBe(0);
 
-    const padded = worldWith([target({ x: 8, y: 120, hitPadding: { x: 3, y: 0 } })]);
+    const padded = worldWith([enemyAt({ x: 8, y: 120, hitPadding: { x: 3, y: 0 } })]);
     padded.player.x = 0;
     runUntil(padded, FIRE, (w) => w.score > 0);
     expect(padded.score).toBe(50);
+  });
+
+  it('cannot hit an enemy that has not launched yet', () => {
+    // Due far in the future, so it stays in standby for the whole run.
+    const world = worldWith([
+      enemyAt({ x: 0, y: 120, state: 'standby', launchFrame: Number.MAX_SAFE_INTEGER }),
+    ]);
+    world.player.x = 0;
+    for (let i = 0; i < 200; i += 1) stepWorld(world, FIRE);
+    expect(world.score).toBe(0);
+    expect(world.fleet.enemies[0]?.state).toBe('standby');
+  });
+
+  it('doubles the value of an enemy shot on its way in', () => {
+    // S3 from the scout report: a drone shot during the entry wave is 100.
+    const world = worldWith([enemyAt({ x: 0, y: 120, state: 'entering' })]);
+    world.player.x = 0;
+    runUntil(world, FIRE, (w) => w.score > 0);
+    expect(world.score).toBe(100);
   });
 });
 
@@ -159,7 +200,7 @@ describe('enemy bullets against the player', () => {
 
 describe('extra lives', () => {
   it('awards one when the score crosses the first threshold', () => {
-    const world = worldWith([target({ x: 0, y: 120, score: 1_000 })]);
+    const world = worldWith([enemyAt({ x: 0, y: 120, scoreBase: 1_000 })]);
     world.player.x = 0;
     world.score = 19_500;
 
@@ -173,8 +214,8 @@ describe('extra lives', () => {
 
   it('does not award the same threshold twice', () => {
     const world = worldWith([
-      target({ id: 0, x: 0, y: 120, score: 1_000 }),
-      target({ id: 1, x: 0, y: 100, score: 1_000 }),
+      enemyAt({ id: 0, x: 0, y: 120, scoreBase: 1_000 }),
+      enemyAt({ id: 1, x: 0, y: 100, scoreBase: 1_000 }),
     ]);
     world.player.x = 0;
     world.score = 19_500;
@@ -186,21 +227,76 @@ describe('extra lives', () => {
 
 describe('the stage', () => {
   it('reports the verified starfield speed byte when a stage starts', () => {
-    const world = createWorld({ seed: 'stage', stage: 1, rules });
+    const world = createWorld({ seed: 'stage', stage: 1, rules, stages });
     const started = eventsOfType(world.events, 'stage-started');
     expect(started[0]?.starfieldSpeed).toBe(starfieldSpeedByte(rules, 1));
     expect(started[0]?.starfieldSpeed).toBe(0x40);
   });
 
-  it('rolls on to the next stage when the formation is cleared', () => {
-    const world = worldWith([target({ x: 0, y: 120 })]);
+  it('puts the pack’s stage on the field, with its formation', () => {
+    const world = createWorld({ seed: 'stage', rules, stages });
+    expect(world.content?.stage.id).toBe('stage-1');
+    expect(world.fleet.enemies).toHaveLength(40);
+    expect(world.formation?.columnsAtRest).toHaveLength(10);
+  });
+
+  it('rolls on to the next stage when the fleet is cleared', () => {
+    const world = worldWith([enemyAt({ x: 0, y: 120 })]);
     world.player.x = 0;
     const events = runUntil(world, FIRE, (w) => w.stage > 1);
 
     expect(eventsOfType(events, 'stage-cleared')[0]?.stage).toBe(1);
     const started = eventsOfType(events, 'stage-started');
     expect(started[0]?.stage).toBe(2);
-    expect(world.targets.length).toBeGreaterThan(0);
+    // A fresh fleet, back in standby, for the new stage.
+    expect(world.fleet.enemies).toHaveLength(40);
+    expect(world.fleet.enemies.every((enemy) => enemy.state === 'standby')).toBe(true);
+  });
+
+  it('sits still on a stage the pack has no content for', () => {
+    const world = createWorld({ seed: 'empty', rules });
+    for (let i = 0; i < 120; i += 1) stepWorld(world, FIRE);
+    expect(world.fleet.enemies).toHaveLength(0);
+    expect(world.formation).toBeUndefined();
+    // No content is a halt, not a stage counter running away every frame.
+    expect(world.stage).toBe(1);
+  });
+});
+
+describe('the entry, end to end', () => {
+  it('launches five waves of eight and settles the formation exactly once', () => {
+    const world = createWorld({ seed: 'entry', rules, stages });
+    const events: SimEvent[] = [];
+    for (let i = 0; i < 1_400; i += 1) events.push(...stepWorld(world, EMPTY_FRAME));
+
+    const launched = eventsOfType(events, 'enemy-launched');
+    expect(launched).toHaveLength(40);
+    expect(new Set(launched.map((event) => event.wave))).toEqual(new Set([0, 1, 2, 3, 4]));
+    for (const wave of [0, 1, 2, 3, 4]) {
+      expect(launched.filter((event) => event.wave === wave)).toHaveLength(8);
+    }
+
+    const settled = eventsOfType(events, 'formation-settled');
+    expect(settled).toHaveLength(1);
+    expect(settled[0]?.enemies).toBe(40);
+    expect(world.formation?.swayOffset).toBe(0);
+    expect(world.formation?.motion).toBe('breathe');
+    expect(world.fleet.enemies.every((enemy) => enemy.state === 'home')).toBe(true);
+  });
+
+  it('never leaves an enemy off the playfield once it is flying', () => {
+    const world = createWorld({ seed: 'bounds', rules, stages });
+    const margin = 24;
+    for (let i = 0; i < 1_400; i += 1) {
+      stepWorld(world, EMPTY_FRAME);
+      for (const enemy of world.fleet.enemies) {
+        if (enemy.state !== 'entering' && enemy.state !== 'home') continue;
+        expect(enemy.x).toBeGreaterThanOrEqual(-margin);
+        expect(enemy.x).toBeLessThanOrEqual(rules.playfield.width + margin);
+        expect(enemy.y).toBeGreaterThanOrEqual(-margin);
+        expect(enemy.y).toBeLessThanOrEqual(rules.playfield.height + margin);
+      }
+    }
   });
 });
 
@@ -209,13 +305,13 @@ describe('the simulation boundary', () => {
     // The Vitest projects use the Node environment, so this is not rhetorical:
     // any DOM or Canvas reference inside src/sim/ would fail to import here.
     expect(typeof globalThis.document).toBe('undefined');
-    const world = createWorld({ seed: 'headless', rules });
+    const world = createWorld({ seed: 'headless', rules, stages });
     for (let i = 0; i < 300; i += 1) stepWorld(world, FIRE);
     expect(world.step).toBe(300);
   });
 
   it('replaces its event list every step rather than accumulating', () => {
-    const world = createWorld({ seed: 'events', rules });
+    const world = createWorld({ seed: 'events', rules, stages });
     stepWorld(world, EMPTY_FRAME);
     const first = world.events;
     stepWorld(world, EMPTY_FRAME);
