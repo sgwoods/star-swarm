@@ -1,8 +1,9 @@
 # `src/ui/`
 
 `flow.ts` (the game-state machine), `attract.ts`, `hud.ts`, `results.ts`,
-`highscores.ts`, `panel.ts` (the plate every card sits on), `menus.ts` and
-`lab/` (the `/lab` preview harness).
+`highscores.ts`, `panel.ts` (the plate every card sits on) and `lab/` (the `/lab`
+preview harness). `menus.ts`, which `docs/DESIGN.md` section 9 also lists, is not
+written yet — see the bottom of this file.
 
 Like `src/render/`, this layer is a **subscriber** — it reads simulation state
 and events and draws; it never writes back, and `src/sim/` never imports it.
@@ -31,7 +32,7 @@ The front-end shell around it landed with Milestone 2:
   longer and it parks against a wall.
 - **The results screen counts from events**, not from bookkeeping added to the
   sim: `shot-fired` against `target-hit`/`target-destroyed` (`results.ts`).
-- **The high-score table degrades, never throws.** `highScores.ts` splits
+- **The high-score table degrades, never throws.** `highscores.ts` splits
   ordering and insertion from persistence; `createWebStorage` catches on every
   path, including the property access itself, and falls back to a session-only
   table that behaves identically. A blocked storage API must never take the game

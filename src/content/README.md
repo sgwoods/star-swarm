@@ -9,8 +9,10 @@ model and section 6 the rules layer.
 | `schema.ts`   | Zod schemas and inferred types for every content kind, the manifest and the rules                           |
 | `loader.ts`   | Pure: documents in, a validated pack or a list of errors out                                                |
 | `fs.ts`       | **Node only.** Reads a pack directory into the shape `loader.ts` takes                                      |
+| `bundle.ts`   | **Vite only.** The same walk over the same tree, through `import.meta.glob`                                 |
 | `registry.ts` | Layers loaded packs into one lookup; a later pack wins                                                      |
 | `rules.ts`    | Reads the rules layer: rank tables, stage sequences, cadence, plateaus, and everything the simulation steps |
+| `stages.ts`   | A stage _number_ to the resolved `StageContent` the simulation is handed                                    |
 | `errors.ts`   | `ContentError`, and the per-file report both the loader and the validator print                             |
 
 Three things worth knowing before changing anything here.
@@ -31,10 +33,14 @@ a shape carries confidence rather than a value is `provenance`, which marks a
 field path `verified` or `provisional` — the loader rejects a key that names
 nothing, so a rename cannot leave a marking behind.
 
-**`fs.ts` is the only file that imports `node:fs`**, and `index.ts` does not
-re-export it, so importing the platform never drags the filesystem into the
-browser bundle. The browser builds a `PackSource` with `packSourceFromRecord`
-over bundled JSON imports — see `src/main.ts`.
+**A pack is read two ways, and neither reader is re-exported.** `fs.ts` is the
+only file that imports `node:fs`, for the validator and the tests; `bundle.ts`
+walks the same tree with Vite's `import.meta.glob` for the browser, globbing the
+whole directory rather than a list of remembered files. `index.ts` re-exports
+neither — one would drag the filesystem into the browser bundle, the other a
+Vite-only transform into plain Node — so `src/main.ts` imports `bundle.ts`
+directly, and `tests/unit/bundled-packs.test.ts` holds the two sides to each
+other.
 
 `npm run validate-packs` runs the same two passes the game does — it calls
 `loadPack` rather than reimplementing it. Section 8's playability checks are

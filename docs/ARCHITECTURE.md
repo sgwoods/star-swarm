@@ -29,13 +29,14 @@ directory under `packs/`, not a fork.
 That split is the whole architecture, and it is enforced rather than trusted —
 see [§3](#3-the-layers).
 
-The game is playable now: entry waves, formation motion, slot homing, dive
-attacks, enemy fire, the difficulty ramp, scoring, lives, attract mode, game
-over, the hit-ratio results card and the high-score table are all in, and the
-normal stages through 8 are authored as pack data, and the capture mechanic —
-tractor beam, captured fighter, rogue, rescue and dual fighter — is in. The
-challenge stages are the Milestone 2 work still outstanding;
-[§5](#5-what-is-not-here-yet) lists what that means when you play it.
+The game is playable now, and Milestone 2 is complete: entry waves, formation
+motion, slot homing, dive attacks, enemy fire, the difficulty ramp, the transform
+attack, scoring, lives, attract mode, game over, the hit-ratio results card and
+the high-score table are all in; the normal stages through 8 and eight challenge
+stages are authored as pack data; and the capture mechanic — tractor beam,
+captured fighter, rogue, rescue and dual fighter — is in.
+[§5](#5-what-is-not-here-yet) is what is left, and none of it belongs to
+Milestone 2.
 
 ---
 
@@ -91,12 +92,46 @@ exactly centred, the breathe taking over — and then the fighter opening up on 
 
 ![The game: entry waves, formation and the fighter shooting](media/arch-gameplay.gif)
 
-The front end around that is one state machine with five phases. The cabinet
-boots into attract mode, where the demo behind the cards is the _real_ simulation
-replaying a recorded input log; start begins a game; three fighters lost ends it
-into the game-over banner, the hit-ratio results card, and back to attract.
+The front end around that is one state machine with six phases — attract,
+playing, the between-stage challenge card, game over, results and high-score
+entry. The cabinet boots into attract mode, where the demo behind the cards is
+the _real_ simulation replaying a recorded input log; start begins a game; three
+fighters lost ends it into the game-over banner, the hit-ratio results card, and
+then either the high-score table or straight back to attract.
 
 ![The front end: attract mode, a game, and out to the results card](media/arch-front-end.gif)
+
+`challenge-results` is the sixth phase and the only one that returns to
+`playing`: a challenge stage has ended, the next stage is already on the field,
+and the world simply stops being stepped while the card is up. It is a phase
+rather than a flag precisely so that "playing" never sometimes means "not
+stepping the world" — `src/ui/flow.ts` says so at the top of the file.
+
+### The two mechanics that are easiest to read about and hardest to picture
+
+**Capture.** A captor loops out of the formation, slides down and opens its
+tractor beam; the beam takes the fighter and drags it into the captor's own
+captive slot; the captured fighter then dives _with_ its captor, is freed when
+the captor is shot while both are attacking, and spins in to dock as a second
+ship you fly alongside.
+
+![The capture arc: beam, captive slot, rescue and the dual fighter](media/m2-capture.gif)
+
+That clip is a golden replay played back through the real simulation and the real
+renderer, so what it shows is the recorded run rather than a staged one.
+
+**A challenge stage and its card.** Forty enemies in five groups of eight fly
+scripted convoys and leave without ever attacking; the stage then ends on the
+between-stage card, with the hit count and the end-of-stage award.
+
+![A challenge stage played to a perfect, and the card that follows](media/m2-challenge.gif)
+
+> The score this clip happens to land on is one the arcade record does not yet
+> settle. `docs/reference/arcade-reference.md` section 11's open item is whether a
+> challenge stage's second wave keeps four boss-class objects; the two readings
+> differ by 1,200 points on a perfect first challenge stage, and the pack is built
+> to one of them. `packs/classic/stages/README.md` carries both. Read the clip as
+> the mechanic, not as the number.
 
 ---
 
@@ -121,7 +156,7 @@ flowchart TB
 
     subgraph deterministic["The deterministic half — headless, no host APIs"]
         engine["src/engine/<br/>fixed 60 Hz loop · seeded RNG<br/>abstract input · replay logs"]
-        sim["src/sim/<br/>world · player · shots · enemies<br/>formation · paths · dives"]
+        sim["src/sim/<br/>world · player · shots · enemies<br/>formation · paths · dives<br/>challenge · capture"]
     end
 
     subgraph presentation["The presentation half — subscribers"]
@@ -184,14 +219,14 @@ make the simulation bit-identical, and nothing here claims it does.
 
 ### The layers one at a time
 
-| Layer          | What it is                                                                                                                               |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/engine/`  | The fixed-step loop, the seeded RNG, abstract input, and input recording/replay. Knows nothing about this game or any game.              |
-| `src/sim/`     | The world and one step of it: player, shots, collisions, lives, enemies, formation, the path interpreter, dives, enemy fire and capture. |
-| `src/content/` | The content platform: the Zod schemas, the loader, the registry, and the one module that interprets a rules document.                    |
-| `src/render/`  | The 224×288 backbuffer presented at a whole-number scale, sprite rasterisation, the pixel font, the starfield, and scene composition.    |
-| `src/audio/`   | A parametric synth over Web Audio, and the mapping from simulation events to sounds.                                                     |
-| `src/ui/`      | The game-flow state machine, attract mode, the HUD, the results card, the high-score table — and the dev-only `/lab`.                    |
+| Layer          | What it is                                                                                                                                                 |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/engine/`  | The fixed-step loop, the seeded RNG, abstract input, and input recording/replay. Knows nothing about this game or any game.                                |
+| `src/sim/`     | The world and one step of it: player, shots, collisions, lives, enemies, formation, the path interpreter, dives, enemy fire, challenge stages and capture. |
+| `src/content/` | The content platform: the Zod schemas, the loader, the registry, the module that interprets a rules document, and stage resolution.                        |
+| `src/render/`  | The 224×288 backbuffer presented at a whole-number scale, sprite rasterisation, the pixel font, the starfield, and scene composition.                      |
+| `src/audio/`   | A parametric synth over Web Audio, and the mapping from simulation events to sounds.                                                                       |
+| `src/ui/`      | The game-flow state machine, attract mode, the HUD, the results card, the high-score table — and the dev-only `/lab`.                                      |
 
 Four properties worth knowing, because each one is load-bearing:
 
@@ -340,7 +375,7 @@ flowchart TB
     subgraph reused["Reused untouched — the platform"]
         direction TB
         p1["src/engine/<br/>fixed step · seeded RNG · replay"]
-        p2["src/sim/<br/>world · formation addressed by index<br/>path interpreter · attack director<br/>collisions · lives"]
+        p2["src/sim/<br/>world · formation addressed by index<br/>path interpreter · attack director<br/>ability triggers · collisions · lives"]
         p3["src/content/<br/>schemas · loader · registry · rules reader"]
         p4["src/render/ · src/audio/ · src/ui/<br/>subscribers: sprites · synth · flow · HUD"]
     end
@@ -348,6 +383,24 @@ flowchart TB
     ss --> reused
     sib --> reused
 ```
+
+The clearest single example of that boundary is the tractor beam, because it is
+already built both sides of the line. `packs/classic/paths/dive-capture.json` is
+four segments of authored data, and the third of them is:
+
+```json
+{ "type": "trigger", "ability": "captureBeam" }
+```
+
+The path says _when_ — a `trigger` segment on the flight's timeline, after the
+loop and the run at the player. `src/sim/capture.ts` is _what_, and it opens the
+beam when a flight passes that segment naming that ability. Neither knows the
+other: the path names an id from the fixed registry in `src/content/schema.ts`,
+and the channel matches on the id. So moving the beam later in the dive is a
+one-line edit to a pack document, and a sibling game that wants a beam of its own
+authors the same `trigger` in its own path — while a sibling that wants none
+simply never writes one, which is why "no capture channel at all" is a property
+of a pack rather than a branch in the engine.
 
 The split follows the classification in the rules-and-scoring scout report
 (section 9), not a fresh decision:
@@ -399,28 +452,46 @@ the whole test harness.
 
 ## 5. What is not here yet
 
-Stated plainly, because it is visible the moment you play:
+Milestone 2 is complete, so nothing below is missing from the game you can play
+today — it is the content the pack does not yet author, and the modules the plan
+names and nobody has written:
 
-- **Challenge stages.** `stageSequence.challenge` is empty, so stages 3 and 7 —
-  the challenge slots — fall back to a normal stage rather than meeting an empty
-  screen. That fallback is a temporary bridge in `content/stages.ts` and is
-  marked as one.
-- **Stages past 8.** The pack authors the normal stages through 8 and then
+- **Normal stages past 8.** The pack authors the normal stages through 8 and then
   plateaus on the last of them, because the arcade's seventeen-entry index list
   cycles its final three rows and claiming that plateau three rows early would
-  assert something that is not there. Difficulty keeps ramping past 8 regardless:
-  the rank table is a separate ramp with its own 26 rows.
+  assert something that is not there. The challenge half does _not_ plateau — all
+  eight of its scripts cycle — so the two halves of one sequence deliberately
+  repeat on different periods. Difficulty keeps ramping past 8 either way: the
+  rank table is a separate ramp with its own 26 rows.
+- **The other three difficulty ranks' stage sequences.** The pack ships one
+  pack-wide sequence. Reference section 5 gives all four ranks' index lists, and
+  they need ten of the thirteen combat scripts through stage 8 alone;
+  `packs/classic/stages/README.md` records why they cannot land until the
+  remaining scripts do.
+- **The ability registry.** `src/sim/abilities/` is a placeholder README. The one
+  ability the game needs is implemented directly in `src/sim/capture.ts`, which
+  matches on the `captureBeam` id a path's `trigger` segment names ([§4.4](#44-where-a-second-game-plugs-in));
+  splitting the registry out, and the six other ids `src/content/schema.ts`
+  already reserves, is Milestone 3.
 - **`render/crt.ts`, `audio/music.ts`, `ui/menus.ts`** and the validator's
   playability checks are named in the design plan and are not written yet.
+
+One arcade question is also still open rather than decided: whether a challenge
+stage's second wave keeps four boss-class objects. It changes what a perfect
+challenge stage pays, the pack is built to one of the two readings, and both are
+written down in `packs/classic/stages/README.md` and
+`docs/reference/arcade-reference.md` section 11. Nothing in `src/` turns on the
+answer — it is one line per challenge document — so it is recorded here rather
+than resolved.
 
 Two places where the tree departs from [`docs/DESIGN.md`](DESIGN.md) section 9's
 listing, both of which this document follows the code on:
 
-- The plan lists `sim/capture.ts`, `sim/scoring.ts` and `sim/stages.ts`. Only
-  `capture.ts` exists. Scoring is in `sim/enemies.ts` and `sim/world.ts`; stage
-  resolution is `content/stages.ts`, on the content side of the boundary, because
-  resolving a stage number to its documents is content work rather than
-  simulation work.
+- The plan lists `sim/capture.ts`, `sim/challenge.ts`, `sim/scoring.ts` and
+  `sim/stages.ts`. `capture.ts` and `challenge.ts` exist; the other two do not.
+  Scoring is in `sim/enemies.ts` and `sim/world.ts`; stage resolution is
+  `content/stages.ts`, on the content side of the boundary, because resolving a
+  stage number to its documents is content work rather than simulation work.
 - The plan puts `schema.ts, loader.ts, registry.ts` in `src/content/`, where
   there are now also `rules.ts`, `stages.ts`, `errors.ts`, and the two pack
   readers `fs.ts` and `bundle.ts`.

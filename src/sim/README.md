@@ -1,8 +1,13 @@
 # `src/sim/` — simulation
 
-Pure game simulation: `world.ts`, `player.ts`, `shots.ts`, `enemies.ts`,
-`formation.ts`, `paths.ts` (segment interpreter), `dive.ts`, `capture.ts`,
-`abilities/` (one file per ability), `scoring.ts`, `stages.ts`.
+Pure game simulation. What is here: `world.ts`, `player.ts`, `shots.ts`,
+`collision.ts`, `lives.ts`, `events.ts`, `enemies.ts`, `formation.ts`, `paths.ts`
+(segment interpreter), `dive.ts`, `challenge.ts` and `capture.ts`. What
+`docs/DESIGN.md` section 9 also lists and is not here: `abilities/` is a
+placeholder README until Milestone 3, and `scoring.ts` and `stages.ts` were never
+written — scoring lives in `enemies.ts` and `world.ts`, and resolving a stage
+number to its documents is content work in `src/content/stages.ts`.
+`docs/ARCHITECTURE.md` §5 records both divergences.
 
 Milestone 1 landed the player half: `world.ts`, `player.ts`, `shots.ts`,
 `collision.ts`, `lives.ts` and `events.ts`. Milestone 2's first task replaced
@@ -32,7 +37,7 @@ therefore not a special case anywhere; it falls out of the flag. The complete se
 of ways the channel is released is the list of `releaseCapture`'s callers, and
 each one is an arcade release site the rules-and-scoring report traced.
 
-Two consequences worth knowing before editing `capture.ts`:
+Three consequences worth knowing before editing `capture.ts`:
 
 - **The captured fighter is an `Enemy`.** It sits in the formation, dives with its
   captor, is shot for 500 or 1,000 by the ordinary doubling rule, and re-enters as

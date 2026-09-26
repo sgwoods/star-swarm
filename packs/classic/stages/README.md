@@ -15,16 +15,16 @@ list: 13 combat script rows, 8 challenge rows, selected by
 adj -= 4`. So a stage number picks a script, and several stage numbers pick the same
 one. Reference section 5's per-stage table, rank A, as far as this pack authors it:
 
-| Stage | Script row  | Document               |
-| ----- | ----------- | ---------------------- |
-| 1     | 0           | `stage-1`              |
-| 2     | 1           | `stage-2`              |
-| 3     | challenge 0 | — (see _Not here yet_) |
-| 4     | 4           | `stage-4`              |
-| 5     | 3           | `stage-5`              |
-| 6     | 2           | `stage-6`              |
-| 7     | challenge 1 | —                      |
-| 8     | 4           | `stage-4`              |
+| Stage | Script row  | Document      |
+| ----- | ----------- | ------------- |
+| 1     | 0           | `stage-1`     |
+| 2     | 1           | `stage-2`     |
+| 3     | challenge 0 | `challenge-1` |
+| 4     | 4           | `stage-4`     |
+| 5     | 3           | `stage-5`     |
+| 6     | 2           | `stage-6`     |
+| 7     | challenge 1 | `challenge-2` |
+| 8     | 4           | `stage-4`     |
 
 Each document is named for the **first stage that plays its script row**, which is
 why there is no `stage-8.json`: stage 8 is script row 4, the same row as stage 4, so

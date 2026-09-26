@@ -30,6 +30,8 @@ Sequenced sounds spell their notes out as frequencies rather than note names,
 because the schema takes hertz. The scale used is ordinary equal temperament
 from A4 = 440 Hz, which keeps the jingles in tune with each other.
 
-`dive`, `capture-beam`, `rescue` and the two challenge jingles are for events
-Milestone 2 raises; their bindings in `pack.json` name events that do not exist
-yet, which is harmless — an unmatched binding never fires.
+Every binding in `pack.json` now names a simulation event that exists, `dive`,
+`capture-beam`, `rescue` and the two challenge jingles included. The reverse is
+not true and does not have to be: `src/sim/events.ts` raises more events than the
+map binds, and an event with no binding is simply silent — the map is the pack's
+choice of what makes a noise, not a table it has to fill.
