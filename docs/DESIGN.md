@@ -74,6 +74,7 @@ The values in this section have been verified against the original's 1981 operat
 - From the formation, enemies peel off in **dive attacks**: bees swoop and loop, butterflies dive in arcs, bosses dive with up to 2 escorts.
 - Enemies fire during dives, and during entry from stage 2 onward — there is no entry bombing on stage 1. **At most 8 enemy bullets exist on screen at once, globally**, and each enemy carries its own inter-shot delay. Bullet enable flags and per-type launch rates come from the per-stage difficulty table.
 - Divers that leave the bottom re-enter from the top and rejoin the formation.
+- **An enemy's body kills the fighter.** The original's manual advertises it — "if they can't bomb you, they'll ram you in the rear" — and it is the same hit detection a bomb goes through: one routine, the fighter's own window (Δx ∈ [−6, +6], Δy ∈ [−6, +6] in playfield pixels), run once per ship so a dual fighter is tested twice and loses only the half that was hit. It costs a fighter, and it is the same loss as being shot rather than a new one; on the readings `docs/reference/arcade-reference.md` section 3 takes it **scores nothing and the enemy flies on**, and there is **no distinction between a diver and an enemy at home** — the collision path carries no state test, unlike the scoring path. Nothing collides on a challenge stage, because a body is an attack.
 
 **Capture and rescue**
 - A boss may dive partway and emit a **tractor beam**; if it catches the player, that ship becomes a captured (red) fighter sitting beside the boss in formation.
@@ -273,6 +274,7 @@ The shape of the schedule is unchanged and is worth stating once here, because t
 - On the ninth challenge stage (stage 35) the per-hit value must revert to 100 while the group bonus stays at 3,000. The two indices have different periods and only one of them clamps.
 - With the factory-default extra-life setting, the award at 980,000 must be the **last**; no further extra lives are granted after it.
 - The entry-wave sway must end with the formation **exactly centred**, on the same frame the pulsing-formation sound starts and the breathe begins.
+- Flying into an enemy must cost a fighter, and losing the last one that way must reach game over. It must score nothing, leave the enemy flying, and happen on no challenge stage.
 
 ## 12. Open decisions for the captain
 

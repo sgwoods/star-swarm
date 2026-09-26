@@ -896,7 +896,15 @@ export const rulesSchema = z.strictObject({
     /** Where a dual fighter's second ship sits, relative to the anchor. */
     secondShipOffsetX: z.number().default(0),
 
-    /** One enemy bullet against one ship. A dual fighter is tested twice. */
+    /**
+     * Anything that can hit the fighter, against one ship: an enemy bullet, and
+     * an enemy's body (`enemies.collision`). A dual fighter is tested twice.
+     *
+     * One window rather than one per threat, because the arcade has one routine
+     * — `hitd_det_fghtr` — and the window is a property of the *fighter*. What
+     * varies by threat is the other side of the test, which is why a body brings
+     * its alien's `hitPadding` and a bullet brings none.
+     */
     hitWindow: hitWindowSchema,
     /** Frames the fighter is off the field after a hit. */
     respawnFrames: framesSchema,
@@ -949,6 +957,25 @@ export const rulesSchema = z.strictObject({
       width: z.number().positive(),
       height: z.number().positive(),
     }),
+    /**
+     * The enemy's own body against the fighter.
+     *
+     * A second *pairing*, not a second collision idea: it is tested with the
+     * fighter's own {@link rulesSchema} `player.hitWindow`, widened by the
+     * enemy's `hitPadding` exactly as a player shot is, so a pack that wants a
+     * fatter alien to be harder to fly past says so in one place. There is no
+     * geometry of its own here to get out of step.
+     *
+     * `enabled: false` is a game whose enemies may be flown through. The
+     * arcade's may not — "if they can’t bomb you, they’ll ram you in the rear"
+     * ([MANUAL] via `docs/reference/arcade-reference.md` section 5) — and a body
+     * is an *attack*, so it does nothing on a stage where nothing attacks.
+     */
+    collision: z
+      .strictObject({
+        enabled: z.boolean().default(true),
+      })
+      .prefault({}),
     /**
      * How the attack director turns a difficulty row into dives.
      *

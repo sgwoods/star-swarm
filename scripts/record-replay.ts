@@ -33,6 +33,7 @@ import type { Recorder } from '../src/engine/replay.js';
 import { recordInput, serializeReplay } from '../src/engine/replay.js';
 import { createRng } from '../src/engine/rng.js';
 import { beamCaptor, capturedFighter, captorOfCaptive, holdsFighter } from '../src/sim/capture.js';
+import type { Enemy } from '../src/sim/enemies.js';
 import { createWorld, fingerprintWorld, stepWorld, type World } from '../src/sim/world.js';
 
 const GOLDEN_DIR = resolve(import.meta.dirname, '..', 'tests', 'sim', 'golden');
@@ -183,6 +184,43 @@ export function capturePilot(world: World): InputSource {
   };
 }
 
+/**
+ * A pilot that flies *into* things instead of shooting them.
+ *
+ * The one golden whose subject is `enemies.collision`: every death in its log is a
+ * body, so the run it records is a run that ends the way the arcade's manual
+ * describes — "if they can’t bomb you, they’ll ram you in the rear". It watches the
+ * world for the same reason {@link capturePilot} does: what lands on disk is still a
+ * plain frame log, and steering under one particular diver at one particular moment
+ * is not something a fixed sweep reliably does.
+ *
+ * It never fires, which is the whole trick and not a flourish — a pilot that shot
+ * the diver coming for it would record a run that ends some other way, and a shot
+ * that lands on the frame a ram would have happened is exactly the case
+ * `resolveBodyCollisions` resolves in the player's favour.
+ *
+ * Its target is the **lowest** enemy on the field rather than the nearest: divers
+ * come down the screen, so the lowest one is the one about to arrive, and chasing a
+ * higher one across the playfield only walks under the rest of them. With nothing
+ * flying it sits still, because the formation cannot reach it.
+ */
+export function rammingPilot(world: World): InputSource {
+  return {
+    sample(): InputFrame {
+      let target: Enemy | undefined;
+      for (const enemy of world.fleet.enemies) {
+        if (enemy.state !== 'diving' && enemy.state !== 'returning') continue;
+        if (target === undefined || enemy.y > target.y) target = enemy;
+      }
+      if (target === undefined) return 0;
+      const dx = target.x - world.player.x;
+      if (dx > 0) return frameOf('right');
+      if (dx < 0) return frameOf('left');
+      return 0;
+    },
+  };
+}
+
 /** What one recorded or replayed run comes back as. */
 export interface WorldRun {
   readonly fingerprint: string;
@@ -254,6 +292,8 @@ export interface GoldenSpec {
    * {@link capturePilot}.
    */
   readonly capture?: boolean;
+  /** Record with the ramming pilot. See {@link rammingPilot}. */
+  readonly ram?: boolean;
 }
 
 /**
@@ -270,18 +310,42 @@ function fiveShipCabinet(): Rules {
 }
 
 /**
- * A five-ship cabinet whose enemies drop no bombs: the global bullet cap at zero.
+ * A five-ship cabinet whose enemies can neither bomb the fighter nor be flown
+ * into: the global bullet cap at zero, and `enemies.collision` off.
  *
- * Used by the capture goldens, and not for convenience. Enemy fire is the only thing
- * that can shoot the fighter down, and an idle-ish pilot in front of forty bombers
- * loses every ship inside half a minute — so a capture log recorded against the
- * shipped cap would be a record of being bombed, with the mechanic barely started.
- * Bombing has its own goldens (`player-core`, `player-survival`, `stage-dives`); these
- * record the channel, and the only thing that can cost a fighter in them is the beam.
+ * Used by the capture goldens, and not for convenience. Getting captured on purpose
+ * means walking *into* a descending captor, so both of the other ways to lose a
+ * fighter are pointed straight at a pilot doing it — an idle-ish pilot in front of
+ * forty bombers loses every ship inside half a minute, and one that hunts captors
+ * gets rammed by everything else on its way there. Either way the log records being
+ * killed, with the mechanic barely started. Both have their own goldens (`player-core`,
+ * `player-survival`, `stage-dives`, `collision-game-over`); these three record the
+ * channel, and the only thing that may cost a fighter in them is the beam.
+ *
+ * That a capture still completes with bodies live is a separate claim and belongs
+ * where it can be stated in one run rather than inferred from five thousand steps:
+ * `tests/unit/capture.test.ts`.
  */
 function unbombedCabinet(): Rules {
   const rules = fiveShipCabinet();
-  return { ...rules, enemies: { ...rules.enemies, maxBullets: 0 } };
+  return {
+    ...rules,
+    enemies: { ...rules.enemies, maxBullets: 0, collision: { enabled: false } },
+  };
+}
+
+/**
+ * The shipped three-fighter cabinet with the bombs off: the global bullet cap at
+ * zero, and `enemies.collision` left exactly as the pack ships it.
+ *
+ * The mirror image of {@link unbombedCabinet}, for the golden whose subject is the
+ * body. Every fighter it loses is lost to a collision, so "this run ended by being
+ * flown into" is a property of the cabinet rather than something a reader has to
+ * take on trust from the pilot's name. The lives, the window and the difficulty row
+ * are the pack's.
+ */
+function bodiesOnlyCabinet(): Rules {
+  return { ...CLASSIC.rules, enemies: { ...CLASSIC.rules.enemies, maxBullets: 0 } };
 }
 
 export const GOLDENS: readonly GoldenSpec[] = [
@@ -307,12 +371,21 @@ export const GOLDENS: readonly GoldenSpec[] = [
   // A five-ship cabinet with a pilot that keeps moving: far enough in to clear
   // stage 1 with dives and bombs in play and roll on to stage 2, which is the
   // first stage on which an entering enemy may bomb.
+  //
+  // The sweep period is 175 rather than 100 because `enemies.collision` landed:
+  // a diver is now something to be flown around as well as shot, and the
+  // 100-frame sweeper walked into one on stage 1 five times over and never
+  // reached stage 2 — which would have cost this golden the one thing only it
+  // covers. 175 clears stage 1 and rolls on, on four fighters rather than three.
+  // The number is the test pilot's, not the game's; no difficulty value moved,
+  // and the run ends in game over at step 3,444 either way, because a sweeper
+  // that never dodges cannot survive stage 2 on any period tried.
   {
     name: 'player-survival',
     seed: 'golden-player-survival',
     inputSeed: 'pilot-2',
     steps: 5_400,
-    sweepPeriod: 100,
+    sweepPeriod: 175,
     rules: fiveShipCabinet(),
   },
   // The capture mechanic: three goldens over one pilot and one seed, each cut a
@@ -387,6 +460,20 @@ export const GOLDENS: readonly GoldenSpec[] = [
   // challenge data or the flight paths stop allowing it, these fail rather than
   // quietly needing a nudge. Each starts on its own challenge stage because the
   // combat stages between them cannot be cleared from a standstill.
+  // A run that ends by **collision** — the loss `enemies.collision` added, and the
+  // only golden whose deaths are all bodies: the bombs are off, so nothing else can
+  // take a fighter. The pilot steers under the lowest diver on the field and never
+  // fires (`rammingPilot`), which is the arcade's own description of how this kills
+  // you rather than a contrivance. Three fighters, and the third one reaches
+  // `game-over` through the same `killPlayer` a bomb does.
+  {
+    name: 'collision-game-over',
+    seed: 'golden-collision',
+    inputSeed: 'rammer',
+    steps: 1_500,
+    ram: true,
+    rules: bodiesOnlyCabinet(),
+  },
   {
     name: 'challenge-one-perfect',
     seed: 'golden-challenge-one',
@@ -422,6 +509,7 @@ export function goldenPath(name: string): string {
 export function pilotFor(spec: GoldenSpec): InputSource | ((world: World) => InputSource) {
   if (spec.hold !== undefined) return constantInput(spec.hold);
   if (spec.capture === true) return capturePilot;
+  if (spec.ram === true) return rammingPilot;
   if (spec.sweepPeriod !== undefined) return sweepingPilot(spec.sweepPeriod);
   return scriptedPilot(spec.inputSeed);
 }

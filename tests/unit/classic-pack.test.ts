@@ -395,6 +395,19 @@ describe('the rest of the Classic rules', () => {
     expect(rules.player.hitWindow).toEqual({ dxMin: -6, dxMax: 6, dyMin: -6, dyMax: 6 });
   });
 
+  it('makes enemy bodies solid, with no window of their own', () => {
+    // Reference section 5: the enemies ram the fighter, and section 3's
+    // `hitd_det_fghtr` is the one routine that tests anything against it — so the
+    // pack turns the pairing on and states no second geometry. A `collision` block
+    // that grew a window would be the drift this asserts against.
+    expect(rules.enemies.collision).toEqual({ enabled: true });
+    // And the aliens carry no padding, which is the arcade's own behaviour: enemy
+    // size is baked into that single window.
+    for (const alien of pack.aliens.values()) {
+      expect([alien.id, alien.hitPadding]).toEqual([alien.id, { x: 0, y: 0 }]);
+    }
+  });
+
   it('starts three fighters on the factory bonus setting', () => {
     expect(rules.lives.default).toBe(3);
     expect(rules.lives.options).toEqual([2, 3, 4, 5]);
@@ -609,6 +622,7 @@ describe('how far each value may be trusted', () => {
       'player.shot.windows.dual[0].dxMin',
       'player.shot.windows.dual[1].dxMin',
       'enemies.maxBullets',
+      'enemies.collision.enabled',
       'enemies.bomberReadyTimers',
       'enemies.updatePhases',
       'enemies.dive.returnPath',

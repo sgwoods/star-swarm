@@ -13,6 +13,7 @@ import { beamWindow, capturedFighter, captorOfCaptive } from '../../src/sim/capt
 import { hitsAny, windowGapsX } from '../../src/sim/collision.js';
 import { armDives } from '../../src/sim/dive.js';
 import type { Enemy } from '../../src/sim/enemies.js';
+import { isTargetable } from '../../src/sim/enemies.js';
 import { eventsOfType, type SimEvent } from '../../src/sim/events.js';
 import { createWorld, stepWorld, type World } from '../../src/sim/world.js';
 import { classicRules, classicStages } from '../helpers/rules.js';
@@ -35,25 +36,45 @@ const stages = classicStages();
 const FIRE = frameOf('fire');
 
 /**
- * The shipped rules with nothing shooting back: a global bullet cap of zero.
+ * The shipped rules with nothing shooting back and nothing solid to fly into: a
+ * global bullet cap of zero, and enemy bodies switched off.
  *
  * The default for these tests, and the reason is not convenience. The question
  * every one of them asks is what the *beam* does, and an idle fighter standing in
- * front of forty bombers is dead within a few seconds — so a run against the
- * shipped cap measures enemy fire, not capture. One rules field, and every other
- * number is the pack's.
+ * front of forty bombers is dead within a few seconds — of a bomb, or now of a
+ * diver flying through it, since `enemies.collision` landed. Either way the run
+ * measures being killed rather than being captured, and "a capture is not a hit"
+ * below is only a claim about the channel if nothing *else* can hit. Two rules
+ * fields, and every other number is the pack's; the handful of tests whose subject
+ * *is* the body put them back through {@link solidFleet}.
  */
 function unarmedFleet(): Rules {
   return {
     ...rules,
     lives: { ...rules.lives, default: 400 },
-    enemies: { ...rules.enemies, maxBullets: 0 },
+    enemies: { ...rules.enemies, maxBullets: 0, collision: { enabled: false } },
   };
 }
 
 /** {@link unarmedFleet} on the very last fighter: reserve zero. */
 function lastFighter(): Rules {
   return { ...unarmedFleet(), lives: { ...rules.lives, default: 1 } };
+}
+
+/**
+ * {@link unarmedFleet} with the bodies put back: bombs off, `enemies.collision`
+ * exactly as the pack ships it.
+ *
+ * For the handful of tests whose subject *is* the body — whether a beam still
+ * connects when the captor that carries it is solid, and what colliding with a
+ * captured fighter, a rogue or a dual fighter means. Everywhere else the bodies are
+ * off so that "a capture is not a hit" is a claim about the channel.
+ */
+function solidFleet(): Rules {
+  return {
+    ...unarmedFleet(),
+    enemies: { ...unarmedFleet().enemies, collision: rules.enemies.collision },
+  };
 }
 
 /**
@@ -403,8 +424,8 @@ function bothAttacking(world: World): boolean {
 }
 
 /** A world that has been captured and then rescued into a dual fighter. */
-function rescuedWorld(): World {
-  const world = heldWorld({ seed: 'rescue' });
+function rescuedWorld(options: { rules?: Rules } = {}): World {
+  const world = heldWorld({ seed: 'rescue', ...options });
   // Wait for the captor to dive; a held fighter attacks *with* its captor, which is
   // what makes the manual's "while they are both attacking" condition reachable.
   runUntil(world, bothAttacking);
@@ -773,5 +794,147 @@ describe('capture as a loss condition', () => {
     expect(eventsOfType(events, 'player-hit')).toHaveLength(0);
     const captured = eventsOfType(events, 'player-captured')[0];
     expect(captured?.livesRemaining).toBe(0);
+  });
+});
+
+/**
+ * Bodies and the channel — the three ships the capture mechanic puts in unusual
+ * states, against `resolveBodyCollisions` in `src/sim/world.ts`.
+ *
+ * Every test here runs on {@link solidFleet}: the bombs are off so nothing else can
+ * take a fighter, and `enemies.collision` is exactly as the pack ships it. A parked
+ * diver stands in for the ram where the encounter would otherwise have to be flown —
+ * an enemy in `diving` with no compiled flight stays where it is put — and where the
+ * thing doing the ramming is the captive itself, the *fighter* is moved onto it,
+ * because the captive is flying a real path and must keep flying it.
+ */
+describe('enemy bodies and the capture channel', () => {
+  /** Park a solid diver on one of the fighter's ships and step a frame. */
+  function ram(world: World, shipIndex = 0): SimEvent[] {
+    const anchorX = world.player.x + shipIndex * world.rules.player.secondShipOffsetX;
+    const captive = capturedFighter(world.capture, world.fleet);
+    const alien = captive?.alienId ?? 'drone';
+    const enemy = world.fleet.enemies.find((candidate) => candidate.alienId === alien);
+    expect(enemy, 'the fleet should have an enemy to copy').toBeDefined();
+    if (enemy === undefined) return [];
+    world.fleet.enemies.push({
+      ...enemy,
+      id: 9_000 + world.fleet.enemies.length,
+      state: 'diving',
+      inCaptiveSlot: false,
+      x: anchorX,
+      y: world.player.y,
+    });
+    return run(world, 1);
+  }
+
+  /**
+   * Fly the fighter onto `enemy`, which is the only way to ram one that is moving.
+   *
+   * Waits for a fighter to be on the field first, and it is not a formality: with
+   * the bodies live, a fighter parked at the centre of the screen while a test waits
+   * for a captive to do something gets rammed by the rest of the fleet in the
+   * meantime, and a ram against an empty row proves nothing.
+   */
+  function flyInto(world: World, enemy: Enemy): SimEvent[] {
+    runUntil(world, (live) => live.player.alive);
+    world.player.x = Math.round(enemy.x);
+    world.player.y = Math.round(enemy.y);
+    // And that `enemy` is the only thing in reach, so the hit below is the
+    // captured ship's and not some other diver's that happened to be passing.
+    const reachable = world.fleet.enemies.filter(
+      (candidate) =>
+        candidate !== enemy &&
+        isTargetable(candidate) &&
+        hitsAny(world.player, candidate, [world.rules.player.hitWindow], candidate.hitPadding),
+    );
+    expect(reachable.map((candidate) => candidate.id)).toEqual([]);
+    return run(world, 1);
+  }
+
+  it('still lets a beam connect, with the captor that carries it solid', () => {
+    // The thing a pack author would most reasonably fear about this change: a
+    // captor has to descend towards the fighter to open its beam, so if its body
+    // arrived first no capture could ever complete. It does not — the catch window
+    // starts 16 px below the captor and the fighter's is ±6 — and this is the test
+    // that says so on the shipped numbers rather than by reading them.
+    const world = armedWorld({ rules: solidFleet(), seed: 'solid-capture' });
+    const events = runToPhase(world, ['held']);
+    expect(eventsOfType(events, 'capture-started').length).toBeGreaterThan(0);
+    expect(eventsOfType(events, 'player-captured')).toHaveLength(1);
+    expect(world.capture.phase).toBe('held');
+  });
+
+  it('cannot touch the fighter while the beam is dragging it', () => {
+    // Already lost to the beam: killing it here would swallow the capture and
+    // leave the channel holding a ship the run never paid for. The same guard the
+    // bullets are behind.
+    const world = armedWorld({ rules: solidFleet(), seed: 'solid-carry' });
+    runToPhase(world, ['carrying']);
+    const events = ram(world);
+    expect(eventsOfType(events, 'player-hit')).toHaveLength(0);
+    expect(world.capture.phase).toBe('carrying');
+    // And the capture still finishes, so nothing was merely deferred.
+    runToPhase(world, ['held']);
+    expect(world.capture.phase).toBe('held');
+  });
+
+  it('kills the fighter with its own captured ship, escorting its captor', () => {
+    // A captured fighter is an enemy in every other respect — it dives, it bombs
+    // nobody, it can be shot for 500 or 1,000 — so it is an enemy in this respect
+    // too. Exempting it would be a special case nothing in the reference asks for,
+    // and it would make the captive the one safe thing on the screen.
+    const world = heldWorld({ rules: solidFleet(), seed: 'solid-escort' });
+    runUntil(world, bothAttacking);
+    const captive = capturedFighter(world.capture, world.fleet);
+    expect(captive?.state).toBe('diving');
+    expect(captive?.inCaptiveSlot).toBe(true);
+    if (captive === undefined) return;
+
+    runUntil(world, (live) => live.player.alive);
+    const before = world.lives.reserve;
+    const events = flyInto(world, captive);
+    expect(eventsOfType(events, 'player-hit')).toHaveLength(1);
+    expect(world.lives.reserve).toBe(before - 1);
+    // It is still held: being killed by it releases nothing, and no second beam
+    // may appear.
+    expect(world.capture.phase).toBe('held');
+  });
+
+  it('kills the fighter with a rogue on its one dive', () => {
+    const world = heldWorld({ rules: solidFleet(), seed: 'solid-rogue' });
+    runUntil(world, bothHome);
+    expect(eventsOfType(shoot(world, captorOf(world)), 'captive-rogue')).toHaveLength(1);
+    expect(world.capture.phase).toBe('rogue');
+
+    // The rogue sits in its slot for `rogueDelayFrames` and then swoops once.
+    const rogue = capturedFighter(world.capture, world.fleet);
+    expect(rogue).toBeDefined();
+    if (rogue === undefined) return;
+    runUntil(world, () => rogue.state === 'diving');
+
+    runUntil(world, (live) => live.player.alive);
+    const before = world.lives.reserve;
+    const events = flyInto(world, rogue);
+    expect(eventsOfType(events, 'player-hit')).toHaveLength(1);
+    expect(world.lives.reserve).toBe(before - 1);
+    expect(world.capture.phase).toBe('rogue');
+  });
+
+  it('costs a dual fighter only the half that was flown into', () => {
+    // The same rule the bullets follow, and the reference's own words about the
+    // fighter's geometry: "collision detection is run once per ship sprite". So
+    // the survivor plays on, the reserve is untouched, and losing the half
+    // releases the channel.
+    const world = rescuedWorld({ rules: solidFleet() });
+    expect(world.player.mode).toBe('dual');
+    const before = world.lives.reserve;
+
+    const events = ram(world, 1);
+    expect(eventsOfType(events, 'dual-half-lost')).toHaveLength(1);
+    expect(eventsOfType(events, 'player-hit')).toHaveLength(0);
+    expect(world.player.mode).toBe('single');
+    expect(world.lives.reserve).toBe(before);
+    expect(world.capture.phase).toBe('idle');
   });
 });

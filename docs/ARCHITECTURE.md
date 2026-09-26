@@ -49,8 +49,9 @@ motion, slot homing, dive attacks, enemy fire, the difficulty ramp, the transfor
 attack, scoring, lives, attract mode, game over, the hit-ratio results card and
 the high-score table are all in; the normal stages through 8 and eight challenge
 stages are authored as pack data; and the capture mechanic — tractor beam,
-captured fighter, rogue, rescue and dual fighter — is in.
-[§5](#5-what-is-not-here-yet) is what is left, and none of it belongs to
+captured fighter, rogue, rescue and dual fighter — is in. A bomb, a tractor beam
+and flying into an enemy all take a fighter, which is every way the arcade has of
+doing it. [§5](#5-what-is-not-here-yet) is what is left, and none of it belongs to
 Milestone 2.
 <!-- check:count classic.sequence.normal 6 classic.stages.challenge 8 -->
 
@@ -507,13 +508,25 @@ describing as deliberately absent something that shipped two merges ago.
   been specified ([`docs/IDEAS.md`](IDEAS.md)).
   <!-- check:count classic.stages.boss 0 schema.stageKinds 3 -->
 
-One arcade question is also still open rather than decided: whether a challenge
-stage's second wave keeps four boss-class objects. It changes what a perfect
-challenge stage pays, the pack is built to one of the two readings, and both are
-written down in `packs/classic/stages/README.md` and
-`docs/reference/arcade-reference.md` section 11. Nothing in `src/` turns on the
-answer — it is one line per challenge document — so it is recorded here rather
-than resolved, as it is in [`docs/ROADMAP.md`](ROADMAP.md#open-questions-this-roadmap-does-not-answer).
+Two arcade questions are also still open rather than decided, and the game is
+built to one reading of each. Both are written down in
+`docs/reference/arcade-reference.md` section 11, and both are recorded here
+rather than resolved because nothing in `src/` turns on the answer, as they are
+in [`docs/ROADMAP.md`](ROADMAP.md#open-questions-this-roadmap-does-not-answer):
+
+- **Whether a challenge stage's second wave keeps four boss-class objects.** It
+  changes what a perfect challenge stage pays; the alternative readings are also
+  in `packs/classic/stages/README.md`, and switching is one line per challenge
+  document.
+- **What a collision with an enemy body does beyond killing the fighter** —
+  whether it destroys the enemy as well, and whether it scores. Every kill and
+  every point the reference traces arrives through the original's _rocket_ hit
+  dispatcher and none through the fighter-hit path, so the engine takes the
+  negative reading of both: a ram costs a fighter and changes nothing else.
+  Switching would be `resolveBodyCollisions` in `src/sim/world.ts` and the
+  goldens it moves.
+
+<!-- check:count reference.openQuestions 2 -->
 
 ### Two places where the tree departs from the plan
 

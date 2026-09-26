@@ -21,14 +21,16 @@
  * ordinary dive with a beam on it, so it launches through the same director and
  * the same `beginDive`.
  *
- * Two loss conditions reach the same end, and they are not the same event. Being
- * shot raises `player-hit`; being **captured** raises `player-captured`, and on the
- * last fighter it ends the game — a distinct loss condition the design plan
- * originally missed and the original's manual is explicit about
- * (`docs/reference/arcade-reference.md` section 7).
+ * **Three ways to lose a fighter, two events.** Being shot and being *flown into*
+ * are the same loss — the arcade has one routine for every hit on the fighter — so
+ * both raise `player-hit` ({@link resolveEnemyBullets},
+ * {@link resolveBodyCollisions}). Being **captured** is not: it raises
+ * `player-captured`, and on the last fighter it ends the game — a distinct loss
+ * condition the design plan originally missed and the original's manual is
+ * explicit about (`docs/reference/arcade-reference.md` section 7).
  */
 
-import { extraLivesEarned, maxXFor, starfieldSpeedByte } from '../content/rules.js';
+import { allowsAttacks, extraLivesEarned, maxXFor, starfieldSpeedByte } from '../content/rules.js';
 import type { Rules } from '../content/schema.js';
 import type { StageContent, StageSource } from '../content/stages.js';
 import { EMPTY_STAGE_SOURCE } from '../content/stages.js';
@@ -452,7 +454,68 @@ function resolveEnemyBullets(world: World): void {
 }
 
 /**
- * One half of a dual fighter is shot away.
+ * Enemy **bodies** against the fighter — the arcade's other way to die.
+ *
+ * [MANUAL] is explicit that it is a way to die and not an accident: "if they
+ * can’t bomb you, they’ll ram you in the rear. That’s one of their favorite
+ * tricks, to fly in a circle and come up behind you"
+ * (`docs/reference/arcade-reference.md` section 5). So this is the same test the
+ * bullets get, with the enemy on the other side of it: the fighter's own
+ * `player.hitWindow`, widened by the *enemy's* `hitPadding` exactly as a player
+ * shot is. There is no second window and no second idea of overlap, which is
+ * what stops a fat alien being easy to shoot and impossible to fly past.
+ *
+ * Three things the reference settles, and one it does not:
+ *
+ * - **It costs a fighter, and it is the same loss as being shot.** One routine
+ *   handles every hit on the fighter (`hitd_det_fghtr` → `hitd_fghtr_hit`), so it
+ *   raises `player-hit` rather than an event of its own — unlike being captured,
+ *   which really is a separate condition in the ROM.
+ * - **It scores nothing, and the enemy flies on.** Every kill and every point in
+ *   the reference reaches the accumulator through `hitd_dspchr`, the *rocket* hit
+ *   dispatcher, and the report traces that path link by link as the only one
+ *   there is (section 3.1). Nothing puts an enemy's destruction on the
+ *   fighter-hit path. That the reference does not state the negative outright is
+ *   recorded as an open item in its section 11; this is the reading consistent
+ *   with the rest of it, and the cautious one — a ram that also killed the enemy
+ *   would hand out free kills nothing traced.
+ * - **A diver and a formation enemy are not different cases.** The fighter-hit
+ *   path carries no state test, unlike the *scoring* path, which carries one. So
+ *   the rule is "any enemy on the field", which is the set a shot may hit
+ *   ({@link isTargetable}) and needs no set of its own. On the shipped formation
+ *   nothing at home can reach the fighter's row even at full breathe, so the
+ *   generality costs nothing and invents nothing;
+ *   `tests/unit/world.test.ts` pins both halves of that.
+ *
+ * Two gates, neither of them new. **Nothing attacks on a challenge stage** and a
+ * body is an attack, so `allowsAttacks` refuses it there — the same answer
+ * `stepAttacks` and the capture channel's attacking parts give. And nothing can
+ * hit the fighter while a beam is dragging it: it is already lost to the beam.
+ */
+function resolveBodyCollisions(world: World): void {
+  if (!world.rules.enemies.collision.enabled) return;
+  if (!world.player.alive || beamHasFighter(world.capture)) return;
+  if (!allowsAttacks(world.rules, world.stage)) return;
+
+  const hitWindow = world.rules.player.hitWindow;
+  const anchors = shipAnchors(world.player, world.rules);
+
+  for (const enemy of world.fleet.enemies) {
+    if (!isTargetable(enemy)) continue;
+    for (const [index, anchor] of anchors.entries()) {
+      // Measured ship → enemy, so the padding widening the window is the
+      // enemy's, which is the only way round that composes with a dual
+      // fighter's two anchors.
+      if (hitWindowIndex(anchor, enemy, [hitWindow], enemy.hitPadding) < 0) continue;
+      if (world.player.mode === 'dual') loseDualHalf(world, index, anchor.x, anchor.y);
+      else killPlayer(world, anchor.x, anchor.y);
+      return;
+    }
+  }
+}
+
+/**
+ * One half of a dual fighter is lost — shot away, or flown into.
  *
  * Releases the capture channel, which is the last of the arcade's ways back to
  * idle: beams resume once you are a single fighter again (report acceptance test
@@ -782,6 +845,12 @@ export function stepWorld(world: World, frame: InputFrame): readonly SimEvent[] 
 
   stepShots(world.shots, world.rules);
   resolvePlayerShots(world);
+
+  // Bodies before bullets, and after the shots: an enemy destroyed on this frame
+  // cannot also ram you, which is the player-favourable reading of an order the
+  // arcade's single dispatcher pass does not settle — and the one that avoids
+  // dying to something that is no longer on the screen.
+  resolveBodyCollisions(world);
 
   stepEnemyBullets(world.enemyBullets, world.rules);
   resolveEnemyBullets(world);

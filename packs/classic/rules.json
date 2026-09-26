@@ -215,6 +215,9 @@
       "width": 1,
       "height": 3
     },
+    "collision": {
+      "enabled": true
+    },
     "dive": {
       "baseLaunchRate": 1,
       "launchCost": 16,
@@ -1986,6 +1989,10 @@
     "enemies.bullet.height": {
       "confidence": "provisional",
       "note": "As enemies.bullet.width."
+    },
+    "enemies.collision.enabled": {
+      "confidence": "verified",
+      "note": "Enemy bodies are lethal to the fighter: [MANUAL] line 1962, quoted in reference section 5 — \u201cif they can\u2019t bomb you, they\u2019ll ram you in the rear\u201d. The window is the fighter\u2019s own player.hitWindow, from the one ROM routine that tests anything against the fighter. What the reference does not settle is whether the ram also destroys the enemy or scores; reference section 11 item 2 records that, and the engine takes the negative reading."
     },
     "enemies.updatePhases": {
       "confidence": "verified",
