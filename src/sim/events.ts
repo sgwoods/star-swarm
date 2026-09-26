@@ -137,6 +137,75 @@ export interface ExtraLifeEvent {
   readonly score: number;
 }
 
+/**
+ * A captor opened its tractor beam.
+ *
+ * Raised on the frame the beam appears, which is the frame the arcade's capture
+ * tune starts — `packs/classic/pack.json` binds it to `capture-beam`.
+ */
+export interface CaptureStartedEvent {
+  readonly type: 'capture-started';
+  readonly targetId: number;
+  readonly x: number;
+  readonly y: number;
+}
+
+/**
+ * A capture attempt ended with the fighter untouched.
+ *
+ * Its own event rather than silence because it is the moment the channel is free
+ * again, and "does a second beam ever appear?" is the behaviour the whole mechanic
+ * turns on. `targetId` is the captor when a shot ended the attempt and `-1` when
+ * the beam simply retracted.
+ */
+export interface CaptureFailedEvent {
+  readonly type: 'capture-failed';
+  readonly targetId: number;
+}
+
+/**
+ * The fighter was taken by a tractor beam.
+ *
+ * **A distinct loss condition from being shot**, which is why it is a distinct
+ * event: on the last fighter it ends the game, and a subscriber that treated it as
+ * a `player-hit` would lose both the sound and the reason
+ * (`docs/reference/arcade-reference.md` section 7).
+ */
+export interface PlayerCapturedEvent {
+  readonly type: 'player-captured';
+  readonly x: number;
+  readonly y: number;
+  readonly livesRemaining: number;
+}
+
+/** The captured fighter's captor was destroyed in formation: it is a rogue now. */
+export interface CaptiveRogueEvent {
+  readonly type: 'captive-rogue';
+  readonly targetId: number;
+}
+
+/** The captured fighter was freed. It spins where it was until it docks. */
+export interface FighterRescuedEvent {
+  readonly type: 'fighter-rescued';
+  readonly x: number;
+  readonly y: number;
+}
+
+/** The freed fighter finished docking: the fighter is dual from this frame. */
+export interface FighterDockedEvent {
+  readonly type: 'fighter-docked';
+  readonly x: number;
+  readonly y: number;
+}
+
+/** One half of a dual fighter was shot away, leaving a single ship flying. */
+export interface DualHalfLostEvent {
+  readonly type: 'dual-half-lost';
+  readonly x: number;
+  readonly y: number;
+  readonly livesRemaining: number;
+}
+
 export interface PlayerHitEvent {
   readonly type: 'player-hit';
   readonly x: number;
@@ -239,6 +308,13 @@ export type SimEvent =
   | TargetHitEvent
   | ScoreChangedEvent
   | ExtraLifeEvent
+  | CaptureStartedEvent
+  | CaptureFailedEvent
+  | PlayerCapturedEvent
+  | CaptiveRogueEvent
+  | FighterRescuedEvent
+  | FighterDockedEvent
+  | DualHalfLostEvent
   | PlayerHitEvent
   | PlayerReadyEvent
   | GameOverEvent

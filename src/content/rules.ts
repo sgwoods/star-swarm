@@ -158,6 +158,21 @@ export function resolveBombCooldown(
 }
 
 /**
+ * Frames between one step of a captor's tractor beam and the next, on this row.
+ *
+ * The one stage-varying number the capture channel needs, and it is read from the
+ * row exactly like every other: rank A runs 12 at stage 1 down to 3 late on, so a
+ * late beam extends and pulls four times faster rather than appearing more often
+ * (`docs/reference/arcade-reference.md` section 6, parameter 6). A row that says
+ * nothing — or a fold that lands on a challenge-stage row of zeros — gives a
+ * period of zero, which the simulation reads as "one step per frame" rather than
+ * as a division by zero.
+ */
+export function resolveBeamStepFrames(row: DifficultyRow | undefined): number {
+  return Math.max(1, row?.beamStepFrames ?? 1);
+}
+
+/**
  * The bombing flight vectors in force, which a row may swap for its alternative.
  *
  * The arcade's parameter 9 is a *pointer reload*: from stage 8 the bombing

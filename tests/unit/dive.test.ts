@@ -190,8 +190,11 @@ describe('how many may dive at once', () => {
   it('does not count a diver on its way back into its slot', () => {
     // The row's limit is on simultaneous *bombers*; an enemy rotating home has
     // stopped attacking. Counting it would silently halve the attack.
+    //
+    // Long enough for a whole round trip on stage 1, where two divers at a time is
+    // the row's limit and a capture attempt can hold one of the two for seconds.
     const world = armedWorld(1, { rules: longLived() });
-    run(world, 1_200);
+    run(world, 2_400);
     const returning = world.fleet.enemies.filter((enemy) => enemy.state === 'returning');
     expect(returning.length).toBeGreaterThan(0);
     expect(diverCount(world.fleet)).toBe(
@@ -223,8 +226,11 @@ describe('a dive, end to end', () => {
 
     // And every enemy back at home is standing in its own slot, not in a
     // neighbour's: homing resolves the slot the enemy owns for the whole stage.
+    // Keyed on the whole address, because a home index names a slot in one of two
+    // tables — a captured fighter's names a captive slot (`src/sim/capture.ts`).
     const homes = world.fleet.enemies.filter((enemy) => enemy.state === 'home');
-    expect(new Set(homes.map((enemy) => enemy.home)).size).toBe(homes.length);
+    const addresses = homes.map((enemy) => `${String(enemy.inCaptiveSlot)}:${String(enemy.home)}`);
+    expect(new Set(addresses).size).toBe(homes.length);
   });
 
   it('flies the dive from the slot it left, not from a fixed point', () => {

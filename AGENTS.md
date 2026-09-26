@@ -41,7 +41,9 @@ scans the tree and runs ESLint against a deliberately illegal probe file so the
 rules cannot be quietly deleted. Both run in CI.
 
 That scan is textual, so inside `src/sim/` an identifier spelled exactly
-`window` fails even as a local variable or parameter. Name it `hitWindow`.
+`window` fails even as a local variable or parameter. Name it `hitWindow`. It
+catches **object keys** too, so a `rules.json` field the sim destructures cannot
+be called `window` either — that is why the tractor beam's is `catchWindow`.
 
 ## Arcade numbers say how far to trust themselves
 
@@ -111,7 +113,11 @@ Practical consequences:
   broke something — say which. `--check` fails instead of rewriting. One of them
   (`stage-entry`) records an **empty** input log on purpose: entry choreography
   is scripted, so a golden with no input is a record of the fleet and the
-  formation alone.
+  formation alone. A golden's pilot **may read the world** while recording
+  (`capturePilot`), because what lands on disk is still a plain frame log — that
+  is the only way to record a run that has to shoot one particular enemy at one
+  particular moment. Anything added to `fingerprintWorld` rewrites every golden,
+  so it is a deliberate act, not a drive-by.
 
 ## The second rule: content is a platform, not this game
 
@@ -203,6 +209,50 @@ a path carrying one leaves its flyer `home`, and a path without one — every
 challenge script — leaves it `departed`, gone from the field without having been
 hit. The **path** decides, never the stage kind, so a challenge stage and its
 `kind: "challenge"` document cannot disagree.
+
+## Capture is one channel, and the flag is the rule
+
+`src/sim/capture.ts` holds the tractor beam, the captured fighter, the rogue, the
+rescue and the dual fighter. There is **exactly one captured fighter in a run,
+ever**, and a captor may only be chosen while the channel is idle. A successful
+capture does not free it, so while a fighter is held — including parked as a
+rogue, including flying beside you as a dual — no second beam appears. "A dual
+fighter is never targeted" is therefore not a special case anywhere; deleting one
+would be adding a bug. The complete set of releases is the list of
+`releaseCapture`'s callers, each an arcade site the rules-and-scoring report
+traced, and it is written out there.
+
+Three things that are easy to undo by accident:
+
+- **A captor's dive is an ordinary dive.** `src/sim/dive.ts` asks the channel one
+  question on a captor-role launch and changes only the path. A second launcher,
+  or a second kind of motion, is the mistake this arrangement prevents.
+- **`Enemy.home` names a slot in one of two tables.** `inCaptiveSlot` says which:
+  the alien slots, or the captive slots a stolen fighter parks in. `homePosition`
+  and `isRightOfCentre` in `src/sim/formation.ts` take the flag; a call that
+  forgets it parks the captured fighter in a Warden's seat.
+- **A kill is reported to the channel with the state the enemy _had_.** The world
+  marks an enemy dead before telling `captureNoteDestroyed`, so a rescue's recall
+  cannot drag the captor home — and the rescue condition ("both attacking") reads
+  the prior state. Reading `enemy.state` there turns every rescue into a rogue,
+  silently.
+
+Being captured is a **loss condition of its own**: it raises `player-captured`,
+not `player-hit`, and on the last fighter it ends the game.
+
+**The channel is stepped outside the attack director, so the director's gates do
+not cover it.** `stepAttacks` refuses everything on a challenge stage in one
+place; `stepCapture` runs whatever the stage is, because a beam mid-flight has to
+finish and a freed fighter has to dock. Anything in it that _attacks_ — the
+captive escorting its captor, a rogue's swoop — therefore asks `allowsAttacks`
+itself, and `enterStageCapture` refuses to put a held fighter on the field at
+all where nothing may attack. A held fighter sits a challenge stage out and
+returns on the next stage that has a formation to return to.
+
+One more thing the two-stage life of a captive makes easy to get wrong: **enemy
+ids are per stage**. `CaptureState.captiveId` is cleared on every stage entry and
+set again only if a captive is actually placed, because a stale id is some other
+enemy's number next stage — and shooting _that_ would release the channel.
 
 ## Audio is the other side of that boundary
 

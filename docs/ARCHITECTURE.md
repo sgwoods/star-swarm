@@ -32,7 +32,8 @@ see [§3](#3-the-layers).
 The game is playable now: entry waves, formation motion, slot homing, dive
 attacks, enemy fire, the difficulty ramp, scoring, lives, attract mode, game
 over, the hit-ratio results card and the high-score table are all in, and the
-normal stages through 8 are authored as pack data. Capture and rescue and the
+normal stages through 8 are authored as pack data, and the capture mechanic —
+tractor beam, captured fighter, rogue, rescue and dual fighter — is in. The
 challenge stages are the Milestone 2 work still outstanding;
 [§5](#5-what-is-not-here-yet) lists what that means when you play it.
 
@@ -183,14 +184,14 @@ make the simulation bit-identical, and nothing here claims it does.
 
 ### The layers one at a time
 
-| Layer          | What it is                                                                                                                            |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/engine/`  | The fixed-step loop, the seeded RNG, abstract input, and input recording/replay. Knows nothing about this game or any game.           |
-| `src/sim/`     | The world and one step of it: player, shots, collisions, lives, enemies, formation, the path interpreter, dives and enemy fire.       |
-| `src/content/` | The content platform: the Zod schemas, the loader, the registry, and the one module that interprets a rules document.                 |
-| `src/render/`  | The 224×288 backbuffer presented at a whole-number scale, sprite rasterisation, the pixel font, the starfield, and scene composition. |
-| `src/audio/`   | A parametric synth over Web Audio, and the mapping from simulation events to sounds.                                                  |
-| `src/ui/`      | The game-flow state machine, attract mode, the HUD, the results card, the high-score table — and the dev-only `/lab`.                 |
+| Layer          | What it is                                                                                                                               |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/engine/`  | The fixed-step loop, the seeded RNG, abstract input, and input recording/replay. Knows nothing about this game or any game.              |
+| `src/sim/`     | The world and one step of it: player, shots, collisions, lives, enemies, formation, the path interpreter, dives, enemy fire and capture. |
+| `src/content/` | The content platform: the Zod schemas, the loader, the registry, and the one module that interprets a rules document.                    |
+| `src/render/`  | The 224×288 backbuffer presented at a whole-number scale, sprite rasterisation, the pixel font, the starfield, and scene composition.    |
+| `src/audio/`   | A parametric synth over Web Audio, and the mapping from simulation events to sounds.                                                     |
+| `src/ui/`      | The game-flow state machine, attract mode, the HUD, the results card, the high-score table — and the dev-only `/lab`.                    |
 
 Four properties worth knowing, because each one is load-bearing:
 
@@ -400,10 +401,6 @@ the whole test harness.
 
 Stated plainly, because it is visible the moment you play:
 
-- **Capture and rescue.** No tractor beam, no captured fighter, no dual fighter.
-  The rules and the pack already carry the data; the simulation does not act on
-  it yet. The seam it will attach to is the dive director — a captor's dive is an
-  ordinary dive with a beam on it.
 - **Challenge stages.** `stageSequence.challenge` is empty, so stages 3 and 7 —
   the challenge slots — fall back to a normal stage rather than meeting an empty
   screen. That fallback is a temporary bridge in `content/stages.ts` and is
@@ -419,10 +416,11 @@ Stated plainly, because it is visible the moment you play:
 Two places where the tree departs from [`docs/DESIGN.md`](DESIGN.md) section 9's
 listing, both of which this document follows the code on:
 
-- The plan lists `sim/capture.ts`, `sim/scoring.ts` and `sim/stages.ts`. None
-  exists. Scoring is in `sim/enemies.ts` and `sim/world.ts`; stage resolution is
-  `content/stages.ts`, on the content side of the boundary, because resolving a
-  stage number to its documents is content work rather than simulation work.
+- The plan lists `sim/capture.ts`, `sim/scoring.ts` and `sim/stages.ts`. Only
+  `capture.ts` exists. Scoring is in `sim/enemies.ts` and `sim/world.ts`; stage
+  resolution is `content/stages.ts`, on the content side of the boundary, because
+  resolving a stage number to its documents is content work rather than
+  simulation work.
 - The plan puts `schema.ts, loader.ts, registry.ts` in `src/content/`, where
   there are now also `rules.ts`, `stages.ts`, `errors.ts`, and the two pack
   readers `fs.ts` and `bundle.ts`.

@@ -37,6 +37,9 @@
     },
     "ensign": {
       "label": "Ensign"
+    },
+    "captive": {
+      "label": "Captive"
     }
   },
   "formations": {

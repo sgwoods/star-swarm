@@ -12,6 +12,7 @@
  * deliberately not enough to be mistaken for finished art.
  */
 
+import { beamCaptor, beamWindow } from '../sim/capture.js';
 import { enemySprite } from '../sim/enemies.js';
 import { shipAnchors } from '../sim/player.js';
 import type { World } from '../sim/world.js';
@@ -21,6 +22,8 @@ const PLAYER_COLOR = '#e8eaff';
 const PLAYER_ACCENT = '#4d9bff';
 const SHOT_COLOR = '#fff6a5';
 const BULLET_COLOR = '#ff5a5a';
+const BEAM_COLOR = '#7de3ff';
+const BEAM_EDGE_COLOR = '#ffffff';
 
 /** Placeholder colours, used only when no sprite sheet was supplied. */
 const ROLE_COLORS: Readonly<Record<string, string>> = Object.freeze({
@@ -94,6 +97,71 @@ function drawShots(ctx: CanvasRenderingContext2D, world: World): void {
   }
 }
 
+/**
+ * The tractor beam, drawn as the shape it is tested against.
+ *
+ * The window the simulation catches the fighter with *is* the beam, so drawing it
+ * from {@link beamWindow} means what the player sees and what can take their ship
+ * cannot drift apart. Banding it into the beam's own animation steps is what makes
+ * a late-stage beam visibly faster: the steps are the same, the period is shorter.
+ */
+function drawCaptureBeam(ctx: CanvasRenderingContext2D, world: World): void {
+  const beam = beamWindow(world.capture, world.rules);
+  const captor = beamCaptor(world.capture, world.fleet);
+  if (beam === undefined || captor === undefined) return;
+
+  const { steps } = world.rules.capture.beam;
+  const top = captor.y + beam.dyMin;
+  const depth = beam.dyMax - beam.dyMin;
+  if (depth <= 0) return;
+
+  const bands = Math.max(1, Math.min(steps, world.capture.beamStep));
+  const band = depth / bands;
+  const centre = captor.x + (beam.dxMin + beam.dxMax) / 2 + 8;
+
+  ctx.save();
+  for (let i = 0; i < bands; i += 1) {
+    // Widening and fading with depth, with a gap between the bands: a striped cone
+    // rather than a slab, which is what the beam looks like and what makes its
+    // *extension* legible a band at a time.
+    const spread = (i + 1) / bands;
+    const halfWidth = ((beam.dxMax - beam.dxMin) / 2) * spread;
+    ctx.globalAlpha = 0.9 - 0.45 * spread;
+    ctx.fillStyle = BEAM_COLOR;
+    ctx.fillRect(centre - halfWidth, top + i * band, halfWidth * 2, Math.max(1, band - 1));
+  }
+  // The two edges, bright the whole way down, so the cone has a shape at any depth.
+  ctx.globalAlpha = 0.9;
+  ctx.fillStyle = BEAM_EDGE_COLOR;
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < bands; i += 1) {
+      const spread = (i + 1) / bands;
+      const halfWidth = ((beam.dxMax - beam.dxMin) / 2) * spread;
+      ctx.fillRect(centre + side * halfWidth, top + i * band, 1, band);
+    }
+  }
+  ctx.restore();
+}
+
+/**
+ * The freed fighter, spinning where it was released until it docks.
+ *
+ * It is no longer an enemy by then — that is how "invulnerable to your own shots
+ * while it spins" is implemented — so the only place left to draw it from is the
+ * capture channel's own pose.
+ */
+function drawFreedFighter(ctx: CanvasRenderingContext2D, world: World, sheet?: SpriteSheet): void {
+  const at = world.capture.freedAt;
+  if (at === undefined) return;
+  const [x, y] = at;
+  if (sheet?.has(PLAYER_SPRITE) === true) {
+    drawSprite(ctx, sheet, PLAYER_SPRITE, x, y);
+    return;
+  }
+  ctx.fillStyle = PLAYER_COLOR;
+  ctx.fillRect(x + 4, y + 4, 8, 8);
+}
+
 function drawEnemyBullets(ctx: CanvasRenderingContext2D, world: World): void {
   const { width, height } = world.rules.enemies.bullet;
   ctx.fillStyle = BULLET_COLOR;
@@ -109,8 +177,10 @@ export function drawScene(
   world: World,
   options: SceneOptions = {},
 ): void {
+  drawCaptureBeam(ctx, world);
   drawEnemies(ctx, world, options.sheet);
   drawShots(ctx, world);
   drawEnemyBullets(ctx, world);
+  drawFreedFighter(ctx, world, options.sheet);
   drawPlayer(ctx, world, options.sheet);
 }

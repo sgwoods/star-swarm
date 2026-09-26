@@ -98,13 +98,15 @@ never drop bombs — and explicitly does not give the flight vectors.
 Dive attacks are the Milestone 2 dive task. One per role, plus one for the
 transform group and one shared return leg.
 
-| File                  | Shape (reference sections 5 and 6)                          |
-| --------------------- | ----------------------------------------------------------- |
-| `dive-drone.json`     | the bees' wide sweeping arc, a loop, and out of the bottom  |
-| `dive-wing.json`      | the butterflies' faster arc dive, swinging away at the end  |
-| `dive-warden.json`    | the captor's slow, weaving descent — the one you shoot at   |
-| `dive-transform.json` | the trio: arc, two scripted shots, one final loop, and gone |
-| `dive-return.json`    | re-entry at the top, then `toSlot` and nothing else         |
+| File                  | Shape (reference sections 5 and 6)                                              |
+| --------------------- | ------------------------------------------------------------------------------- |
+| `dive-drone.json`     | the bees' wide sweeping arc, a loop, and out of the bottom                      |
+| `dive-wing.json`      | the butterflies' faster arc dive, swinging away at the end                      |
+| `dive-warden.json`    | the captor's slow, weaving descent — the one you shoot at                       |
+| `dive-transform.json` | the trio: arc, two scripted shots, one final loop, and gone                     |
+| `dive-capture.json`   | the captor's capture run: one loop, a slide to beam position, the beam, and out |
+| `dive-captive.json`   | the captured fighter's swoop, beside its captor or as a rogue                   |
+| `dive-return.json`    | re-entry at the top, then `toSlot` and nothing else                             |
 
 Three things about their shape are not free choices:
 
@@ -122,6 +124,18 @@ Three things about their shape are not free choices:
   bottom and re-enter at the top (reference section 5). Whether an alien comes
   back is its own `dive.returns` flag — the transform trio's is `false`, which is
   the one confirmed exception.
+
+`dive-capture.json` is the only file here with a `trigger` segment, and it is
+what opens the tractor beam (`src/sim/capture.ts`). That is deliberate: **where
+in the dive the beam comes out is authored here**, not a depth threshold in the
+engine. The original's captor "loops just once at the top of the formation,
+slides down to roughly mid-screen, then emits the beam"
+(`docs/reference/arcade-reference.md` section 7) — and the reference is explicit
+that its two accounts of the descent depth disagree, so the `aimAtPlayer`
+duration is tuned by eye to land the captor below the formation with the beam
+still able to reach the fighter's row. Change that duration and
+`capture.beam.catchWindow`'s reach in `rules.json` has to move with it, or a beam
+opens too high to catch anything.
 
 `dive-transform.json` is the only file here with `fire` segments, and
 deliberately so: the trio "fires on the way down" is a scripted moment in its

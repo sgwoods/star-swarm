@@ -43,6 +43,17 @@ export interface FormationState {
   /** Captive-slot index → the same two axes. */
   readonly captiveColumn: readonly number[];
   readonly captiveRow: readonly number[];
+  /**
+   * Captive-slot index → the `slots` index of the captor that owns it.
+   *
+   * Carried here so the capture channel can answer "whose captive slot is this"
+   * without the formation *document*: the captor is identified by its slot rather
+   * than by an enemy, which is what lets a held fighter survive a stage change,
+   * when every enemy is built anew (`docs/reference/arcade-reference.md` section
+   * 7 — the arcade addresses the slot arithmetically from the boss's object
+   * index, for the same reason).
+   */
+  readonly captiveCaptor: readonly number[];
 
   /** Frames since the stage began. The only clock this module has. */
   frame: number;
@@ -101,6 +112,7 @@ export function createFormation(
     slotRow: formation.slots.map((slot) => at(rowIndex, slot.row)),
     captiveColumn: formation.captiveSlots.map((slot) => at(columnIndex, slot.column)),
     captiveRow: formation.captiveSlots.map((slot) => at(rowIndex, slot.row)),
+    captiveCaptor: formation.captiveSlots.map((slot) => slot.captor),
 
     frame: 0,
     motion: sways ? 'sway' : 'still',
@@ -187,8 +199,8 @@ export function slotPosition(
  * see in a screenshot. With an even number of columns the two halves are equal;
  * with an odd number the middle column counts as the right.
  */
-export function isRightOfCentre(state: FormationState, index: number): boolean {
-  const column = state.slotColumn[index] ?? 0;
+export function isRightOfCentre(state: FormationState, index: number, captive = false): boolean {
+  const column = (captive ? state.captiveColumn[index] : state.slotColumn[index]) ?? 0;
   return column * 2 >= state.columnsAtRest.length - 1;
 }
 
@@ -204,6 +216,49 @@ export function captivePosition(
     x: (state.columnsAtRest[column] ?? 0) + state.swayOffset + breatheColumn(state, rules, column),
     y: (state.rowsAtRest[row] ?? 0) + breatheRow(state, rules, row),
   };
+}
+
+/**
+ * Which captive slot the captor in formation slot `captorSlot` owns, or
+ * `undefined` when it owns none.
+ *
+ * One slot per possible captor, addressed by the captor's own slot — see
+ * {@link FormationState.captiveCaptor}.
+ */
+export function captiveSlotOf(state: FormationState, captorSlot: number): number | undefined {
+  const index = state.captiveCaptor.indexOf(captorSlot);
+  return index < 0 ? undefined : index;
+}
+
+/**
+ * Where an enemy's home is right now, whichever of the two slot tables it names.
+ *
+ * An enemy's `home` is an index, and `inCaptiveSlot` says which table it indexes:
+ * the alien slots, or the captive slots a captured fighter parks in. Keeping that
+ * behind one call is what lets `src/sim/enemies.ts` treat a captured fighter as
+ * an ordinary enemy that happens to live in a different row — the alternative is
+ * a second homing path, and there is exactly one of those by design.
+ */
+export function homePosition(
+  state: FormationState,
+  rules: Rules,
+  index: number,
+  captive = false,
+): { readonly x: number; readonly y: number } {
+  return captive ? captivePosition(state, rules, index) : slotPosition(state, rules, index);
+}
+
+/** {@link homePosition}, `frames` frames from now. @see slotPositionAhead */
+export function homePositionAhead(
+  state: FormationState,
+  rules: Rules,
+  index: number,
+  frames: number,
+  captive = false,
+): { readonly x: number; readonly y: number } {
+  return captive
+    ? captivePositionAhead(state, rules, index, frames)
+    : slotPositionAhead(state, rules, index, frames);
 }
 
 /**
@@ -223,6 +278,24 @@ export function slotPositionAhead(
 ): { readonly x: number; readonly y: number } {
   const column = state.slotColumn[index] ?? 0;
   const row = state.slotRow[index] ?? 0;
+  return {
+    x:
+      (state.columnsAtRest[column] ?? 0) +
+      swayOffsetAhead(state, rules, frames) +
+      breatheColumn(state, rules, column),
+    y: (state.rowsAtRest[row] ?? 0) + breatheRow(state, rules, row),
+  };
+}
+
+/** {@link slotPositionAhead} for a captive slot: the row that never breathes. */
+export function captivePositionAhead(
+  state: FormationState,
+  rules: Rules,
+  index: number,
+  frames: number,
+): { readonly x: number; readonly y: number } {
+  const column = state.captiveColumn[index] ?? 0;
+  const row = state.captiveRow[index] ?? 0;
   return {
     x:
       (state.columnsAtRest[column] ?? 0) +

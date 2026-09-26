@@ -566,9 +566,13 @@ export const formationSchema = z.strictObject({
     )
     .default([]),
   /**
-   * Slots that hold a captured player ship rather than an alien. The arcade has
-   * one per boss, which is why capture is modelled per captor rather than as a
-   * single global flag (`docs/DESIGN.md` section 4).
+   * Slots that hold a captured player ship rather than an alien.
+   *
+   * The arcade has one per boss and holds **exactly one captive globally**: the
+   * four slots are one per possible captor, not four simultaneous captives, and
+   * which one is used is decided by which boss took the fighter
+   * (`docs/reference/arcade-reference.md` section 7). So a formation declares as
+   * many as it has captors, and the capture channel uses one at a time.
    */
   captiveSlots: z
     .array(
@@ -736,8 +740,19 @@ export const difficultyRowSchema = z.strictObject({
   maxDivers: z.number().int().nonnegative().default(0),
   /** The raised limit that replaces `maxDivers` once the stage has run a while. */
   maxDiversBump: z.number().int().nonnegative().default(0),
-  /** How readily a captor attempts a capture. Not a probability; a rate parameter. */
-  captureRate: z.number().int().nonnegative().default(0),
+  /**
+   * Frames between one animation step of a captor's tractor beam and the next.
+   *
+   * **A speed, not a flag and not a probability.** The arcade's parameter 6 is
+   * named "capture flag" in the disassembly and is nothing of the kind: it is
+   * loaded into the beam's countdown when a captor reaches beam position, and the
+   * beam advances one step each time the countdown reaches zero. Rank A runs 12,
+   * 9, 6, 3 across the table, so a late-stage beam extends *and pulls* four times
+   * faster than a stage-1 one — which is what makes a late capture hard to escape
+   * (`docs/reference/arcade-reference.md` section 6, parameter 6). Reading it as a
+   * capture rate produces a game where late captures are merely more frequent.
+   */
+  beamStepFrames: z.number().int().nonnegative().default(0),
   /**
    * How many enemies may remain before bombing becomes continuous. A threshold
    * on the live count, not a timer — "the last few get nastier" is this number.
@@ -1120,9 +1135,41 @@ export const rulesSchema = z.strictObject({
     everyStages: z.number().int().positive(),
   }),
 
+  /**
+   * The capture channel: the beam, the captured fighter and the rogue
+   * (`docs/DESIGN.md` section 4, "Capture and rescue").
+   *
+   * Everything here is **this game's**, not the platform's. A sibling game in the
+   * same lineage need not have capture at all, which is why the whole mechanic is
+   * switched on by one pack field and named entirely in pack vocabulary: which
+   * role captures, which path a captor flies, which alien the stolen fighter
+   * becomes.
+   */
   capture: z
     .strictObject({
       enabled: z.boolean().default(false),
+      /** The role whose dives may carry a beam. Matched against an alien's `role`. */
+      captorRole: idSchema.optional(),
+      /**
+       * The dive a capture attempt flies, in place of the alien's own.
+       *
+       * A capture attempt *is* a dive — same director, same `beginDive` — so this
+       * is an ordinary dive path, compiled from wherever the captor sits. The
+       * beam comes out where the path says: at its `trigger` segment naming the
+       * `captureBeam` ability. Omitted means no attempt is ever launched.
+       */
+      divePath: refSchema.optional(),
+      /** The alien a captured fighter becomes: its sprite, its score, its dive. */
+      captiveAlien: refSchema.optional(),
+      /**
+       * Only every `n`th eligible captor launch may carry a beam.
+       *
+       * The arcade pre-increments a counter and tests its low bit, so with 2 the
+       * **first** captor launch of a game is never a capture attempt and capture
+       * is reachable on the 2nd, 4th, 6th … (report acceptance test R8). 1 means
+       * every eligible launch may capture.
+       */
+      everyNthLaunch: z.number().int().positive().default(1),
       /** Captive slots a single captor may hold. */
       slotsPerCaptor: z.number().int().nonnegative().default(1),
       /**
@@ -1136,6 +1183,53 @@ export const rulesSchema = z.strictObject({
       lastFighterCaptureEndsGame: z.boolean().default(false),
       /** The player cannot fire while a beam has hold of the ship. */
       disablesFireWhileBeamed: z.boolean().default(false),
+      /**
+       * The beam itself. Its *step period* is not here: it is a stage-varying
+       * number and comes from the difficulty row's `beamStepFrames`, like every
+       * other number that varies by stage.
+       */
+      beam: z
+        .strictObject({
+          /** Animation steps from the captor to full extension. */
+          steps: z.number().int().positive().default(1),
+          /** Steps held at full extension before it starts retracting. */
+          holdSteps: z.number().int().nonnegative().default(0),
+          /**
+           * Where the beam catches, at full extension, measured from the captor's
+           * anchor to the fighter's.
+           *
+           * A hit window rather than a rectangle intersection for the same reason
+           * every other overlap test is one (`src/sim/collision.ts`). `dyMax` is
+           * the beam's reach, and it is scaled by how far the beam has extended,
+           * so a beam that has not got down to the fighter's row cannot take it.
+           * Spelt `catchWindow` rather than the obvious name because `src/sim/`
+           * may not contain that identifier at all (`AGENTS.md`).
+           */
+          catchWindow: hitWindowSchema,
+        })
+        .prefault({
+          steps: 1,
+          holdSteps: 0,
+          catchWindow: { dxMin: 0, dxMax: 0, dyMin: 0, dyMax: 0 },
+        }),
+      /**
+       * Steps the beam spends dragging the caught fighter up to its captive slot.
+       *
+       * Counted in beam steps rather than frames on purpose: the arcade reuses the
+       * one countdown for the extension *and* the pull, so a late-stage beam pulls
+       * as much faster as it extends.
+       */
+      carrySteps: z.number().int().positive().default(1),
+      /**
+       * Frames a rogue fighter sits in its captive slot before it swoops.
+       *
+       * A rogue — a captured fighter whose captor was destroyed while in formation
+       * — takes exactly one dive per stage and then leaves the bottom for good
+       * (`docs/reference/arcade-reference.md` section 7). The delay is what makes
+       * the parked-rogue technique a technique: there is time to shoot it in
+       * formation for the standing value instead.
+       */
+      rogueDelayFrames: framesSchema.default(0),
     })
     .prefault({}),
 
@@ -1148,6 +1242,8 @@ export const rulesSchema = z.strictObject({
       freedShipInvulnerableWhileDocking: z.boolean().default(true),
       /** Enemies already diving return to formation when a rescue happens. */
       divingEnemiesReturnToFormation: z.boolean().default(true),
+      /** Frames the freed fighter spins in place before it docks as a second ship. */
+      dockFrames: framesSchema.default(0),
     })
     .prefault({}),
 
@@ -1156,6 +1252,16 @@ export const rulesSchema = z.strictObject({
       enabled: z.boolean().default(false),
       /** Bullets per shot. Still one shot against `player.maxShots`. */
       bulletsPerShot: z.number().int().positive().default(2),
+      /**
+       * Whether losing one half of a dual fighter costs a reserve fighter.
+       *
+       * False is the arcade behaviour: a hit leaves the surviving ship flying and
+       * the reserve untouched — the ship in play was never lost, so the loss path
+       * that ends a game is not reached. It is stated rather than assumed because
+       * it is the difference between a rescue being worth a life and being worth
+       * nothing.
+       */
+      losingHalfCostsLife: z.boolean().default(false),
     })
     .prefault({}),
 

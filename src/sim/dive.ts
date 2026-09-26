@@ -26,7 +26,11 @@
  *    rather than per enemy and is a first-order contributor to how the game
  *    feels (reference section 4), so this file asks {@link launchEnemyBullet} for
  *    a slot and copes with being refused. It never keeps a pool of its own.
- * 5. **Homing is `toSlot` and nothing else.** A diver that leaves the bottom
+ * 5. **A capture attempt is one of these dives.** The captor launches through the
+ *    same credit, the same diver limit and the same `beginDive`; all that differs
+ *    is the path, which the capture channel hands back when it takes the launch
+ *    (`src/sim/capture.ts`). There is no second kind of motion for it.
+ * 6. **Homing is `toSlot` and nothing else.** A diver that leaves the bottom
  *    re-enters at the top and flies the pack's return path, which ends in the
  *    same segment the entry waves use. There is one homing implementation in the
  *    simulation and it lives in the path interpreter.
@@ -52,8 +56,10 @@ import {
 import type { DifficultyRow, Rules } from '../content/schema.js';
 import type { StageContent } from '../content/stages.js';
 import type { Rng } from '../engine/rng.js';
+import type { CaptureState } from './capture.js';
+import { beginCaptureDive } from './capture.js';
 import type { Enemy, Fleet, ScriptedFire } from './enemies.js';
-import { aliveEnemies, beginDive, spawnDiver } from './enemies.js';
+import { beginDive, fleetEnemies, spawnDiver } from './enemies.js';
 import type { FormationState } from './formation.js';
 import { isRightOfCentre } from './formation.js';
 import { headingToVector, vectorToHeading, type Vec2 } from './paths.js';
@@ -138,7 +144,7 @@ export function maxDiversNow(state: DiveState, rules: Rules): number {
 }
 
 /**
- * How many enemies are diving.
+ * How many enemies are attacking.
  *
  * A diver **rotating back into its slot does not count**: the row's limit is on
  * simultaneous bombers, and an enemy on its return leg has stopped attacking. The
@@ -148,7 +154,13 @@ export function maxDiversNow(state: DiveState, rules: Rules): number {
 export function diverCount(fleet: Fleet): number {
   let count = 0;
   for (const enemy of fleet.enemies) {
-    if (enemy.state === 'diving') count += 1;
+    // Your own captured fighter is not one of the row's bombers: it attacks
+    // alongside its captor rather than on the launcher's budget, and counting it
+    // would spend a slot its captor needs.
+    if (enemy.inCaptiveSlot) continue;
+    // A captor holding its tractor beam has stopped flying but has not stopped
+    // attacking, so it still occupies one of the row's diver slots.
+    if (enemy.state === 'diving' || enemy.state === 'beaming') count += 1;
   }
   return count;
 }
@@ -162,6 +174,15 @@ export interface AttackContext {
   readonly stage: number;
   readonly rng: Rng;
   readonly bullets: EnemyBulletPool;
+  /**
+   * The capture channel, or `undefined` for a world without one.
+   *
+   * The director asks it one question, on one kind of launch: is this captor's
+   * dive a capture attempt? A capture attempt is a dive with a beam on it, so it
+   * shares the credit, the diver limit and `beginDive` with everything else — the
+   * only difference is which path it flies (`src/sim/capture.ts`).
+   */
+  readonly capture: CaptureState | undefined;
   /** The fighter's anchor, or `undefined` while it is off the field. */
   readonly playerAt: Vec2 | undefined;
   /** `fire` segments the fleet's flights passed through on this frame. */
@@ -205,7 +226,7 @@ export function stepAttacks(state: DiveState, ctx: AttackContext): AttackStep {
   if (!state.attacks) return NO_ATTACK;
   if (state.armed) state.frame += 1;
 
-  const alive = aliveEnemies(ctx.fleet.enemies).length;
+  const alive = fleetEnemies(ctx.fleet.enemies).length;
   const transformed: Enemy[] = [];
   const parent = state.transformTarget;
   const transforming = stepTransform(state, ctx, alive, transformed);
@@ -298,7 +319,15 @@ function pickDiver(ctx: AttackContext, role: string): Enemy | undefined {
  * same piece of screen.
  */
 function launchDive(ctx: AttackContext, enemy: Enemy): void {
-  const path = ctx.rng.pick(enemy.divePaths);
+  // A capture attempt is this launch with a different path on it. Asking first
+  // means the capture channel's own gate — no attempt while a fighter is held,
+  // only every nth eligible launch — is the only thing deciding whether a beam
+  // ever comes out, and the dive director keeps knowing nothing about capture.
+  const capturing =
+    ctx.capture === undefined
+      ? undefined
+      : beginCaptureDive(ctx.capture, ctx.rules, ctx.formation, enemy);
+  const path = capturing ?? ctx.rng.pick(enemy.divePaths);
   const mirror = isRightOfCentre(ctx.formation, enemy.home);
   beginDive(ctx.fleet, enemy, ctx.content, ctx.formation, ctx.rules, path, mirror, ctx.playerAt);
 }

@@ -261,20 +261,38 @@
   },
   "capture": {
     "enabled": true,
+    "captorRole": "warden",
+    "divePath": "dive-capture",
+    "captiveAlien": "captive",
+    "everyNthLaunch": 2,
     "slotsPerCaptor": 1,
     "maxHeldTotal": 1,
     "lastFighterCaptureEndsGame": true,
-    "disablesFireWhileBeamed": true
+    "disablesFireWhileBeamed": true,
+    "beam": {
+      "steps": 8,
+      "holdSteps": 4,
+      "catchWindow": {
+        "dxMin": -16,
+        "dxMax": 16,
+        "dyMin": 16,
+        "dyMax": 104
+      }
+    },
+    "carrySteps": 12,
+    "rogueDelayFrames": 240
   },
   "rescue": {
     "enabled": true,
     "requiresCaptorAttacking": true,
     "freedShipInvulnerableWhileDocking": true,
-    "divingEnemiesReturnToFormation": true
+    "divingEnemiesReturnToFormation": true,
+    "dockFrames": 90
   },
   "dualFighter": {
     "enabled": true,
-    "bulletsPerShot": 2
+    "bulletsPerShot": 2,
+    "losingHalfCostsLife": false
   },
   "scoring": {
     "movingMultiplier": 2,
@@ -327,7 +345,7 @@
               },
               "maxDivers": 2,
               "maxDiversBump": 2,
-              "captureRate": 12,
+              "beamStepFrames": 12,
               "continuousBombingAt": 6,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -341,7 +359,7 @@
               },
               "maxDivers": 2,
               "maxDiversBump": 3,
-              "captureRate": 12,
+              "beamStepFrames": 12,
               "continuousBombingAt": 7,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -355,7 +373,7 @@
               },
               "maxDivers": 0,
               "maxDiversBump": 0,
-              "captureRate": 12,
+              "beamStepFrames": 12,
               "continuousBombingAt": 0,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -369,7 +387,7 @@
               },
               "maxDivers": 2,
               "maxDiversBump": 3,
-              "captureRate": 9,
+              "beamStepFrames": 9,
               "continuousBombingAt": 7,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -383,7 +401,7 @@
               },
               "maxDivers": 2,
               "maxDiversBump": 3,
-              "captureRate": 9,
+              "beamStepFrames": 9,
               "continuousBombingAt": 8,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -397,7 +415,7 @@
               },
               "maxDivers": 3,
               "maxDiversBump": 3,
-              "captureRate": 9,
+              "beamStepFrames": 9,
               "continuousBombingAt": 8,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -411,7 +429,7 @@
               },
               "maxDivers": 0,
               "maxDiversBump": 0,
-              "captureRate": 9,
+              "beamStepFrames": 9,
               "continuousBombingAt": 0,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -425,7 +443,7 @@
               },
               "maxDivers": 3,
               "maxDiversBump": 3,
-              "captureRate": 9,
+              "beamStepFrames": 9,
               "continuousBombingAt": 9,
               "reloadAttackVectors": true,
               "reloadBombVectors": false
@@ -439,7 +457,7 @@
               },
               "maxDivers": 3,
               "maxDiversBump": 4,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 9,
               "reloadAttackVectors": true,
               "reloadBombVectors": false
@@ -453,7 +471,7 @@
               },
               "maxDivers": 2,
               "maxDiversBump": 3,
-              "captureRate": 9,
+              "beamStepFrames": 9,
               "continuousBombingAt": 7,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -467,7 +485,7 @@
               },
               "maxDivers": 0,
               "maxDiversBump": 0,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 0,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -481,7 +499,7 @@
               },
               "maxDivers": 3,
               "maxDiversBump": 4,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 7,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -495,7 +513,7 @@
               },
               "maxDivers": 4,
               "maxDiversBump": 4,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 8,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -509,7 +527,7 @@
               },
               "maxDivers": 4,
               "maxDiversBump": 5,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 8,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -523,7 +541,7 @@
               },
               "maxDivers": 0,
               "maxDiversBump": 0,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 0,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -537,7 +555,7 @@
               },
               "maxDivers": 4,
               "maxDiversBump": 5,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 9,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -551,7 +569,7 @@
               },
               "maxDivers": 4,
               "maxDiversBump": 5,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 9,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -565,7 +583,7 @@
               },
               "maxDivers": 2,
               "maxDiversBump": 3,
-              "captureRate": 9,
+              "beamStepFrames": 9,
               "continuousBombingAt": 7,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -579,7 +597,7 @@
               },
               "maxDivers": 0,
               "maxDiversBump": 0,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 0,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -593,7 +611,7 @@
               },
               "maxDivers": 4,
               "maxDiversBump": 6,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 10,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -607,7 +625,7 @@
               },
               "maxDivers": 5,
               "maxDiversBump": 6,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 10,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -621,7 +639,7 @@
               },
               "maxDivers": 5,
               "maxDiversBump": 6,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 12,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -635,7 +653,7 @@
               },
               "maxDivers": 0,
               "maxDiversBump": 0,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 0,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -649,7 +667,7 @@
               },
               "maxDivers": 5,
               "maxDiversBump": 7,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 12,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -663,7 +681,7 @@
               },
               "maxDivers": 5,
               "maxDiversBump": 7,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 12,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -677,7 +695,7 @@
               },
               "maxDivers": 5,
               "maxDiversBump": 7,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 12,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -699,7 +717,7 @@
               },
               "maxDivers": 1,
               "maxDiversBump": 2,
-              "captureRate": 12,
+              "beamStepFrames": 12,
               "continuousBombingAt": 6,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -713,7 +731,7 @@
               },
               "maxDivers": 2,
               "maxDiversBump": 2,
-              "captureRate": 12,
+              "beamStepFrames": 12,
               "continuousBombingAt": 6,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -727,7 +745,7 @@
               },
               "maxDivers": 0,
               "maxDiversBump": 0,
-              "captureRate": 12,
+              "beamStepFrames": 12,
               "continuousBombingAt": 0,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -741,7 +759,7 @@
               },
               "maxDivers": 2,
               "maxDiversBump": 3,
-              "captureRate": 9,
+              "beamStepFrames": 9,
               "continuousBombingAt": 7,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -755,7 +773,7 @@
               },
               "maxDivers": 2,
               "maxDiversBump": 3,
-              "captureRate": 9,
+              "beamStepFrames": 9,
               "continuousBombingAt": 7,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -769,7 +787,7 @@
               },
               "maxDivers": 2,
               "maxDiversBump": 3,
-              "captureRate": 12,
+              "beamStepFrames": 12,
               "continuousBombingAt": 7,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -783,7 +801,7 @@
               },
               "maxDivers": 0,
               "maxDiversBump": 0,
-              "captureRate": 9,
+              "beamStepFrames": 9,
               "continuousBombingAt": 0,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -797,7 +815,7 @@
               },
               "maxDivers": 3,
               "maxDiversBump": 3,
-              "captureRate": 9,
+              "beamStepFrames": 9,
               "continuousBombingAt": 8,
               "reloadAttackVectors": true,
               "reloadBombVectors": false
@@ -811,7 +829,7 @@
               },
               "maxDivers": 3,
               "maxDiversBump": 3,
-              "captureRate": 9,
+              "beamStepFrames": 9,
               "continuousBombingAt": 8,
               "reloadAttackVectors": true,
               "reloadBombVectors": false
@@ -825,7 +843,7 @@
               },
               "maxDivers": 3,
               "maxDiversBump": 4,
-              "captureRate": 9,
+              "beamStepFrames": 9,
               "continuousBombingAt": 8,
               "reloadAttackVectors": true,
               "reloadBombVectors": false
@@ -839,7 +857,7 @@
               },
               "maxDivers": 0,
               "maxDiversBump": 0,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 0,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -853,7 +871,7 @@
               },
               "maxDivers": 3,
               "maxDiversBump": 4,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 8,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -867,7 +885,7 @@
               },
               "maxDivers": 4,
               "maxDiversBump": 4,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 8,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -881,7 +899,7 @@
               },
               "maxDivers": 2,
               "maxDiversBump": 3,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 7,
               "reloadAttackVectors": false,
               "reloadBombVectors": true
@@ -895,7 +913,7 @@
               },
               "maxDivers": 0,
               "maxDiversBump": 0,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 0,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -909,7 +927,7 @@
               },
               "maxDivers": 4,
               "maxDiversBump": 5,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 8,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -923,7 +941,7 @@
               },
               "maxDivers": 4,
               "maxDiversBump": 5,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 9,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -937,7 +955,7 @@
               },
               "maxDivers": 4,
               "maxDiversBump": 5,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 9,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -951,7 +969,7 @@
               },
               "maxDivers": 0,
               "maxDiversBump": 0,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 0,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -965,7 +983,7 @@
               },
               "maxDivers": 4,
               "maxDiversBump": 6,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 10,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -979,7 +997,7 @@
               },
               "maxDivers": 5,
               "maxDiversBump": 6,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 10,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -993,7 +1011,7 @@
               },
               "maxDivers": 5,
               "maxDiversBump": 6,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 10,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1007,7 +1025,7 @@
               },
               "maxDivers": 0,
               "maxDiversBump": 0,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 0,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -1021,7 +1039,7 @@
               },
               "maxDivers": 5,
               "maxDiversBump": 6,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 12,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1035,7 +1053,7 @@
               },
               "maxDivers": 5,
               "maxDiversBump": 7,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 12,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1049,7 +1067,7 @@
               },
               "maxDivers": 5,
               "maxDiversBump": 7,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 12,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1071,7 +1089,7 @@
               },
               "maxDivers": 2,
               "maxDiversBump": 3,
-              "captureRate": 12,
+              "beamStepFrames": 12,
               "continuousBombingAt": 6,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -1085,7 +1103,7 @@
               },
               "maxDivers": 2,
               "maxDiversBump": 3,
-              "captureRate": 9,
+              "beamStepFrames": 9,
               "continuousBombingAt": 7,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -1099,7 +1117,7 @@
               },
               "maxDivers": 0,
               "maxDiversBump": 0,
-              "captureRate": 12,
+              "beamStepFrames": 12,
               "continuousBombingAt": 0,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -1113,7 +1131,7 @@
               },
               "maxDivers": 3,
               "maxDiversBump": 3,
-              "captureRate": 9,
+              "beamStepFrames": 9,
               "continuousBombingAt": 8,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -1127,7 +1145,7 @@
               },
               "maxDivers": 3,
               "maxDiversBump": 4,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 8,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -1141,7 +1159,7 @@
               },
               "maxDivers": 3,
               "maxDiversBump": 4,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 8,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -1155,7 +1173,7 @@
               },
               "maxDivers": 0,
               "maxDiversBump": 0,
-              "captureRate": 9,
+              "beamStepFrames": 9,
               "continuousBombingAt": 0,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -1169,7 +1187,7 @@
               },
               "maxDivers": 3,
               "maxDiversBump": 4,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 7,
               "reloadAttackVectors": true,
               "reloadBombVectors": false
@@ -1183,7 +1201,7 @@
               },
               "maxDivers": 4,
               "maxDiversBump": 4,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 8,
               "reloadAttackVectors": true,
               "reloadBombVectors": false
@@ -1197,7 +1215,7 @@
               },
               "maxDivers": 2,
               "maxDiversBump": 3,
-              "captureRate": 9,
+              "beamStepFrames": 9,
               "continuousBombingAt": 7,
               "reloadAttackVectors": true,
               "reloadBombVectors": false
@@ -1211,7 +1229,7 @@
               },
               "maxDivers": 0,
               "maxDiversBump": 0,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 0,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -1225,7 +1243,7 @@
               },
               "maxDivers": 4,
               "maxDiversBump": 5,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 8,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1239,7 +1257,7 @@
               },
               "maxDivers": 4,
               "maxDiversBump": 5,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 9,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1253,7 +1271,7 @@
               },
               "maxDivers": 4,
               "maxDiversBump": 6,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 9,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1267,7 +1285,7 @@
               },
               "maxDivers": 0,
               "maxDiversBump": 0,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 0,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -1281,7 +1299,7 @@
               },
               "maxDivers": 4,
               "maxDiversBump": 6,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 10,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1295,7 +1313,7 @@
               },
               "maxDivers": 5,
               "maxDiversBump": 6,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 10,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1309,7 +1327,7 @@
               },
               "maxDivers": 5,
               "maxDiversBump": 6,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 10,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1323,7 +1341,7 @@
               },
               "maxDivers": 0,
               "maxDiversBump": 0,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 0,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -1337,7 +1355,7 @@
               },
               "maxDivers": 5,
               "maxDiversBump": 6,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 12,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1351,7 +1369,7 @@
               },
               "maxDivers": 5,
               "maxDiversBump": 7,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 12,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1365,7 +1383,7 @@
               },
               "maxDivers": 5,
               "maxDiversBump": 7,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 14,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1379,7 +1397,7 @@
               },
               "maxDivers": 0,
               "maxDiversBump": 0,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 0,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -1393,7 +1411,7 @@
               },
               "maxDivers": 5,
               "maxDiversBump": 7,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 14,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1407,7 +1425,7 @@
               },
               "maxDivers": 6,
               "maxDiversBump": 8,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 14,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1421,7 +1439,7 @@
               },
               "maxDivers": 6,
               "maxDiversBump": 8,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 14,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1443,7 +1461,7 @@
               },
               "maxDivers": 2,
               "maxDiversBump": 3,
-              "captureRate": 12,
+              "beamStepFrames": 12,
               "continuousBombingAt": 6,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -1457,7 +1475,7 @@
               },
               "maxDivers": 2,
               "maxDiversBump": 3,
-              "captureRate": 9,
+              "beamStepFrames": 9,
               "continuousBombingAt": 7,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -1471,7 +1489,7 @@
               },
               "maxDivers": 0,
               "maxDiversBump": 0,
-              "captureRate": 12,
+              "beamStepFrames": 12,
               "continuousBombingAt": 0,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -1485,7 +1503,7 @@
               },
               "maxDivers": 3,
               "maxDiversBump": 4,
-              "captureRate": 9,
+              "beamStepFrames": 9,
               "continuousBombingAt": 8,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -1499,7 +1517,7 @@
               },
               "maxDivers": 3,
               "maxDiversBump": 4,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 8,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -1513,7 +1531,7 @@
               },
               "maxDivers": 3,
               "maxDiversBump": 4,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 8,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -1527,7 +1545,7 @@
               },
               "maxDivers": 0,
               "maxDiversBump": 0,
-              "captureRate": 9,
+              "beamStepFrames": 9,
               "continuousBombingAt": 0,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -1541,7 +1559,7 @@
               },
               "maxDivers": 4,
               "maxDiversBump": 5,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 7,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1555,7 +1573,7 @@
               },
               "maxDivers": 4,
               "maxDiversBump": 6,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 8,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1569,7 +1587,7 @@
               },
               "maxDivers": 4,
               "maxDiversBump": 6,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 9,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1583,7 +1601,7 @@
               },
               "maxDivers": 0,
               "maxDiversBump": 0,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 0,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -1597,7 +1615,7 @@
               },
               "maxDivers": 5,
               "maxDiversBump": 6,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 10,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1611,7 +1629,7 @@
               },
               "maxDivers": 5,
               "maxDiversBump": 6,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 10,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1625,7 +1643,7 @@
               },
               "maxDivers": 5,
               "maxDiversBump": 7,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 10,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1639,7 +1657,7 @@
               },
               "maxDivers": 0,
               "maxDiversBump": 0,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 0,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -1653,7 +1671,7 @@
               },
               "maxDivers": 5,
               "maxDiversBump": 7,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 10,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1667,7 +1685,7 @@
               },
               "maxDivers": 5,
               "maxDiversBump": 7,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 10,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1681,7 +1699,7 @@
               },
               "maxDivers": 6,
               "maxDiversBump": 8,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 12,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1695,7 +1713,7 @@
               },
               "maxDivers": 0,
               "maxDiversBump": 0,
-              "captureRate": 6,
+              "beamStepFrames": 6,
               "continuousBombingAt": 0,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -1709,7 +1727,7 @@
               },
               "maxDivers": 6,
               "maxDiversBump": 8,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 12,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1723,7 +1741,7 @@
               },
               "maxDivers": 6,
               "maxDiversBump": 8,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 12,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1737,7 +1755,7 @@
               },
               "maxDivers": 6,
               "maxDiversBump": 8,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 14,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1751,7 +1769,7 @@
               },
               "maxDivers": 0,
               "maxDiversBump": 0,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 0,
               "reloadAttackVectors": false,
               "reloadBombVectors": false
@@ -1765,7 +1783,7 @@
               },
               "maxDivers": 6,
               "maxDiversBump": 8,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 14,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1779,7 +1797,7 @@
               },
               "maxDivers": 6,
               "maxDiversBump": 8,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 14,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -1793,7 +1811,7 @@
               },
               "maxDivers": 6,
               "maxDiversBump": 8,
-              "captureRate": 3,
+              "beamStepFrames": 3,
               "continuousBombingAt": 14,
               "reloadAttackVectors": true,
               "reloadBombVectors": true
@@ -2064,6 +2082,78 @@
     "formation.animatedStageKinds": {
       "confidence": "verified",
       "note": "Reference section 5: neither motion runs on a challenge stage, because nothing settles into formation there, so f_2A90 never reaches the exit that enables the breathe."
+    },
+    "capture.captorRole": {
+      "confidence": "verified",
+      "note": "Only the boss role captures: the tractor-beam boss is the capture channel's only actor, and it brings no escorts. Reference section 7."
+    },
+    "capture.divePath": {
+      "confidence": "provisional",
+      "note": "The shape is described but not measured: a capture boss loops once at the top of the formation, slides down to roughly mid-screen and emits the beam (reference section 7, which rates the descent depth High and notes its two sources disagree). So the geometry is ours, and the beam comes out at the path's own captureBeam trigger rather than at a depth the engine knows."
+    },
+    "capture.captiveAlien": {
+      "confidence": "provisional",
+      "note": "That a captured fighter becomes a red ship in the formation which attacks, can be shot for 500/1,000 and re-enters with the next stage's wave is verified (reference section 7); the alien document, its dive path and its art are this pack's, because docs/DESIGN.md section 2 bars the original's."
+    },
+    "capture.everyNthLaunch": {
+      "confidence": "verified",
+      "note": "Only every second eligible boss launch may be a capture boss: the ROM pre-increments a counter and tests its low bit, which is also why the first boss launch of a game never carries a beam. Reference section 7, LIST main $1C0D."
+    },
+    "capture.maxHeldTotal": {
+      "confidence": "verified",
+      "note": "Exactly one captured fighter, globally, ever. The flag is set the instant a capture boss is selected and a successful capture does not clear it, so no second attempt happens while one is held — including while it is parked as a rogue — and a dual fighter is never targeted. Reference section 7; the rules-and-scoring report section 3.2 enumerated every write to the flag's byte."
+    },
+    "capture.lastFighterCaptureEndsGame": {
+      "confidence": "verified",
+      "note": "\u201cWhen the enemy destroys or captures your last fighter, the words GAME OVER are displayed\u201d. A loss condition distinct from being shot, and one docs/DESIGN.md originally missed. Reference section 7, MANUAL line 1972."
+    },
+    "capture.disablesFireWhileBeamed": {
+      "confidence": "verified",
+      "note": "Once the boss has connected with the ship the player's fire is disabled \u2014 the ROM routine is named for it. Reference section 7, ASM gg1-3.s l_214C_disable_firepower."
+    },
+    "capture.beam.steps": {
+      "confidence": "provisional",
+      "note": "That the beam extends one animation step per period is verified (reference section 6, parameter 6); how many steps it takes is not in the reference, so 8 is ours. The period itself is a verified table value and is read from the difficulty row."
+    },
+    "capture.beam.holdSteps": {
+      "confidence": "provisional",
+      "note": "How long the beam stays fully extended before retracting. Ours: the reference records only that it retracts when the player is not in range."
+    },
+    "capture.beam.catchWindow": {
+      "confidence": "provisional",
+      "note": "The beam's catch geometry. The reference gives no beam width or reach, so these are ours, chosen so a beam opened at the descent depth capture.divePath reaches does get down to the fighter's row. Its dyMax is scaled by how far the beam has extended, which is what makes a slow early beam escapable."
+    },
+    "capture.carrySteps": {
+      "confidence": "provisional",
+      "note": "How many beam steps the pull-in takes. Ours; that the pull is paced by the same countdown as the extension is the reference's (\u201cthe beam extends and pulls four times faster by stage 20\u201d, section 6, parameter 6), which is why this is counted in steps rather than frames."
+    },
+    "capture.rogueDelayFrames": {
+      "confidence": "provisional",
+      "note": "How long a rogue fighter sits in its slot before it swoops. The reference says only \u201ceventually\u201d (section 7), so 240 frames is ours. It is what makes parking a rogue a technique: there is time to shoot it in formation for 500 instead of 1,000."
+    },
+    "rescue.requiresCaptorAttacking": {
+      "confidence": "verified",
+      "note": "The rescue needs the boss destroyed \u201cwhile they are both attacking your current fighter\u201d, and the ROM takes the branch only when the captured ship's status is the diving state. Reference section 7, MANUAL line 1869 and ASM gg1-5.s cp #9."
+    },
+    "rescue.freedShipInvulnerableWhileDocking": {
+      "confidence": "verified",
+      "note": "The freed fighter spins in mid-space and cannot be destroyed until it joins you. Reference section 7 rates the detail High and names the corroborating ROM task flag, \u201ccapturing boss destroyed, rescued ship spinning\u201d, which the rocket manager reads to change hit detection."
+    },
+    "rescue.divingEnemiesReturnToFormation": {
+      "confidence": "verified",
+      "note": "Enemies already in mid-dive return to formation at the moment of a rescue. Reference section 7 rates this High, from the same ROM task flag as the invulnerability."
+    },
+    "rescue.dockFrames": {
+      "confidence": "provisional",
+      "note": "How long the freed fighter spins before it docks as the second ship. Ours; the reference describes the spin but gives no length."
+    },
+    "dualFighter.bulletsPerShot": {
+      "confidence": "verified",
+      "note": "One logical shot, two bullets: the rocket gets the hardware double-width attribute from the two-ship flag, so the cap stays at two shots and each is drawn as two. Reference section 3."
+    },
+    "dualFighter.losingHalfCostsLife": {
+      "confidence": "provisional",
+      "note": "That a hit on either half leaves a single ship is verified (reference section 7) and that losing a half releases the capture channel is ROM-traced (report section 3.2, LIST sub $0610/$0628); that the reserve is untouched is our reading of it, since the ship in play was never lost. Making it a rule rather than an assumption is the difference between a rescue being worth a life and being worth nothing."
     },
     "challengeStages.firstStage": {
       "confidence": "verified",

@@ -348,9 +348,15 @@ describe('the shipped Classic sprite set', () => {
 
   it('gives every role of docs/DESIGN.md section 2 a sprite under its own name', () => {
     for (const role of Object.keys(pack.manifest.roles)) {
+      // Except the captive, which is not an alien the pack drew: it is the
+      // player's own fighter after a capture, so its art is `player-captured`
+      // and naming it anything else would hide what it is (`src/sim/capture.ts`).
+      if (role === 'captive') continue;
       expect(sheet.has(role)).toBe(true);
     }
-    expect(sheet.ids).toEqual(expect.arrayContaining(['drone', 'wing', 'warden']));
+    expect(sheet.ids).toEqual(
+      expect.arrayContaining(['drone', 'wing', 'warden', 'player', 'player-captured']),
+    );
   });
 
   it('flaps its wings over two frames, per section 5', () => {

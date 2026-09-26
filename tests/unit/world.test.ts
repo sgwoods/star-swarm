@@ -30,6 +30,7 @@ function enemyAt(overrides: Partial<Enemy> = {}): Enemy {
     sprite: 'drone',
     hitSprites: [],
     home: 20,
+    inCaptiveSlot: false,
     phase: 0,
     launchFrame: 0,
     path: 'entry-side-file',
@@ -391,6 +392,22 @@ describe('the fingerprint’s precision', () => {
     const before = fingerprintWorld(world);
     enemy.x = ANCHOR + 0.000001;
     expect(fingerprintWorld(world)).not.toBe(before);
+  });
+
+  it('quantises every number in the structure, not only the ones a test pokes', () => {
+    // The sibling claim to the three above, and the one they cannot make: those
+    // nudge an enemy's `x`, so they prove the replacer reaches *that* number. This
+    // one walks the whole serialised string, which is what says a float added to
+    // the fingerprint later — the capture channel's carry and spin poses were
+    // exactly that — cannot quietly reintroduce the cross-machine failure.
+    const world = createWorld({ seed: 'fingerprint-structure', rules, stages });
+    for (let i = 0; i < 1_400; i += 1) stepWorld(world, EMPTY_FRAME);
+
+    // Only meaningful with real fractional values in flight to round.
+    expect(world.fleet.enemies.some((enemy) => !Number.isInteger(enemy.x))).toBe(true);
+    for (const [, decimals] of fingerprintWorld(world).matchAll(/-?\d+\.(\d+)/g)) {
+      expect(decimals?.length).toBeLessThanOrEqual(6);
+    }
   });
 
   it('leaves the RNG state exactly as it is, bit for bit', () => {

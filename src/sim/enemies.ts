@@ -33,7 +33,7 @@ import type { Alien, Rules, Wave } from '../content/schema.js';
 import type { StageContent } from '../content/stages.js';
 import type { HitPadding } from './collision.js';
 import type { FormationState } from './formation.js';
-import { completeEntry, slotPosition, slotPositionAhead } from './formation.js';
+import { completeEntry, homePosition, homePositionAhead } from './formation.js';
 import type { CompiledPath, PathPose, PathSample, TargetResolver, Vec2 } from './paths.js';
 import { compilePath, pathEventsBetween, samplePath } from './paths.js';
 
@@ -47,10 +47,16 @@ import { compilePath, pathEventsBetween, samplePath } from './paths.js';
  * entry wave scores the diving value, and one shot on its way back into its slot
  * scores the formation value.
  *
- * So the five live states are: waiting to launch, flying in, sitting in the
- * formation, attacking, and rotating back into the slot afterwards. Only the last
- * two of those are new to the dive task, and only the *last* of them scores the
- * formation value while visibly moving.
+ * So the live states are: waiting to launch, flying in, sitting in the formation,
+ * attacking, holding still with a tractor beam out, and rotating back into the
+ * slot afterwards. Only the *last* of them scores the formation value while
+ * visibly moving.
+ *
+ * `beaming` is a captor holding its beam: it has stopped flying its path but it is
+ * still on the field, still shootable, and still worth the attacking value — which
+ * is the whole reason it is a state rather than a flag. Its flight resumes from the
+ * frame it paused on, because a `beaming` enemy is simply one `stepFleet` does not
+ * advance (`src/sim/capture.ts`).
  *
  * `dead` is the one terminal state, and it holds **two** endings: shot down, and
  * flown off the field alive — a diver that does not return, or a challenge-stage
@@ -60,7 +66,8 @@ import { compilePath, pathEventsBetween, samplePath } from './paths.js';
  * is drawn, and both let the stage end. What does differ is the score and the
  * hit count, and both of those are counted from the events.
  */
-export type EnemyState = 'standby' | 'entering' | 'home' | 'diving' | 'returning' | 'dead';
+export type EnemyState =
+  'standby' | 'entering' | 'home' | 'diving' | 'beaming' | 'returning' | 'dead';
 
 /** States that score the formation value rather than the doubled one. */
 const AT_HOME_VALUE: ReadonlySet<EnemyState> = new Set<EnemyState>(['home', 'returning']);
@@ -73,10 +80,22 @@ export interface Enemy {
   readonly sprite: string;
   readonly hitSprites: readonly string[];
   /**
-   * Index into the formation's `slots`: this enemy's own home, for the stage, or
-   * {@link NO_SLOT} when its script never addresses one.
+   * Index into the formation's slots: this enemy's own home, for the stage, or
+   * {@link NO_SLOT} when its script never addresses one. Which slot *table* it
+   * indexes is {@link Enemy.inCaptiveSlot}.
    */
   readonly home: number;
+  /**
+   * Whether `home` indexes the formation's **captive** slots rather than its
+   * alien slots.
+   *
+   * True for exactly one thing: the player's captured fighter, which lives in the
+   * row the arcade keeps above the captors. Everything else about it is an
+   * ordinary enemy — it flies in, sits in its slot, dives, and can be shot for
+   * points — so one flag on the home address is cheaper and truer than a second
+   * kind of object (`src/sim/capture.ts`).
+   */
+  readonly inCaptiveSlot: boolean;
   /** Which frame of the update round robin advances this enemy's state. */
   readonly phase: number;
   /** Frames after the stage began at which it is due to launch. */
@@ -111,8 +130,15 @@ export interface Enemy {
   readonly divePaths: readonly string[];
   /** This alien's share of the dive lottery within its role. */
   readonly diveWeight: number;
-  /** False for an alien that leaves for good after a dive instead of returning. */
-  readonly returnsFromDive: boolean;
+  /**
+   * False for an alien that leaves for good after a dive instead of returning.
+   *
+   * Mutable for one case: a captured fighter returns to its slot while its captor
+   * lives, and stops returning the moment it turns rogue. It is deliberately left
+   * out of {@link enemyFingerprint} because it is derivable from the capture
+   * channel's phase, which *is* fingerprinted.
+   */
+  returnsFromDive: boolean;
   /** How this alien bombs, or `undefined` for one that never does. */
   readonly fire: EnemyFire | undefined;
 
@@ -178,6 +204,9 @@ const TARGETABLE: ReadonlySet<EnemyState> = new Set<EnemyState>([
   'entering',
   'home',
   'diving',
+  // A captor with its beam out is shootable, and shooting it is one of the ways
+  // the capture channel is released (`docs/reference/arcade-reference.md` s7).
+  'beaming',
   'returning',
 ]);
 
@@ -224,6 +253,20 @@ function pathAddressesSlot(content: StageContent, path: string): boolean {
  */
 export function aliveEnemies(enemies: readonly Enemy[]): Enemy[] {
   return enemies.filter((enemy) => enemy.state !== 'dead');
+}
+
+/**
+ * The enemies that count as "how many are left".
+ *
+ * The player's captured fighter does **not**: it stays with its captor for the
+ * rest of the game rather than being something to clear
+ * (`docs/reference/arcade-reference.md` section 7), so a stage that is otherwise
+ * empty still ends, and the thresholds keyed on the live count — continuous
+ * bombing, the transform — measure the fleet rather than the fleet plus your own
+ * stolen ship.
+ */
+export function fleetEnemies(enemies: readonly Enemy[]): Enemy[] {
+  return enemies.filter((enemy) => enemy.state !== 'dead' && !enemy.inCaptiveSlot);
 }
 
 /**
@@ -285,6 +328,7 @@ interface EnemySeed {
   readonly id: number;
   readonly home: number;
   readonly homes: boolean;
+  readonly inCaptiveSlot?: boolean;
   readonly launchFrame: number;
   readonly path: string;
   readonly mirror: boolean;
@@ -309,6 +353,7 @@ function createEnemy(alien: Alien, seed: EnemySeed, rules: Rules): Enemy {
     hitSprites: alien.hitSprites,
     home: seed.home,
     homes: seed.homes,
+    inCaptiveSlot: seed.inCaptiveSlot ?? false,
     phase: seed.id % rules.enemies.updatePhases,
     launchFrame: seed.launchFrame,
     path: seed.path,
@@ -433,17 +478,18 @@ export function createFleet(content: StageContent, rules: Rules): Fleet {
 function slotResolver(
   formation: FormationState,
   rules: Rules,
-  home: number,
+  enemy: Enemy,
   fallbackSpeed: number,
 ): TargetResolver {
+  const { home, inCaptiveSlot } = enemy;
   return (frame: number, at: PathPose): Vec2 => {
     const speed = at.speed > 0 ? at.speed : fallbackSpeed;
-    let target = slotPositionAhead(formation, rules, home, frame);
+    let target = homePositionAhead(formation, rules, home, frame, inCaptiveSlot);
     for (let pass = 0; pass < SLOT_PREDICTION_PASSES; pass += 1) {
       const dx = target.x - at.x;
       const dy = target.y - at.y;
       const travel = speed > 0 ? Math.sqrt(dx * dx + dy * dy) / speed : 0;
-      target = slotPositionAhead(formation, rules, home, frame + travel);
+      target = homePositionAhead(formation, rules, home, frame + travel, inCaptiveSlot);
     }
     return [target.x, target.y];
   };
@@ -472,7 +518,7 @@ export function launchEnemy(
   const compiled = compilePath(path, {
     playfield: rules.playfield,
     mirror: enemy.mirror,
-    slot: slotResolver(formation, rules, enemy.home, 1),
+    slot: slotResolver(formation, rules, enemy, 1),
     ...(from !== undefined && { start: from }),
   });
 
@@ -523,7 +569,7 @@ export function beginDive(
   const compiled = compilePath(path, {
     playfield: rules.playfield,
     mirror,
-    slot: slotResolver(formation, rules, enemy.home, 1),
+    slot: slotResolver(formation, rules, enemy, 1),
     player: playerTarget(rules, playerAt),
     start: [enemy.x, enemy.y],
     heading: enemy.heading,
@@ -546,6 +592,7 @@ export function beginReturn(
   formation: FormationState,
   rules: Rules,
   playerAt?: Vec2,
+  options: { readonly fromHere?: boolean } = {},
 ): boolean {
   const { returnPath, reentryY } = rules.enemies.dive;
   if (returnPath === undefined) return false;
@@ -555,12 +602,15 @@ export function beginReturn(
   }
   const compiled = compilePath(path, {
     playfield: rules.playfield,
-    slot: slotResolver(formation, rules, enemy.home, 1),
+    slot: slotResolver(formation, rules, enemy, 1),
     player: playerTarget(rules, playerAt),
     // Re-entry is at the x it left by and a row above the top of the screen: the
     // arcade's divers reappear at the top rather than flying back up the field.
-    start: [enemy.x, reentryY],
-    heading: 0,
+    // `fromHere` starts the same path where the enemy already is instead, which is
+    // what a rescue does to the divers it recalls — they turn round mid-dive
+    // rather than leaving and coming back.
+    start: options.fromHere === true ? [enemy.x, enemy.y] : [enemy.x, reentryY],
+    heading: options.fromHere === true ? enemy.heading : 0,
   });
   beginFlight(fleet, enemy, compiled, 'returning');
   return true;
@@ -581,6 +631,70 @@ export interface SpawnOptions {
   readonly playerAt?: Vec2 | undefined;
 }
 
+/** Where and how an enemy joins a fleet that is already running. */
+export interface AddOptions {
+  /** The slot it owns, in whichever of the two slot tables `inCaptiveSlot` names. */
+  readonly home: number;
+  readonly inCaptiveSlot?: boolean;
+  /**
+   * Whether it takes that slot at the end of its flight, or simply leaves.
+   *
+   * Everything added this way so far does home — a transform group returns to the
+   * slot it inherited, a captured fighter to its captive slot — but it is stated
+   * rather than assumed, because {@link NO_SLOT} exists for flyers that never
+   * address one and a caller that forgets would strand one at slot 0.
+   */
+  readonly homes?: boolean;
+  /** Its anchor on the frame it appears. Omitted leaves it at the origin. */
+  readonly at?: Vec2;
+  /** Degrees, clockwise positive, 0 down the screen. */
+  readonly heading?: number;
+  /** The path it will fly. An enemy placed straight into its slot needs none. */
+  readonly pathId?: string;
+  readonly mirror?: boolean;
+  /** The frame it is due to launch on, for one that arrives in `standby`. */
+  readonly launchFrame?: number;
+  /** The wave it is reported as belonging to. Defaults to 0. */
+  readonly wave?: number;
+  /** Where it starts: waiting to launch, or already sitting in its slot. */
+  readonly state?: Extract<EnemyState, 'standby' | 'home'>;
+}
+
+/**
+ * Add one enemy to a fleet mid-stage, without a wave to have come from.
+ *
+ * The one creation path for anything that is not in a stage's entry waves — a
+ * transform group, and the captured fighter the capture channel puts in the
+ * formation. It only *places* the enemy; starting it flying is the caller's next
+ * call, because a transform group is already diving while a captured fighter is
+ * standing still in its slot.
+ */
+export function addEnemy(fleet: Fleet, alien: Alien, rules: Rules, options: AddOptions): Enemy {
+  const enemy = createEnemy(
+    alien,
+    {
+      id: nextEnemyId(fleet),
+      home: options.home,
+      homes: options.homes ?? true,
+      ...(options.inCaptiveSlot !== undefined && { inCaptiveSlot: options.inCaptiveSlot }),
+      launchFrame: options.launchFrame ?? fleet.frame,
+      path: options.pathId ?? '',
+      mirror: options.mirror ?? false,
+      trailing: false,
+      wave: options.wave ?? 0,
+    },
+    rules,
+  );
+  enemy.x = options.at?.[0] ?? 0;
+  enemy.y = options.at?.[1] ?? 0;
+  enemy.heading = options.heading ?? 0;
+  enemy.state = options.state ?? 'standby';
+  fleet.enemies.push(enemy);
+  // A fleet that had finished arriving has not, if this one is still to launch.
+  if (enemy.state === 'standby') fleet.entryComplete = false;
+  return enemy;
+}
+
 /**
  * Add an enemy to a fleet mid-stage, already flying an attack path.
  *
@@ -596,26 +710,18 @@ export function spawnDiver(
   rules: Rules,
   options: SpawnOptions,
 ): Enemy {
-  const enemy = createEnemy(
-    alien,
-    {
-      id: nextEnemyId(fleet),
-      home: options.home,
-      // A spawned diver owns a slot and returns to it, so it homes like any
-      // other enemy; the transform group is the only caller and its members do.
-      homes: true,
-      launchFrame: fleet.frame,
-      path: options.pathId,
-      mirror: options.mirror ?? false,
-      trailing: false,
-      wave: options.wave ?? 0,
-    },
-    rules,
-  );
-  enemy.x = options.at[0];
-  enemy.y = options.at[1];
-  enemy.heading = options.heading ?? 0;
-  fleet.enemies.push(enemy);
+  const enemy = addEnemy(fleet, alien, rules, {
+    home: options.home,
+    // A spawned diver owns a slot and returns to it, so it homes like any
+    // other enemy; the transform group is the only caller and its members do.
+    homes: true,
+    at: options.at,
+    ...(options.heading !== undefined && { heading: options.heading }),
+    pathId: options.pathId,
+    mirror: options.mirror ?? false,
+    ...(options.wave !== undefined && { wave: options.wave }),
+    state: 'home',
+  });
   beginDive(
     fleet,
     enemy,
@@ -663,6 +769,22 @@ export interface ScriptedFire {
   readonly count: number;
 }
 
+/**
+ * One scripted `trigger` reached on the timeline: a path asking for an engine
+ * ability at a point in the flight.
+ *
+ * Surfaced rather than acted on here, because an ability is not the fleet's
+ * business. It is how a pack says *where* in a dive something happens — the
+ * tractor beam comes out at the `captureBeam` trigger in the captor's own path
+ * (`src/sim/capture.ts`), so the descent depth is authored content rather than a
+ * threshold in the engine.
+ */
+export interface ScriptedTrigger {
+  readonly enemy: Enemy;
+  readonly ability: string;
+  readonly params: Readonly<Record<string, unknown>> | undefined;
+}
+
 /** What one step of the fleet did, for the world to turn into events. */
 export interface FleetStep {
   /** Enemies that began their entry flight on this frame. */
@@ -676,6 +798,8 @@ export interface FleetStep {
   readonly departed: readonly Enemy[];
   /** `fire` segments a flight passed through on this frame. */
   readonly fired: readonly ScriptedFire[];
+  /** `trigger` segments a flight passed through on this frame. */
+  readonly triggered: readonly ScriptedTrigger[];
   /** True on the frame the last of the entry waves arrived. */
   readonly entryFinished: boolean;
 }
@@ -705,8 +829,9 @@ export function stepFleet(
   const homed: Enemy[] = [];
   const departed: Enemy[] = [];
   const fired: ScriptedFire[] = [];
+  const triggered: ScriptedTrigger[] = [];
 
-  /** Fly one frame of the enemy's current path, collecting any scripted fire. */
+  /** Fly one frame of the enemy's current path, collecting what it passed through. */
   const advanceFlight = (enemy: Enemy): PathSample | undefined => {
     const flight = fleet.flights.get(enemy.id);
     if (flight === undefined) return undefined;
@@ -719,6 +844,7 @@ export function stepFleet(
     // exactly once however many frames a caller steps.
     for (const event of pathEventsBetween(flight, enemy.pathFrame - 1, enemy.pathFrame)) {
       if (event.kind === 'fire') fired.push({ enemy, count: event.count });
+      else triggered.push({ enemy, ability: event.ability, params: event.params });
     }
     return sample;
   };
@@ -776,7 +902,7 @@ export function stepFleet(
       case 'home': {
         // An enemy at home *is* its slot: the formation moves, it follows, and it
         // holds no offset of its own. That is the whole trick of section 5.
-        const position = slotPosition(formation, rules, enemy.home);
+        const position = homePosition(formation, rules, enemy.home, enemy.inCaptiveSlot);
         enemy.x = position.x;
         enemy.y = position.y;
         enemy.heading = 0;
@@ -796,7 +922,7 @@ export function stepFleet(
     completeEntry(formation);
   }
 
-  return { launched, homed, departed, fired, entryFinished };
+  return { launched, homed, departed, fired, triggered, entryFinished };
 }
 
 function isStillArriving(enemy: Enemy): boolean {

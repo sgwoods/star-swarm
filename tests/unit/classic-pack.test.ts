@@ -60,12 +60,13 @@ describe('the pack itself', () => {
   it('loads with its rules', () => {
     expect(pack.id).toBe('classic');
     expect(rules.id).toBe('classic');
-    // The three formation roles plus the three transform types; and five entry
-    // scripts for the normal stages through 8 — five rather than six because
-    // stage 8 replays stage 4's script row — plus the eight challenge scripts.
+    // The three formation roles, the three transform types and the captured
+    // fighter; and five entry scripts for the normal stages through 8 — five
+    // rather than six because stage 8 replays stage 4's script row — plus the
+    // eight challenge scripts.
     // `tests/unit/classic-content.test.ts` checks what is in them; here it is only
     // that they are there.
-    expect(pack.aliens.size).toBe(6);
+    expect(pack.aliens.size).toBe(7);
     expect(pack.stages.size).toBe(13);
   });
 
@@ -102,6 +103,7 @@ describe('the pack itself', () => {
 
   it('declares its own role vocabulary rather than borrowing the engine’s', () => {
     expect(Object.keys(pack.manifest.roles).sort()).toEqual([
+      'captive',
       'drone',
       'ensign',
       'manta',
@@ -288,7 +290,7 @@ describe('the four rank tables', () => {
       launchRates: { drone: 0, wing: 0, warden: 0 },
       maxDivers: 2,
       maxDiversBump: 2,
-      captureRate: 12,
+      beamStepFrames: 12,
       continuousBombingAt: 6,
       reloadAttackVectors: false,
       reloadBombVectors: false,
@@ -301,7 +303,7 @@ describe('the four rank tables', () => {
       launchRates: { drone: 2, wing: 3, warden: 6 },
       maxDivers: 3,
       maxDiversBump: 4,
-      captureRate: 6,
+      beamStepFrames: 6,
       continuousBombingAt: 9,
       reloadAttackVectors: true,
       reloadBombVectors: false,

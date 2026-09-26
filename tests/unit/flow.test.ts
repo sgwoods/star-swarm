@@ -82,6 +82,57 @@ function playUntilGameOver(flow: GameFlow): void {
   expect(flow.phase).toBe('game-over');
 }
 
+describe('a capture that ends the run reaches game over, not the results card', () => {
+  /**
+   * The two mechanics that landed either side of this one both reach the flow's
+   * phases: a capture on the last fighter ends the game, and a finished challenge
+   * stage raises the between-stage card. Six phases now, and the one thing that
+   * must not happen is a run ending into the card instead of into game over.
+   *
+   * Driven through the real flow rather than by asserting on events, because what
+   * is being checked is the *machine*, not the simulation that feeds it.
+   */
+  /**
+   * Lose the fighter to a beam, the way the simulation does when the captor is
+   * shot out from under a carry: the channel says the fighter was taken, and
+   * `src/sim/world.ts` turns that into `player-captured` plus, on the last
+   * fighter, `game-over`.
+   *
+   * Set on the channel rather than played out, because what is under test here is
+   * the *machine* the events reach. That a real beam gets there is
+   * `tests/unit/capture.test.ts`, which plays every step of it.
+   */
+  function captureThePlayer(flow: GameFlow): void {
+    flow.world.capture.phase = 'carrying';
+    flow.step(EMPTY_FRAME);
+  }
+
+  it('ends the run into game over when the beam takes the last fighter', () => {
+    const flow = testFlow();
+    press(flow, START);
+    expect(flow.phase).toBe('playing');
+    // `quickRunRules` starts on one fighter, so there is no reserve to fall back on.
+    expect(flow.world.lives.reserve).toBe(0);
+
+    captureThePlayer(flow);
+
+    expect(flow.phase).toBe('game-over');
+    expect(flow.world.status).toBe('game-over');
+  });
+
+  it('runs on through the ordinary results flow afterwards', () => {
+    // And it is not a dead end: the game-over banner still hands over to the
+    // results screen, which is what "does not strand the results flow" means.
+    const flow = testFlow();
+    press(flow, START);
+    captureThePlayer(flow);
+    expect(flow.phase).toBe('game-over');
+
+    runPhase(flow);
+    expect(flow.phase).toBe('results');
+  });
+});
+
 describe('the game-state machine', () => {
   it('starts in attract mode', () => {
     const flow = testFlow();

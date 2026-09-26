@@ -377,6 +377,19 @@ export function loadPack(source: PackSource): LoadResult {
     if (rules.enemies.dive.returnPath !== undefined) {
       requireRef(RULES_FILE, 'enemies.dive.returnPath', 'paths', rules.enemies.dive.returnPath);
     }
+    // The capture channel names its captor role, its dive and the alien a stolen
+    // fighter becomes. Checked here so a misspelling is a load failure rather
+    // than a mechanic that silently never happens.
+    const { capture } = rules;
+    if (capture.captorRole !== undefined) {
+      requireRole(RULES_FILE, 'capture.captorRole', capture.captorRole);
+    }
+    if (capture.divePath !== undefined) {
+      requireRef(RULES_FILE, 'capture.divePath', 'paths', capture.divePath);
+    }
+    if (capture.captiveAlien !== undefined) {
+      requireRef(RULES_FILE, 'capture.captiveAlien', 'aliens', capture.captiveAlien);
+    }
     if (rules.transform !== undefined) {
       rules.transform.types.forEach((id, index) => {
         requireRef(RULES_FILE, `transform.types[${String(index)}]`, 'aliens', id);
