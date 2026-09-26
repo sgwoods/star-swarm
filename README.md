@@ -3,13 +3,23 @@
 A 1981-arcade-style formation shooter that plays like the classic, plus a content
 system that lets you prompt new aliens, stages and movement paths into existence.
 
-Design and build plan: [`docs/DESIGN.md`](docs/DESIGN.md).
+How it all fits together, and how to run it:
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Design and build plan:
+[`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## Status
 
-Milestone 0 — foundations. The engine skeleton is in place: a 224×288
-integer-scaled canvas, a fixed 60 Hz simulation loop, a seeded RNG, abstract
-input and input replay. No gameplay yet; that is Milestone 1.
+**Milestone 2 — the classic game, most of the way there.** It is playable: five
+scripted entry waves fly in and take formation, the formation sways into centre
+and then breathes, enemies dive and bomb in the arcade's difficulty ramp, and the
+fighter shoots back, through the Classic normal stages up to 8. Around that is a
+real front end — attract mode running the game as a replay, game over, the
+hit-ratio results card and a high-score table.
+
+Still to come in this milestone: the capture beam and rescue, and the challenge
+stages. `docs/ARCHITECTURE.md` §5 has the full list.
+
+![Entry waves, formation and the fighter shooting](docs/media/arch-gameplay.gif)
 
 ## Getting started
 
@@ -17,6 +27,15 @@ input and input replay. No gameplay yet; that is Milestone 1.
 npm install
 npm run dev            # http://localhost:5173
 ```
+
+Press **Enter** to start, **←/→** to move, **Space** to fire. The game boots into
+attract mode, so press start before the arrows do anything.
+
+Node **22.13 or newer on the 22 LTS line, or 24 and newer** — the floor is
+Vitest's and ESLint's, not the game's. CI runs Node 24, and the suite below is
+verified on Node 25.9.0. (Vitest 5 declares no support for Node 25, so `npm
+install` there prints one `EBADENGINE` warning from Vitest itself; everything
+installs and passes regardless.)
 
 | Command                  | What it does                                |
 | ------------------------ | ------------------------------------------- |

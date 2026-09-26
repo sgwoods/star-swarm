@@ -1,9 +1,9 @@
 # `packs/classic/`
 
 The arcade-faithful pack. The manifest, the palette, the formation, the rules,
-the entry paths, the sprite set, the sound set, the three aliens and the normal
-stages through 8 are here; dive paths and the challenge stages land with the
-sibling Milestone 2 tasks.
+the entry and dive paths, the sprite set, the sound set, the three roles plus the
+transform trio and the normal stages through 8 are here; the capture beam and
+the challenge stages land with the sibling Milestone 2 tasks.
 
 ## Roles
 
@@ -22,14 +22,16 @@ this project's own. For anyone checking a number against
 - **`pack.json`** — the 40-slot `classic40` formation and its four captive slots
   (one per `warden`, one row above it). Slots are logical `(row, column)` and
   `grid` turns each index into a pixel; see _The formation's pixel grid_ below.
-- **`aliens/`** — `drone`, `wing` and `warden`, each naming its sprite and its
-  **base** score only (50, 80, 150). The diving value is the base times the rules
+- **`aliens/`** — `drone`, `wing` and `warden`, plus the three transform types
+  (`scourge`, `manta`, `ensign`), each naming its sprite and its **base** score
+  only (50, 80, 150). The diving value is the base times the rules
   layer's `scoring.movingMultiplier`, applied on the alien's motion _state_, so
   50/100 is never stored as two numbers — `docs/DESIGN.md` section 4 explains why
   a flat pair gets a captor's latched escort bonus wrong. The `warden` is the
   two-hit role: `hp: 2` and `hitSprites: ["warden-hit"]`, which is how its first
-  hit changes its colour instead of destroying it. Enemy fire, dive paths and the
-  capture beam are sibling tasks and are deliberately not declared here yet.
+  hit changes its colour instead of destroying it. Each also carries its `fire`
+  pattern and its `dive`, from the dive task; the capture beam is a sibling task
+  and is deliberately not declared here yet.
 - **`stages/`** — five documents covering the normal stages through 8. Each is
   five waves of eight, as reference section 5's `db_attk_wav_IDs` composes them:
   4 `wing` + 4 `drone`, then all four `warden`s with 4 `wing`, then 8 `wing`,
@@ -124,12 +126,14 @@ value unmarked.
   section 5 cannot land until more script rows exist, and
   `stages/README.md` says why in detail: through stage 8 alone the four ranks
   need ten of the thirteen documents, and per-stage ids collide between them.
-- Dive paths in `paths/`, and the `dive`, `fire` and `abilities` blocks of the
-  three aliens. All four belong to sibling tasks. `paths/README.md` says which
-  entry choreography is authored and why there are three paths rather than
-  thirteen.
-- `transform.types`. Three alien ids, cycling on a four-stage period; the bonus
-  they earn (1,000 / 2,000 / 3,000) is already in `scoring.transformGroupBonus`.
+- The `abilities` block of every alien, and the capture beam's own path. Both
+  belong to sibling tasks. `paths/README.md` says which entry choreography is
+  authored and why there are three entry paths rather than thirteen.
+
+The dive paths, the aliens' `dive` and `fire` blocks and `transform.types` — the
+three ids `scourge`, `manta` and `ensign`, cycling on a four-stage period for the
+bonus in `scoring.transformGroupBonus` — were on this list and have since landed
+with the dive task.
 
 ## Two values that were left open, and are now settled
 
