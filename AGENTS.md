@@ -21,6 +21,14 @@ per section 2 of the plan. Unlike the plan it _is_ Prettier-formatted, and
 its claim tables are wide: changing one cell re-pads that whole table, so expect
 a diff larger than the edit and run `npm run format` before `npm run lint`.
 
+`docs/ARCHITECTURE.md` is the reader-facing counterpart, and the one document
+here that describes the code **as built** rather than as planned: what the thing
+is, how to run it, the layers and their one-way arrows, and where a new pack or a
+sibling game plugs in. Its diagrams are Mermaid so GitHub renders them with no
+build step. It is where the plan and the tree are reconciled in public, so when a
+layer moves, a milestone lands or a divergence from the plan is closed, say so
+there — and never document an intention there as if it were the implementation.
+
 ## The one rule that shapes the codebase
 
 `src/sim/` never touches the DOM, Canvas or Web Audio, and never imports from

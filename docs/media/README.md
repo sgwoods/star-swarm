@@ -25,8 +25,18 @@ The clips are screen recordings of the dev build.
   flow and the real screens and drops the bombs the simulation could not yet
   drop. Enemy fire has landed since, so this one can now be recaptured from live
   play.
+- `arch-gameplay.gif` — the clip `docs/ARCHITECTURE.md` opens with: one
+  untouched run of stage 1 from the first frame through the entry waves, the
+  sway, the hand-over to the breathe, and then auto-fire and a sweep against the
+  settled formation.
+- `arch-front-end.gif` — the whole front-end loop in one take, from live play:
+  attract mode, start, a real game lost to three bombs, the game-over banner, the
+  results card with its hit ratio, and back to attract.
+- `arch-lab.gif` — the `/lab` previewer: an entry path playing, then scrubbed
+  frame by frame with the readout following, then the same path mirrored, then a
+  dive path flown from the slot marker.
 
-All of them were captured by driving `npm run dev` with Playwright's
+The playfield clips were captured by driving `npm run dev` with Playwright's
 `recordVideo` at 448x576 — two whole-number scales, so the canvas fills the frame
 with no letterbox — and reducing the result:
 
@@ -36,8 +46,15 @@ with no letterbox — and reducing the result:
 `flags=neighbor` and `dither=none` are the two that matter: anything else
 resamples or dithers the pixel art and the sprites stop being sprites. The
 front-end clips use `max_colors=64`, because the cards put text and plate
-colours on screen that the playfield alone does not. Milestone 4 owns turning
-this into a command (`docs/DESIGN.md` section 10).
+colours on screen that the playfield alone does not.
+
+The two `/lab` clips are the exception, because the lab is a page rather than a
+playfield: they are recorded at the page size and kept there, with no `scale`
+filter (`path-lab.gif` at 760x572; `arch-lab.gif` at 900x660, a viewport big
+enough for the preview canvas to take a 2x scale). `arch-lab.gif` uses `fps=8`
+and `max_colors=32` to keep a frame that large down to roughly the size of a
+playfield clip. Milestone 4 owns turning all of this into a command
+(`docs/DESIGN.md` section 10).
 
 **Note for anyone running the dev server in two checkouts at once.** Vite's
 default port is shared, and `playwright.config.ts` reuses an existing server
