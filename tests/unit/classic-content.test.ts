@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { isChallengeStage, normalStageOrdinal, resolveStageId } from '../../src/content/rules.js';
 import { formationAxes } from '../../src/content/schema.js';
 import { waveLaunchFrames } from '../../src/sim/enemies.js';
-import { classicFormation, classicPack, classicRules } from '../helpers/rules.js';
+import { classicFormation, classicPack, classicRules, classicStages } from '../helpers/rules.js';
 
 /**
  * `packs/classic/aliens/` and `packs/classic/stages/`, against
@@ -31,6 +31,7 @@ import { classicFormation, classicPack, classicRules } from '../helpers/rules.js
 
 const pack = classicPack();
 const rules = classicRules();
+const stages = classicStages();
 const formation = classicFormation();
 
 /**
@@ -242,16 +243,44 @@ describe('the normal stage sequence', () => {
     }
   });
 
-  it('leaves stages 3 and 7 to the challenge task', () => {
-    // `(stage + 1) mod 4 == 0` is the ROM's own test, so the cadence is settled
-    // even though the content is not. `challenge.rows` is still empty, which is
-    // why these resolve to nothing rather than to a normal stage.
-    expect([3, 7].map((stage) => isChallengeStage(rules, stage))).toEqual([true, true]);
-    expect([3, 7].map((stage) => resolveStageId(pack.manifest, rules, stage))).toEqual([
-      undefined,
-      undefined,
+  it('interleaves the two sequences, with a real normal stage either side', () => {
+    // `(stage + 1) mod 4 == 0` is the ROM's own test. Now that both halves are
+    // authored, this is the assertion that the *whole* ladder lines up: the two
+    // sequences advance on separate ordinals, so a normal document inserted or
+    // removed shifts everything after it on one side only, and a challenge stage
+    // landing a stage early or late would go unnoticed by either half's own test.
+    expect([3, 7, 11, 15].every((stage) => isChallengeStage(rules, stage))).toBe(true);
+    const plays = (stage: number): string | undefined =>
+      resolveStageId(pack.manifest, rules, stage);
+    expect([1, 2, 3, 4, 5, 6, 7, 8].map(plays)).toEqual([
+      'stage-1',
+      'stage-2',
+      'challenge-1',
+      'stage-4',
+      'stage-5',
+      'stage-6',
+      'challenge-2',
+      // Stage 8 is script row 4 again, which is why it replays stage 4's document
+      // rather than shipping a second copy of it.
+      'stage-4',
     ]);
-    expect(pack.manifest.stageSequence.challenge.rows).toEqual([]);
+    // And past the authored rows: the normal half holds its last row while the
+    // challenge half keeps cycling all eight, on its own period.
+    expect([11, 15].map(plays)).toEqual(['challenge-3', 'challenge-4']);
+    expect([9, 10, 12].map(plays)).toEqual(['stage-4', 'stage-4', 'stage-4']);
+  });
+
+  it('gives every stage of the ladder the kind its half of the sequence implies', () => {
+    // The loader enforces this per document; what it cannot see is the pairing of
+    // a stage *number* with the kind that plays there, which is what decides
+    // whether the formation sways and whether the enemies attack.
+    for (let stage = 1; stage <= 16; stage += 1) {
+      const kind = stages.stageFor(stage)?.stage.kind;
+      expect([stage, kind]).toEqual([
+        stage,
+        isChallengeStage(rules, stage) ? 'challenge' : 'normal',
+      ]);
+    }
   });
 
   it('cycles one row past stage 8, because the rest of the table is not authored', () => {

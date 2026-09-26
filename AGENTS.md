@@ -198,6 +198,12 @@ Two consequences when editing either:
   would be invention. Leave them as data until the reference covers them, and do
   not "wire them up" to something plausible.
 
+That segment is also the whole answer to "does this enemy join the formation?":
+a path carrying one leaves its flyer `home`, and a path without one — every
+challenge script — leaves it `departed`, gone from the field without having been
+hit. The **path** decides, never the stage kind, so a challenge stage and its
+`kind: "challenge"` document cannot disagree.
+
 ## Audio is the other side of that boundary
 
 `src/audio/synth.ts` is in two halves on purpose: `buildSoundPlan` is pure and
@@ -284,7 +290,12 @@ and font through the real pipeline into `docs/media/`, which is the contact shee
   out, and arcs reverse their handedness because the reflection says so. A pack
   that ships a hand-mirrored twin of a path is working against
   `src/sim/paths.ts`. A dive uses the same mechanism to fan outwards: the enemy's
-  side of the formation picks the flag (`isRightOfCentre`).
+  side of the formation picks the flag (`isRightOfCentre`). The one exception is
+  a path whose point is to pass over the **fighter**: the mirror axis is the
+  playfield centre, anchor x 112, and the fighter's home column is x 103 because
+  the ROM's travel limits are not symmetric — 9 px apart against a shot window
+  ±5 px wide. The challenge scripts are authored per column for that reason
+  (`packs/classic/paths/README.md`).
 - **A dive path states no `start` and may use no `line` or `bezier`.** It is
   flown from wherever the enemy already sits, so every segment has to be relative
   to the flyer's pose — `arc`, `loop`, `sine`, `aimAtPlayer`, `exitBottom`. A dive
@@ -292,6 +303,9 @@ and font through the real pipeline into `docs/media/`, which is the contact shee
   of screen and no single-position test notices;
   `tests/unit/classic-paths.test.ts` flies each one from six slots for that
   reason. `/lab` starts such a path at its slot marker, so a dive previews there.
+- `/.scratch/` is git-, Prettier- and ESLint-ignored: put probe scripts, one-off
+  harnesses and video frames there rather than in `/tmp`, which sibling worktrees
+  share.
 - Vite's port is shared between checkouts, and `playwright.config.ts` reuses an
   existing dev server outside CI — so a second worktree's Playwright run
   silently tests the _first_ one's build: green, and meaningless. Set

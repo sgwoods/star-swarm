@@ -9,8 +9,9 @@ Milestone 1 landed the player half: `world.ts`, `player.ts`, `shots.ts`,
 the static stand-in with real enemies: `enemies.ts` (entry waves, the four-phase
 update, slot homing) and `formation.ts` (the coordinate axes, sway and breathe).
 The dive task added `dive.ts` — dive attacks, enemy fire and the difficulty ramp
-that drives both. The capture beam, the captured fighter, rescue, the dual
-fighter and the challenge stages are the sibling tasks that build on those.
+that drives both — and `challenge.ts` followed with challenge stages and their
+three awards. The capture beam, the captured fighter, rescue and the dual fighter
+are the sibling tasks that build on those.
 
 **The attack is one director, and dives are where capture hooks in.** `dive.ts`
 resolves the stage's difficulty row once and reads it: the per-role launch rates,
@@ -26,10 +27,28 @@ Two fields of a difficulty row are carried as data and **read by nothing yet**:
 select, so modelling them would be invention rather than reproduction; they stay
 verified data until the reference covers them.
 
+**A challenge stage's awards are three different rules, and the trap is that two
+of them index the same stage counter differently.** The per-impact value cycles
+with a period of eight challenge stages; the group-of-eight bonus clamps at its
+maximum. So the ninth challenge stage pays the _first_ stage's 100 a hit and the
+_last_ stage's 3,000 a group at the same time. Both come from the rules layer, so
+neither is a number `challenge.ts` knows. The third award — 100 × hits at the end
+of the stage, or a flat perfect bonus that **replaces** it — is the one an
+implementation most often turns into an addition, at 4,000 points a stage.
+
+**A challenge stage has no attack at all**, and that is stated rather than
+inferred: `allowsAttacks` in `src/content/rules.ts` is what `dive.ts` reads once
+per stage to make the whole director inert. Nothing arms it on a challenge stage
+anyway — `formation-settled` never comes, because the formation never sways — but
+"no dives because no settle" is a coincidence of two unrelated rules, and the
+enemies would still have **bombed**: a challenge flyer spends its whole life in
+`entering`, which is the one state entry bombing applies to.
+
 **The simulation has no rules of its own.** Every policy number it steps — the
 movement cadence, the travel limits, the shot cap, the hit windows, the
-extra-life thresholds, the formation's sway and breathe, the enemy update
-cadence, the playfield — arrives as one resolved `Rules` value from
+extra-life thresholds and their ceiling, the challenge cadence and its three
+awards, the formation's sway and breathe, the enemy update cadence, the
+playfield — arrives as one resolved `Rules` value from
 `src/content/`, which `createWorld` requires. The same is true of content: a
 stage arrives as a resolved `StageContent` through a `StageSource`
 (`src/content/stages.ts`), never as a pack. Nothing here loads anything:

@@ -48,6 +48,51 @@ literal double-width row needs a second, inboard path, and its geometry would be
 as unsourced as these three — so it is not here. `../stages/README.md` has the
 flag patterns the three shapes are actually built from.
 
+## The challenge-stage scripts
+
+`challenge-*.json` are a different kind of path and obey the opposite contract:
+they **never** end in `toSlot`, because nothing settles into formation on a
+challenge stage. A flyer whose script runs out without having addressed a slot
+leaves the field — reported as a departure, not a kill, exactly as a diver that
+does not come back is (`src/sim/enemies.ts`) — which is what ends a
+challenge stage and what costs a player the perfect bonus.
+
+Each one enters from off screen, curves onto a column, falls down it and exits by
+the bottom. The falling stretch is the point: reference section 8 records that
+the first two challenge stages are clearable **without moving, from the exact
+centre**, and a convoy that merely _crosses_ the fighter's column is not — a
+shot fired at the wrong moment sails past and the 2-shot cap means the next one
+is ~20 frames away. A convoy that _descends_ the column stays hittable for as
+long as it takes, which is what makes the acceptance test pass by construction
+rather than by luck. The explicit vertical `line` before `exitBottom` is there
+for the same reason: `exitBottom` keeps the heading it is handed when the bottom
+is the nearest edge along it, so the segment before it has to be pointing
+straight down or the fall drifts out of the column.
+
+| File                              | Column            | Used by                  |
+| --------------------------------- | ----------------- | ------------------------ |
+| `challenge-fall-centre.json`      | the fighter's own | `challenge-1`, `-2`, …   |
+| `challenge-weave-centre.json`     | the fighter's own | a gentle weave inside it |
+| `challenge-cross-centre.json`     | the fighter's own | crosses the screen first |
+| `challenge-fall-inner-left.json`  | x 64              | `challenge-3` … `-8`     |
+| `challenge-fall-outer-left.json`  | x 24              | `challenge-3` … `-8`     |
+| `challenge-fall-inner-right.json` | x 143             | `challenge-3` … `-8`     |
+| `challenge-fall-outer-right.json` | x 183             | `challenge-3` … `-8`     |
+
+**None of them declares `mirror`, and that is deliberate.** Mirroring reflects
+about the playfield's vertical centre line — x 112 for a sprite anchor — but the
+fighter's home column is **x 103**, because the ROM's travel limits (0…207) are
+not symmetric. The mirror of a path that passes over the fighter therefore misses
+it by 9 px, against a shot window only ±5 px wide. So a challenge script cannot
+be a mirrored pair with its own opposite, and the left- and right-hand ones are
+authored as genuinely different shapes rather than as hand-mirrored twins. The
+entry paths above are unaffected: they end in `toSlot`, and a slot mirrors to
+another slot.
+
+The geometry is ours. Reference section 8 confirms the structure — eight scripts,
+cycling every eight challenge stages, forty enemies in five groups of eight that
+never drop bombs — and explicitly does not give the flight vectors.
+
 ## Dive paths
 
 Dive attacks are the Milestone 2 dive task. One per role, plus one for the

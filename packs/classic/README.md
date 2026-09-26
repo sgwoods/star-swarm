@@ -1,9 +1,10 @@
 # `packs/classic/`
 
 The arcade-faithful pack. The manifest, the palette, the formation, the rules,
-the entry and dive paths, the sprite set, the sound set, the three roles plus the
-transform trio and the normal stages through 8 are here; the capture beam and
-the challenge stages land with the sibling Milestone 2 tasks.
+the entry, dive and challenge paths, the sprite set, the sound set, the three
+roles plus the transform trio, the normal stages through 8 and the eight
+challenge stages are here; the capture beam lands with the sibling Milestone 2
+task.
 
 ## Roles
 
@@ -46,6 +47,17 @@ this project's own. For anyone checking a number against
   which of the thirteen ROM scripts is which shape. `stages/README.md` carries
   the decode of every `home` back to the ROM table, the script-row mapping and
   what is still missing; `paths/README.md` covers the three shapes.
+- **`stages/challenge-1.json` … `challenge-8.json`** — the eight challenge
+  scripts, cycling every eight challenge stages exactly as reference section 8
+  says the original's do. Each is five waves of eight single-hit aliens flying a
+  path that never addresses a formation slot, so its flyers leave rather than
+  settle. Which columns they converge on is the one thing about them that is
+  load-bearing rather than decorative; see _Where a challenge convoy falls_
+  below.
+- **`stageBadges`** in `pack.json` — the six denominations of `docs/DESIGN.md`
+  section 4 (1, 5, 10, 20, 30, 50), each with the sprite that draws it. Data
+  rather than a table in the HUD because a sibling game counts stages
+  differently, or not at all.
 - **`rules.json`** — all four difficulty ranks as 26 literal rows each, from
   `docs/reference/arcade-reference.md` section 6, plus the shot caps, extra-life
   settings, challenge cadence, capture rules and scoring rules from sections 3,
@@ -115,17 +127,45 @@ verified and its Δy bounds are not, so each is marked on its own. The loader
 rejects a key that names no field, so a rename cannot quietly leave a verified
 value unmarked.
 
+## Where a challenge convoy falls
+
+A challenge stage is the one place where the _geometry_ of a path decides whether
+the game is playable as the reference describes it. Reference section 8 records,
+at high confidence, that the first two challenge stages can be cleared **without
+moving, from the exact centre of the screen**, and that later ones need up to
+five firing positions — one per group. So:
+
+- `challenge-1` and `challenge-2` send all five groups down the fighter's home
+  column. Both are perfect from a standstill, which
+  `tests/sim/golden/challenge-one-perfect.replay.json` and its pair prove with
+  input logs that never set a direction bit.
+- `challenge-3` … `challenge-8` put each group on a different column, so a player
+  who does not move clears one group and watches the rest go by.
+
+That home column is **x 103**, the centre of the fighter's travel, and it is not
+the centre of the playfield: the travel limits are the ROM's and are not
+symmetric (`player.minX` 0, `player.maxX` 207). Mirroring reflects about the
+playfield's centre line, x 112, so the mirrored twin of a path over the fighter
+misses it by 9 px against a shot window only ±5 px wide. That is why these paths
+declare no mirror and are authored per column instead — the one place in this
+pack where a hand-authored pair is right rather than a mistake. `paths/README.md`
+has the detail.
+
 ## What is deliberately empty
 
-- `stageSequence.challenge.rows`, with its `repeatLast: 8` already stated because
-  the two sequences plateau on _different_ periods and that is easy to lose. The
-  normal half now lists the six normal stages through 8 — the first six of the
-  reference's seventeen — and still states `repeatLast: 1`: cycling the last
-  three is a property of the whole table, so claiming it three rows early would
-  assert a plateau that is not there. The per-rank sequences of reference
-  section 5 cannot land until more script rows exist, and
-  `stages/README.md` says why in detail: through stage 8 alone the four ranks
-  need ten of the thirteen documents, and per-stage ids collide between them.
+- The per-rank stage sequences of reference section 5. They cannot land until
+  more script rows exist, and `stages/README.md` says why in detail: through
+  stage 8 alone the four ranks need ten of the thirteen documents, and per-stage
+  ids collide between them.
+
+  Both halves of the pack-wide sequence itself are now filled, and they plateau
+  on _different_ periods, which is easy to lose: the challenge half states
+  `repeatLast: 8` because all eight scripts cycle, and the normal half lists the
+  six normal stages through 8 — the first six of the reference's seventeen — and
+  still states `repeatLast: 1`, because cycling the last three is a property of
+  the whole table and claiming it three rows early would assert a plateau that is
+  not there.
+
 - The `abilities` block of every alien, and the capture beam's own path. Both
   belong to sibling tasks. `paths/README.md` says which entry choreography is
   authored and why there are three entry paths rather than thirteen.
@@ -133,7 +173,8 @@ value unmarked.
 The dive paths, the aliens' `dive` and `fire` blocks and `transform.types` — the
 three ids `scourge`, `manta` and `ensign`, cycling on a four-stage period for the
 bonus in `scoring.transformGroupBonus` — were on this list and have since landed
-with the dive task.
+with the dive task. `stageSequence.challenge.rows` and the challenge scripts it
+names were on it too, and land with this one.
 
 ## Two values that were left open, and are now settled
 
@@ -152,7 +193,18 @@ ROM closed them, and both changed a shape rather than a number:
   four home slots are one per possible captor, not four simultaneous captives.
   `docs/reference/arcade-reference.md` section 7.
 
-One narrower question is still open. It does not touch any value in this pack,
-but it is one of the two things holding up the challenge stages, because it
-decides what a challenge stage's second wave contains: see
-`docs/reference/arcade-reference.md` section 11, and `stages/README.md`.
+One narrower question is still open, and it is the one that decides what a
+challenge stage's second wave contains: whether four of the forty are the two-hit
+boss class (`docs/reference/arcade-reference.md` section 11, and
+`stages/README.md`).
+
+**The challenge stages here are authored on one reading of it and the stage
+documents are written on the other, and that is a live disagreement, not a
+settled question.** This pack's `challenge-*.json` make all forty slots single-hit
+aliens of one score group, which is what the rules-and-scoring report recommends
+and what makes a perfect first challenge stage pay **19,000** — the figure
+`docs/DESIGN.md` section 11 states as an acceptance criterion. Reading the arcade
+wave table literally instead gives four boss-class objects and **20,200**. Nothing
+in this pack resolves it; it is with the captain. Whichever way it lands, the
+engine rule is what has to be right, and which aliens a challenge stage holds is
+one line of data here.

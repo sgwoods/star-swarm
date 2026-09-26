@@ -25,8 +25,15 @@ export interface LivesState {
   bonusesAwarded: number;
 }
 
-export function createLives(rules: Rules): LivesState {
+/**
+ * `startingLives` is the count this run began on — the cabinet's setting, which
+ * `rules.lives.options` lists. It defaults to the rules' own default, and it
+ * matters beyond the reserve: it also selects which extra-life threshold set is
+ * in force (`resolveExtraLifeAward` in `src/content/rules.ts`), which is why the
+ * world remembers it rather than re-reading the default later.
+ */
+export function createLives(rules: Rules, startingLives?: number): LivesState {
   // The starting count includes the fighter on the field, so the reserve is one
   // fewer: a 3-ship cabinet shows two reserve fighters at the first "READY".
-  return { reserve: Math.max(0, rules.lives.default - 1), bonusesAwarded: 0 };
+  return { reserve: Math.max(0, (startingLives ?? rules.lives.default) - 1), bonusesAwarded: 0 };
 }

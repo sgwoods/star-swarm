@@ -197,7 +197,27 @@ export function nearestBombVector(vectors: readonly number[], heading: number): 
 /** May an enemy still flying its entry path drop a bomb on stage `n`? */
 export function allowsEntryBombing(rules: Rules, stage: number): boolean {
   const from = rules.enemies.bombing.entryFromStage;
-  return from !== undefined && stage >= from;
+  if (from === undefined || !allowsAttacks(rules, stage)) return false;
+  return stage >= from;
+}
+
+/**
+ * Do enemies attack at all on stage `n`?
+ *
+ * **No, on a challenge stage.** Its forty fly their scripts and leave: they never
+ * dive, and — the part that is easy to miss — they never bomb either, even though
+ * they spend the whole stage in the state an entering enemy is in, which is the
+ * one state entry bombing applies to. The arcade's own answer is the same and for
+ * the same reason its transform is disabled there
+ * (`docs/reference/arcade-reference.md` section 8: "They do not drop any bombs").
+ *
+ * Asked here rather than left to the attack director's `armed` flag happening to
+ * stay false: nothing arms it on a challenge stage today, but "no dives because
+ * no `formation-settled`" is a coincidence of two unrelated rules, and coincidences
+ * are what regress silently.
+ */
+export function allowsAttacks(rules: Rules, stage: number): boolean {
+  return !isChallengeStage(rules, stage);
 }
 
 /**
@@ -299,24 +319,47 @@ export function resolveExtraLifeAward(rules: Rules, startingLives?: number): Ext
 }
 
 /**
+ * The lowest threshold that can never be awarded, or `Infinity` when none is.
+ *
+ * The arcade's ceiling is not a score: it falls out of comparing a fixed pair of
+ * score digits with a threshold carried in the same units, so the first
+ * threshold that needs a third digit is the one that stops matching, and every
+ * threshold from there on is unreachable. `thresholdUnit × thresholdModulus` is
+ * that value — 1,000,000 for two digits of 10,000 — and the *last award* is the
+ * highest threshold strictly below it, which differs per setting rather than
+ * being the same round number for all of them.
+ */
+export function extraLifeThresholdCeiling(rules: Rules): number {
+  const { thresholdUnit, thresholdModulus } = rules.extraLives;
+  if (thresholdUnit === undefined || thresholdModulus === undefined) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return thresholdUnit * thresholdModulus;
+}
+
+/**
  * How many extra lives a score of `score` has earned in total under `award`.
  *
  * Counting totals rather than watching for crossings is deliberate: a single
  * step can cross two thresholds at once, and a crossing test that fires once
  * per step would swallow the second award.
+ *
+ * `ceiling` is exclusive — a threshold at or beyond it is never paid, which is
+ * {@link extraLifeThresholdCeiling}'s contract.
  */
 export function extraLivesEarnedAt(
   award: ExtraLifeAward,
   score: number,
-  stopAfterScore?: number,
+  ceiling: number = Number.POSITIVE_INFINITY,
 ): number {
   if (award.mode === 'none') return 0;
-  // Awards stop once the score passes the ceiling, so cap before counting.
-  const capped = Math.min(score, stopAfterScore ?? Number.POSITIVE_INFINITY);
-  if (capped < award.first) return 0;
-  if (award.second === undefined || capped < award.second) return 1;
+  // A threshold the ceiling has ruled out is never paid, however high the score
+  // goes, so counting stops at the last reachable one rather than at a score.
+  const reachable = Math.min(score, ceiling - 1);
+  if (reachable < award.first) return 0;
+  if (award.second === undefined || reachable < award.second) return 1;
   if (award.repeat === undefined) return 2;
-  return 2 + Math.floor((capped - award.second) / award.repeat);
+  return 2 + Math.floor((reachable - award.second) / award.repeat);
 }
 
 /** Awards earned by moving from `scoreBefore` to `scoreAfter`. */
@@ -324,18 +367,22 @@ export function extraLivesEarnedBetween(
   award: ExtraLifeAward,
   scoreBefore: number,
   scoreAfter: number,
-  stopAfterScore?: number,
+  ceiling?: number,
 ): number {
   return Math.max(
     0,
-    extraLivesEarnedAt(award, scoreAfter, stopAfterScore) -
-      extraLivesEarnedAt(award, scoreBefore, stopAfterScore),
+    extraLivesEarnedAt(award, scoreAfter, ceiling) -
+      extraLivesEarnedAt(award, scoreBefore, ceiling),
   );
 }
 
 /**
  * Whether the player has earned an extra life by crossing `score`, given the
  * score before the award, under the award the rules resolve to.
+ *
+ * `startingLives` is the count the *run* began on, not the rules' default: the
+ * thresholds on offer depend on it, so a five-fighter run handed the default
+ * awards the wrong bonuses for its whole length.
  */
 export function extraLivesEarned(
   rules: Rules,
@@ -347,8 +394,56 @@ export function extraLivesEarned(
     resolveExtraLifeAward(rules, startingLives),
     scoreBefore,
     scoreAfter,
-    rules.extraLives.stopAfterScore,
+    extraLifeThresholdCeiling(rules),
   );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Challenge-stage scoring                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What a challenge-stage enemy is worth at the moment of impact on stage `n`,
+ * or `undefined` when the rules award nothing on impact.
+ *
+ * The value belongs to the *challenge stage*, not to the alien: the original
+ * overwrites every enemy's score group at each challenge stage's start from an
+ * eight-entry table, so the same enemy type is worth 100 on the first challenge
+ * stage and 160 on the second (`docs/reference/arcade-reference.md` section 8).
+ * That is why the table is indexed by the challenge-stage ordinal and why it
+ * **cycles** rather than plateauing — the original's index has no clamp, so the
+ * ninth challenge stage reverts to 100 while the group bonus beside it stays at
+ * its clamped maximum. Two tables, two fold rules, one stage counter.
+ */
+export function challengeImpactAward(rules: Rules, stage: number): number | undefined {
+  const table = rules.scoring.challenge?.impactAward;
+  if (table === null || table === undefined) return undefined;
+  return resolveRow(table, challengeOrdinal(rules, stage));
+}
+
+/** What clearing a whole group of eight pays on stage `n`. */
+export function challengeGroupBonus(rules: Rules, stage: number): number {
+  const table = rules.scoring.challenge?.groupBonus;
+  if (table === undefined) return 0;
+  return resolveRow(table, challengeOrdinal(rules, stage)) ?? 0;
+}
+
+/**
+ * The award at the end of a challenge stage: `perHit × hits`, or the perfect
+ * bonus when every enemy was destroyed.
+ *
+ * The perfect bonus **replaces** the per-hit one rather than adding to it —
+ * the original's two branches join the same adder and are mutually exclusive
+ * (`docs/reference/arcade-reference.md` section 8). Adding them instead is a
+ * 4,000-point error on every perfect stage, so which it is stays data
+ * (`perfectReplacesPerHit`) rather than an assumption here.
+ */
+export function challengeEndBonus(rules: Rules, hits: number, total: number): number {
+  const challenge = rules.scoring.challenge;
+  if (challenge === undefined) return 0;
+  const perHit = challenge.perHit * hits;
+  if (total <= 0 || hits < total) return perHit;
+  return challenge.perfectReplacesPerHit ? challenge.perfect : perHit + challenge.perfect;
 }
 
 /* -------------------------------------------------------------------------- */

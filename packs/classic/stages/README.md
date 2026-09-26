@@ -117,23 +117,28 @@ tables also fold at different stages (23 for the entry scripts, 27 for the
 difficulty rows), which is precisely why neither may be derived from the other.
 No document here sets `modifiers` or `diveRules`.
 
+## The challenge stages, and the number still in dispute
+
+`challenge-1.json` … `challenge-8.json` sit beside these, and the second reason
+they were not here has gone: their waves fly `../paths/challenge-*.json`, which
+fly through and leave rather than ending in `toSlot`, so `stageSequence.challenge`
+is filled and `createStageSource`'s bridge is removed. What plays at each stage
+number is asserted end to end in `tests/unit/classic-content.test.ts`.
+
+**The first reason is still open, and it is a live disagreement about a number.**
+Reference section 11 asks whether challenge-stage wave 2 keeps the four
+boss-class objects. `db_attk_wav_IDs` read literally says it does, which makes a
+perfect first challenge stage worth **20,200**. The rules-and-scoring report
+recommends authoring all forty slots as single-hit aliens of one score group
+instead, which makes it **19,000** — and 19,000 is what `docs/DESIGN.md`
+section 11 states as an acceptance criterion and what `rules.json`'s `scoring`
+and the challenge documents here are built to. Both readings are written down;
+neither is settled here. It is with the captain, and whichever way it lands the
+engine rule is unaffected — only which aliens wave 2 names, which is one line per
+document.
+
 ## Not here yet, and why
 
-- **Challenge stages 3 and 7.** The cadence is settled — `(stage + 1) mod 4 == 0` is
-  the ROM's own test — but the content is not, on two counts, and both belong to the
-  challenge-stage task rather than to a guess here. First, reference section 11's one
-  remaining open item is whether challenge-stage wave 2 keeps the four boss-class
-  objects; `db_attk_wav_IDs` says it does, which would make a perfect stage 3 worth
-  20,200, while `docs/DESIGN.md` and this pack's `scoring` build to the 19,000 of
-  forty enemies at 100 apiece. Authoring wave 2 either way decides that. Second, a
-  challenge stage has nothing settle into formation — which is why `rules.json`'s
-  `formation.animatedStageKinds` leaves `challenge` out — so its waves need entry
-  paths that fly through and leave. Every path in `../paths/` that a wave can name
-  ends in `toSlot`; the dive task's paths do exit the screen, but a dive is flown
-  from wherever an enemy already sits and states no `start`, so it is not a wave's
-  entry path. Until fly-through entry paths exist,
-  `stageSequence.challenge.rows` stays empty and `createStageSource`'s documented
-  bridge plays a normal stage in their place.
 - **Stages 9 and up**, which need script rows 6 to 12 — seven more documents whose
   choreography is entirely ours.
 - **The per-rank sequences.** Reference section 5 gives all four ranks' index lists,

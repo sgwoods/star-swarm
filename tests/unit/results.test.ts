@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import type { SimEvent } from '../../src/sim/events.js';
 import {
+  challengeHeading,
+  challengeResultRows,
   countEvents,
   EMPTY_STATS,
   formatHitRatio,
   hitRatio,
   resultRows,
+  type ChallengeSummary,
   type RunStats,
 } from '../../src/ui/results.js';
 
@@ -106,5 +109,141 @@ describe('the results rows', () => {
     const rows = resultRows({ ...EMPTY_STATS, shotsFired: 200, hits: 73 });
     expect(rows.map((row) => row.label)).toEqual(['SHOTS FIRED', 'HITS', 'HIT RATIO']);
     expect(rows.map((row) => row.value)).toEqual(['200', '73', '36.5%']);
+  });
+
+  it('say nothing about challenge stages in a run that saw none', () => {
+    const rows = resultRows({ ...EMPTY_STATS, shotsFired: 200, hits: 73 });
+    expect(rows).toHaveLength(3);
+  });
+
+  it('add the challenge tally once a run has played one', () => {
+    const rows = resultRows({
+      ...EMPTY_STATS,
+      shotsFired: 200,
+      hits: 73,
+      challengeStages: 2,
+      challengeHits: 74,
+      challengeEnemies: 80,
+      challengeScore: 32_000,
+    });
+    expect(rows.map((row) => row.label)).toEqual([
+      'SHOTS FIRED',
+      'HITS',
+      'HIT RATIO',
+      'CHALLENGE HITS',
+      'CHALLENGE BONUS',
+    ]);
+    expect(rows.at(-2)?.value).toBe('74/80');
+    expect(rows.at(-1)?.value).toBe('32000');
+  });
+
+  it('calls out perfect stages only when there were some', () => {
+    const played = { ...EMPTY_STATS, challengeStages: 2, challengeHits: 74, challengeEnemies: 80 };
+    expect(resultRows(played).map((row) => row.label)).not.toContain('PERFECT STAGES');
+    expect(resultRows({ ...played, perfectStages: 1 }).map((row) => row.label)).toContain(
+      'PERFECT STAGES',
+    );
+  });
+});
+
+/**
+ * The between-stage card the original shows: "NUMBER OF HITS", then either
+ * "BONUS" or, for all forty, the flashing "PERFECT !" and "SPECIAL BONUS"
+ * (`docs/reference/arcade-reference.md` section 8, "Results screen").
+ */
+describe('the challenge-stage results', () => {
+  const summary = (overrides: Partial<ChallengeSummary> = {}): ChallengeSummary => ({
+    stage: 3,
+    ordinal: 0,
+    hits: 40,
+    total: 40,
+    perfect: true,
+    impactScore: 4_000,
+    groupBonus: 5_000,
+    endBonus: 10_000,
+    ...overrides,
+  });
+
+  it('is headed by the challenge stage’s number, counted from one', () => {
+    expect(challengeHeading(summary())).toBe('CHALLENGE 1');
+    expect(challengeHeading(summary({ ordinal: 8 }))).toBe('CHALLENGE 9');
+  });
+
+  it('shows the hit count and the special bonus on a perfect stage', () => {
+    const rows = challengeResultRows(summary());
+    expect(rows.map((row) => row.label)).toEqual(['NUMBER OF HITS', 'SPECIAL BONUS']);
+    expect(rows.map((row) => row.value)).toEqual(['40/40', '10000']);
+    expect(rows[1]?.colour).toBeDefined();
+  });
+
+  it('shows the ordinary bonus otherwise, labelled differently', () => {
+    // The label changes with the branch because the perfect bonus *replaces* the
+    // per-hit one: "BONUS 10000" would read as the same award scaled up.
+    const rows = challengeResultRows(summary({ hits: 23, perfect: false, endBonus: 2_300 }));
+    expect(rows.map((row) => row.label)).toEqual(['NUMBER OF HITS', 'BONUS']);
+    expect(rows.map((row) => row.value)).toEqual(['23/40', '2300']);
+    expect(rows[1]?.colour).toBeUndefined();
+  });
+
+  it('shows the end award alone, because the rest already ticked the counter', () => {
+    // The impact awards and the group bonuses arrived during the stage; the
+    // original's between-stage display carries the end award and the hit count.
+    const rows = challengeResultRows(summary());
+    expect(rows.map((row) => row.value)).not.toContain('19000');
+  });
+});
+
+describe('counting challenge stages into a run', () => {
+  const ended: SimEvent = {
+    type: 'challenge-ended',
+    stage: 3,
+    ordinal: 0,
+    hits: 40,
+    total: 40,
+    perfect: true,
+    impactScore: 4_000,
+    groupBonus: 5_000,
+    endBonus: 10_000,
+  };
+
+  it('keeps the last summary and totals every stage', () => {
+    const first = countEvents(EMPTY_STATS, [ended]);
+    expect(first.challenge).toMatchObject({ stage: 3, hits: 40 });
+    expect(first).toMatchObject({
+      challengeStages: 1,
+      challengeHits: 40,
+      challengeEnemies: 40,
+      perfectStages: 1,
+      challengeScore: 19_000,
+    });
+
+    const second = countEvents(first, [
+      {
+        ...ended,
+        stage: 7,
+        ordinal: 1,
+        hits: 23,
+        perfect: false,
+        impactScore: 3_680,
+        endBonus: 2_300,
+      },
+    ]);
+    expect(second.challenge).toMatchObject({ stage: 7, hits: 23 });
+    expect(second).toMatchObject({
+      challengeStages: 2,
+      challengeHits: 63,
+      challengeEnemies: 80,
+      perfectStages: 1,
+      challengeScore: 19_000 + 3_680 + 5_000 + 2_300,
+    });
+  });
+
+  it('totals the challenge money from the event, not from a per-hit value', () => {
+    // The ninth challenge stage pays 100 a hit while the group bonus stays at
+    // 3,000, so a screen that multiplied hits by one number would be wrong there.
+    const ninth = countEvents(EMPTY_STATS, [
+      { ...ended, stage: 35, ordinal: 8, impactScore: 4_000, groupBonus: 15_000 },
+    ]);
+    expect(ninth.challengeScore).toBe(29_000);
   });
 });

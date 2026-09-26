@@ -690,6 +690,23 @@ export const packManifestSchema = z.strictObject({
    * game, not to the platform.
    */
   sounds: z.record(z.string(), refSchema).default({}),
+  /**
+   * The badges that add up to the stage number, each with the sprite that draws
+   * it (`docs/DESIGN.md` section 4: "denominations 1, 5, 10, 20, 30, 50").
+   *
+   * Data rather than a table in the HUD because the denominations are this
+   * game's: a sibling in the lineage counts stages differently, or not at all,
+   * and an empty list is a game with no badge row. Order does not matter — the
+   * greedy decomposition sorts them, since it is only correct largest-first.
+   */
+  stageBadges: z
+    .array(
+      z.strictObject({
+        value: z.number().int().positive(),
+        sprite: refSchema,
+      }),
+    )
+    .default([]),
   stageSequence: stageSequenceSchema.default({
     normal: { rows: [], repeatLast: 1 },
     challenge: { rows: [], repeatLast: 1 },
@@ -788,8 +805,25 @@ export const rulesSchema = z.strictObject({
   extraLives: z.strictObject({
     /** The award in force, for the default starting-life count. */
     award: extraLifeAwardSchema,
-    /** Awards stop once the score passes this. Omitted means never. */
-    stopAfterScore: z.number().int().positive().optional(),
+    /**
+     * The award ceiling, as the two numbers that produce it rather than as the
+     * score it works out to.
+     *
+     * The arcade original does not compare the score with a threshold. It reads
+     * a fixed pair of score *digits* and compares `floor(score / unit) mod
+     * modulus` with the pending threshold, which is carried in the same units
+     * and advanced by the repeat interval each time one is paid. So a threshold
+     * that reaches `modulus` can never match again, and the awards simply stop:
+     * with 20,000 / 70,000 / every 70,000 the thresholds run 2, 7, 14 … 98 and
+     * then 105, which no two digits can hold (`docs/reference/arcade-reference.md`
+     * section 3). The last extra life is therefore at 980,000 — not a round
+     * million, and not the same score for every setting, which is why the
+     * ceiling is the mechanism and not a number.
+     *
+     * Both omitted means awards never stop.
+     */
+    thresholdUnit: z.number().int().positive().optional(),
+    thresholdModulus: z.number().int().positive().optional(),
     /**
      * Which of `options` the cabinet is set to, as a zero-based index into the
      * options that apply to the starting-life count in play. Omitted means

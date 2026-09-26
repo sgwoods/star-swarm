@@ -8,9 +8,9 @@
  *
  * What runs each step is decided by the state machine in `src/ui/flow.ts`: this
  * file owns the display, the input device, the sprite sheet, the starfield and
- * the audio, and nothing else. Attract demo, play, game over, results and
- * high-score entry all arrive through one `flow.step(frame)` call, which is why
- * there are no phase flags here.
+ * the audio, and nothing else. Attract demo, play, the between-stage challenge
+ * card, game over, results and high-score entry all arrive through one
+ * `flow.step(frame)` call, which is why there are no phase flags here.
  */
 
 import { createSfx, createSynth } from './audio/index.js';
@@ -23,13 +23,14 @@ import { createDisplay, LOGICAL_HEIGHT, LOGICAL_WIDTH } from './render/canvas.js
 import { drawScene } from './render/scene.js';
 import { createSpriteSheet } from './render/sprites.js';
 import { createStarfield } from './render/starfield.js';
+import { aliveEnemies } from './sim/enemies.js';
 import type { SimEvent } from './sim/events.js';
 import { drawAttract } from './ui/attract.js';
 import { createGameFlow, type GamePhase } from './ui/flow.js';
 import { createHighScoreBoard, createWebStorage, drawInitialsEntry } from './ui/highscores.js';
-import { drawHud } from './ui/hud.js';
+import { badgesForStage, drawHud } from './ui/hud.js';
 import { CARD_TOP } from './ui/panel.js';
-import { drawGameOver, drawResults } from './ui/results.js';
+import { drawChallengeResults, drawGameOver, drawResults } from './ui/results.js';
 
 const container = document.getElementById('app');
 if (container === null) throw new Error('Missing #app container');
@@ -147,6 +148,9 @@ const loop = createLoop({
       highScore: Math.max(flow.highScores.best(), world.score),
       lives: world.lives.reserve,
       stage: world.stage,
+      // The badge denominations and their art are the pack's, not the HUD's.
+      badges: registry.manifest.stageBadges,
+      sheet: sprites,
     });
 
     switch (flow.phase) {
@@ -163,6 +167,13 @@ const loop = createLoop({
       case 'results':
         drawResults(ctx, { stats: flow.stats, rows: flow.resultRows() });
         break;
+      case 'challenge-results': {
+        const summary = flow.stats.challenge;
+        if (summary !== undefined) {
+          drawChallengeResults(ctx, { stats: flow.stats, summary, steps: flow.phaseSteps });
+        }
+        break;
+      }
       case 'high-score-entry': {
         const entry = flow.entry;
         if (entry !== undefined) {
@@ -199,9 +210,14 @@ declare global {
       readonly stage: number;
       readonly lives: number;
       readonly playerX: number;
-      /** Enemies still alive, and how many of them have reached their slot. */
+      /** Enemies still on the field, and how many of them have reached their slot. */
       readonly enemiesAlive: number;
       readonly enemiesHome: number;
+      /** Challenge-stage totals for the run: enemies destroyed and perfect stages. */
+      readonly challengeHits: number;
+      readonly perfectStages: number;
+      /** The badge denominations on screen, which come from the pack. */
+      readonly badges: readonly number[];
       /** Which motion the formation is running: sway, breathe or still. */
       readonly formationMotion: string;
       readonly shotsFired: number;
@@ -235,10 +251,21 @@ window.starSwarm = {
     return flow.world.player.x;
   },
   get enemiesAlive(): number {
-    return flow.world.fleet.enemies.filter((enemy) => enemy.state !== 'dead').length;
+    return aliveEnemies(flow.world.fleet.enemies).length;
   },
   get enemiesHome(): number {
     return flow.world.fleet.enemies.filter((enemy) => enemy.state === 'home').length;
+  },
+  get challengeHits(): number {
+    return flow.stats.challengeHits;
+  },
+  get perfectStages(): number {
+    return flow.stats.perfectStages;
+  },
+  get badges(): readonly number[] {
+    return badgesForStage(flow.world.stage, registry.manifest.stageBadges).map(
+      (badge) => badge.value,
+    );
   },
   get formationMotion(): string {
     return flow.world.formation?.motion ?? 'none';

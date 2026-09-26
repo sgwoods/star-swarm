@@ -18,6 +18,17 @@ The clips are screen recordings of the dev build.
   and homing back into their own slots, a warden turning blue on its first hit,
   and the last few enemies turning nasty. The controls are untouched for the
   first nineteen seconds, so the clip opens on the whole fleet.
+- `m2-challenge.gif` — the first challenge stage played to a perfect and the
+  between-stage card that follows it: forty enemies in five groups of eight
+  flying scripted convoys and **leaving without attacking**, the fighter standing
+  on the exact centre of its travel with the button held and never touching a
+  direction, and then "PERFECT !" over "NUMBER OF HITS 40/40", "SPECIAL BONUS
+  10000" and a score of exactly 19,000 — the quality bar's own number, on screen.
+  The run is _started_ on stage 3 by a temporary `?stage=` override applied only
+  for the recording and not committed, because reaching a challenge stage by
+  playing means surviving stages 1 and 2 now that dives and bombs have landed,
+  and that is several minutes of fighting the clip does not show anyway. What
+  plays from there is the ordinary game.
 - `m2-attract.gif` — the front-end shell's attract mode: the two cards over the
   demo, which is the real game playing itself.
 - `m2-game-over.gif` — a run ending into the game-over banner, the results screen

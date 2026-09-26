@@ -51,6 +51,14 @@ import { compilePath, pathEventsBetween, samplePath } from './paths.js';
  * formation, attacking, and rotating back into the slot afterwards. Only the last
  * two of those are new to the dive task, and only the *last* of them scores the
  * formation value while visibly moving.
+ *
+ * `dead` is the one terminal state, and it holds **two** endings: shot down, and
+ * flown off the field alive — a diver that does not return, or a challenge-stage
+ * flyer whose script never addressed a slot. They are told apart by the *events*
+ * (`target-destroyed` against `enemy-departed`) rather than by the state, because
+ * nothing downstream treats the two differently: neither is on the field, neither
+ * is drawn, and both let the stage end. What does differ is the score and the
+ * hit count, and both of those are counted from the events.
  */
 export type EnemyState = 'standby' | 'entering' | 'home' | 'diving' | 'returning' | 'dead';
 
@@ -64,7 +72,10 @@ export interface Enemy {
   /** Sprite id, and what it becomes after each hit it survives. */
   readonly sprite: string;
   readonly hitSprites: readonly string[];
-  /** Index into the formation's `slots`: this enemy's own home, for the stage. */
+  /**
+   * Index into the formation's `slots`: this enemy's own home, for the stage, or
+   * {@link NO_SLOT} when its script never addresses one.
+   */
   readonly home: number;
   /** Which frame of the update round robin advances this enemy's state. */
   readonly phase: number;
@@ -73,6 +84,17 @@ export interface Enemy {
   /** The entry path it flies, and whether it flies the mirrored variant. */
   readonly path: string;
   readonly mirror: boolean;
+  /**
+   * Whether its entry path ends in its formation slot.
+   *
+   * **The path decides, not the stage.** A path that addresses a slot leaves the
+   * flyer at home; one that does not — every challenge-stage script — has it
+   * leave the field at the end, reported as a departure rather than a kill.
+   * Reading it off the path keeps the one answer to "does this enemy join the
+   * formation?" in the same place as the geometry that settles it, rather than in
+   * a second test on the stage kind that could disagree with the data.
+   */
+  readonly homes: boolean;
   /** Launched behind its pair partner rather than alongside it. */
   readonly trailing: boolean;
   /** The wave it belongs to, zero-based. Reported in events. */
@@ -159,11 +181,47 @@ const TARGETABLE: ReadonlySet<EnemyState> = new Set<EnemyState>([
   'returning',
 ]);
 
+/**
+ * `home` for an enemy that owns no formation slot.
+ *
+ * A challenge-stage flyer has no home: it flies its script and leaves, and the
+ * forty of them would otherwise have to claim forty slots they never reach —
+ * which a formation shaped for a different role mix cannot even supply. Negative
+ * so that nothing can mistake it for slot 0.
+ */
+export const NO_SLOT = -1;
+
 /** Everything on the field that a shot can be tested against. */
 export function isTargetable(enemy: Enemy): boolean {
   return TARGETABLE.has(enemy.state);
 }
 
+/**
+ * Does this path put the flyer in its formation slot?
+ *
+ * A `toSlot` segment is the only thing that addresses one, so its presence is
+ * the whole test — and it is a property of the path rather than of the stage,
+ * which is what stops a challenge script and a `kind: "challenge"` document from
+ * having to agree. A path the stage does not carry is treated as homing, which
+ * is what the entry paths are; {@link launchEnemy} is where the missing path
+ * becomes an error, with the flyer's id in the message.
+ */
+function pathAddressesSlot(content: StageContent, path: string): boolean {
+  // Spelled `movement`, not `document`: the boundary scan in
+  // `tests/unit/sim-boundary.test.ts` is textual, so an identifier named after a
+  // host global fails inside `src/sim/` even as a local (`AGENTS.md`).
+  const movement = content.paths.get(path);
+  if (movement === undefined) return true;
+  return movement.segments.some((segment) => segment.type === 'toSlot');
+}
+
+/**
+ * Enemies still on the field: everything that has not reached `dead`.
+ *
+ * Both ways off the field end there — shot down, and flown away alive — which is
+ * what lets one test end a stage whether its enemies were destroyed or merely
+ * sailed past. A challenge stage nobody fires a shot on ends on this.
+ */
 export function aliveEnemies(enemies: readonly Enemy[]): Enemy[] {
   return enemies.filter((enemy) => enemy.state !== 'dead');
 }
@@ -226,6 +284,7 @@ export class StageContentError extends Error {
 interface EnemySeed {
   readonly id: number;
   readonly home: number;
+  readonly homes: boolean;
   readonly launchFrame: number;
   readonly path: string;
   readonly mirror: boolean;
@@ -249,6 +308,7 @@ function createEnemy(alien: Alien, seed: EnemySeed, rules: Rules): Enemy {
     sprite: alien.sprite,
     hitSprites: alien.hitSprites,
     home: seed.home,
+    homes: seed.homes,
     phase: seed.id % rules.enemies.updatePhases,
     launchFrame: seed.launchFrame,
     path: seed.path,
@@ -330,12 +390,17 @@ export function createFleet(content: StageContent, rules: Rules): Fleet {
           `stage "${stage.id}" wave ${String(waveIndex)} slot ${String(slotIndex)}: no entry path`,
         );
       }
+      // A script that never addresses a slot claims none either: the forty
+      // flyers of a challenge stage would otherwise have to reserve forty slots
+      // they never reach.
+      const homes = pathAddressesSlot(content, path);
       enemies.push(
         createEnemy(
           alien,
           {
             id: enemies.length,
-            home: slot.home ?? claimSlot(alien.role),
+            home: homes ? (slot.home ?? claimSlot(alien.role)) : NO_SLOT,
+            homes,
             launchFrame: launchFrames[slotIndex] ?? wave.at,
             path,
             mirror: slot.mirror,
@@ -536,6 +601,9 @@ export function spawnDiver(
     {
       id: nextEnemyId(fleet),
       home: options.home,
+      // A spawned diver owns a slot and returns to it, so it homes like any
+      // other enemy; the transform group is the only caller and its members do.
+      homes: true,
       launchFrame: fleet.frame,
       path: options.pathId,
       mirror: options.mirror ?? false,
@@ -601,7 +669,10 @@ export interface FleetStep {
   readonly launched: readonly Enemy[];
   /** Enemies that reached their slot on this frame, entering or returning. */
   readonly homed: readonly Enemy[];
-  /** Enemies that finished a dive and left the field for good on this frame. */
+  /**
+   * Enemies that left the field alive on this frame: a dive that did not return,
+   * or an entry script that never addressed a slot. Not a kill, and not a hit.
+   */
   readonly departed: readonly Enemy[];
   /** `fire` segments a flight passed through on this frame. */
   readonly fired: readonly ScriptedFire[];
@@ -672,9 +743,17 @@ export function stepFleet(
         const sample = advanceFlight(enemy);
         if (sample === undefined) break;
         if (onPhase && sample.done) {
-          enemy.state = 'home';
           fleet.flights.delete(enemy.id);
-          homed.push(enemy);
+          if (enemy.homes) {
+            enemy.state = 'home';
+            homed.push(enemy);
+          } else {
+            // Its script is over and it never addressed a slot, so it is gone —
+            // the same ending a diver that does not return reaches below, and
+            // reported the same way: a departure, not a kill.
+            enemy.state = 'dead';
+            departed.push(enemy);
+          }
         }
         break;
       }

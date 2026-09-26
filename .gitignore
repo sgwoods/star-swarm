@@ -8,3 +8,6 @@ dist/
 
 # Written and removed by tests/unit/sim-boundary.test.ts
 /src/sim/__boundary_probe__.ts
+
+# Scratch space for a task: harnesses and video frames, never committed
+/.scratch/

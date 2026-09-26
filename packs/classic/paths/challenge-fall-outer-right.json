@@ -1,0 +1,9 @@
+{
+  "id": "challenge-fall-outer-right",
+  "start": [8, -16],
+  "segments": [
+    { "type": "bezier", "to": [183, 40], "c1": [24, 80], "c2": [168, 80], "speed": 1.4 },
+    { "type": "line", "to": [183, 60], "speed": 1.4 },
+    { "type": "exitBottom", "speed": 1.4 }
+  ]
+}

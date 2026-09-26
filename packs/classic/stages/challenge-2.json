@@ -1,0 +1,217 @@
+{
+  "id": "challenge-2",
+  "kind": "challenge",
+  "formation": "classic40",
+  "waves": [
+    {
+      "at": 0,
+      "spacing": 20,
+      "slots": [
+        {
+          "alien": "wing",
+          "path": "challenge-weave-centre"
+        },
+        {
+          "alien": "wing",
+          "path": "challenge-weave-centre",
+          "trailing": true
+        },
+        {
+          "alien": "wing",
+          "path": "challenge-weave-centre"
+        },
+        {
+          "alien": "wing",
+          "path": "challenge-weave-centre",
+          "trailing": true
+        },
+        {
+          "alien": "wing",
+          "path": "challenge-weave-centre"
+        },
+        {
+          "alien": "wing",
+          "path": "challenge-weave-centre",
+          "trailing": true
+        },
+        {
+          "alien": "wing",
+          "path": "challenge-weave-centre"
+        },
+        {
+          "alien": "wing",
+          "path": "challenge-weave-centre",
+          "trailing": true
+        }
+      ]
+    },
+    {
+      "at": 330,
+      "spacing": 20,
+      "slots": [
+        {
+          "alien": "drone",
+          "path": "challenge-fall-centre"
+        },
+        {
+          "alien": "drone",
+          "path": "challenge-fall-centre",
+          "trailing": true
+        },
+        {
+          "alien": "drone",
+          "path": "challenge-fall-centre"
+        },
+        {
+          "alien": "drone",
+          "path": "challenge-fall-centre",
+          "trailing": true
+        },
+        {
+          "alien": "drone",
+          "path": "challenge-fall-centre"
+        },
+        {
+          "alien": "drone",
+          "path": "challenge-fall-centre",
+          "trailing": true
+        },
+        {
+          "alien": "drone",
+          "path": "challenge-fall-centre"
+        },
+        {
+          "alien": "drone",
+          "path": "challenge-fall-centre",
+          "trailing": true
+        }
+      ]
+    },
+    {
+      "at": 660,
+      "spacing": 20,
+      "slots": [
+        {
+          "alien": "drone",
+          "path": "challenge-weave-centre"
+        },
+        {
+          "alien": "drone",
+          "path": "challenge-weave-centre",
+          "trailing": true
+        },
+        {
+          "alien": "drone",
+          "path": "challenge-weave-centre"
+        },
+        {
+          "alien": "drone",
+          "path": "challenge-weave-centre",
+          "trailing": true
+        },
+        {
+          "alien": "drone",
+          "path": "challenge-weave-centre"
+        },
+        {
+          "alien": "drone",
+          "path": "challenge-weave-centre",
+          "trailing": true
+        },
+        {
+          "alien": "drone",
+          "path": "challenge-weave-centre"
+        },
+        {
+          "alien": "drone",
+          "path": "challenge-weave-centre",
+          "trailing": true
+        }
+      ]
+    },
+    {
+      "at": 990,
+      "spacing": 20,
+      "slots": [
+        {
+          "alien": "wing",
+          "path": "challenge-cross-centre"
+        },
+        {
+          "alien": "wing",
+          "path": "challenge-cross-centre",
+          "trailing": true
+        },
+        {
+          "alien": "wing",
+          "path": "challenge-cross-centre"
+        },
+        {
+          "alien": "wing",
+          "path": "challenge-cross-centre",
+          "trailing": true
+        },
+        {
+          "alien": "wing",
+          "path": "challenge-cross-centre"
+        },
+        {
+          "alien": "wing",
+          "path": "challenge-cross-centre",
+          "trailing": true
+        },
+        {
+          "alien": "wing",
+          "path": "challenge-cross-centre"
+        },
+        {
+          "alien": "wing",
+          "path": "challenge-cross-centre",
+          "trailing": true
+        }
+      ]
+    },
+    {
+      "at": 1320,
+      "spacing": 20,
+      "slots": [
+        {
+          "alien": "wing",
+          "path": "challenge-fall-centre"
+        },
+        {
+          "alien": "wing",
+          "path": "challenge-fall-centre",
+          "trailing": true
+        },
+        {
+          "alien": "wing",
+          "path": "challenge-fall-centre"
+        },
+        {
+          "alien": "wing",
+          "path": "challenge-fall-centre",
+          "trailing": true
+        },
+        {
+          "alien": "wing",
+          "path": "challenge-fall-centre"
+        },
+        {
+          "alien": "wing",
+          "path": "challenge-fall-centre",
+          "trailing": true
+        },
+        {
+          "alien": "wing",
+          "path": "challenge-fall-centre"
+        },
+        {
+          "alien": "wing",
+          "path": "challenge-fall-centre",
+          "trailing": true
+        }
+      ]
+    }
+  ]
+}

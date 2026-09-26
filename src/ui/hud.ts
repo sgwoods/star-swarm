@@ -17,41 +17,42 @@
  */
 
 import { LOGICAL_HEIGHT, LOGICAL_WIDTH } from '../render/canvas.js';
+import type { SpriteSheet } from '../render/sprites.js';
+import { drawSprite } from '../render/sprites.js';
 import { drawText } from '../render/text.js';
 
 /**
- * Stage badge denominations, largest first (docs/DESIGN.md section 4:
- * "denominations 1, 5, 10, 20, 30, 50").
+ * One badge denomination and the sprite that draws it.
+ *
+ * Structural rather than the manifest's own type: the HUD needs a value and a
+ * sprite id and nothing else, which keeps `src/ui/` from importing the content
+ * schema for a drawing decision.
  */
-export const BADGE_DENOMINATIONS: readonly number[] = Object.freeze([50, 30, 20, 10, 5, 1]);
+export interface StageBadge {
+  readonly value: number;
+  readonly sprite: string;
+}
 
 /**
  * The badges shown for a stage number, largest first.
  *
- * Greedy over the denominations, which is what the original does and why stage
- * 31 shows a 30 and a 1 rather than three 10s and a 1.
+ * Greedy over the denominations the pack declares (`docs/DESIGN.md` section 4:
+ * "denominations 1, 5, 10, 20, 30, 50"), which is what the original does and why
+ * stage 31 shows a 30 and a 1 rather than three 10s and a 1. Greedy is only
+ * correct largest-first, so the list is sorted here rather than trusted — the
+ * order a pack happens to write its badges in is not a rule.
  */
-export function badgesForStage(stage: number): number[] {
+export function badgesForStage(stage: number, badges: readonly StageBadge[]): StageBadge[] {
   let remaining = Math.max(0, Math.trunc(stage));
-  const badges: number[] = [];
-  for (const denomination of BADGE_DENOMINATIONS) {
-    while (remaining >= denomination) {
-      badges.push(denomination);
-      remaining -= denomination;
+  const shown: StageBadge[] = [];
+  for (const badge of [...badges].sort((a, b) => b.value - a.value)) {
+    while (remaining >= badge.value) {
+      shown.push(badge);
+      remaining -= badge.value;
     }
   }
-  return badges;
+  return shown;
 }
-
-/** Colour per denomination. Placeholder art until the sprite pipeline lands. */
-const BADGE_COLORS: Readonly<Record<number, string>> = Object.freeze({
-  1: '#ffd24a',
-  5: '#ff7043',
-  10: '#42a5f5',
-  20: '#ef5350',
-  30: '#ab47bc',
-  50: '#66bb6a',
-});
 
 export interface HudState {
   readonly score: number;
@@ -59,6 +60,10 @@ export interface HudState {
   /** Fighters in reserve — the one on the field is not drawn down here. */
   readonly lives: number;
   readonly stage: number;
+  /** The pack's badge denominations. Empty or absent is a game with no badge row. */
+  readonly badges?: readonly StageBadge[];
+  /** Where the badge art comes from. Absent draws no badges. */
+  readonly sheet?: SpriteSheet;
 }
 
 const TEXT_COLOR = '#ffffff';
@@ -110,13 +115,28 @@ export function drawHud(ctx: CanvasRenderingContext2D, state: HudState): void {
     drawLifeGlyph(ctx, 2 + i * 14, glyphY);
   }
 
-  // Bottom-right: stage badges, largest first, laid out right to left.
-  const badges = badgesForStage(state.stage).slice(0, MAX_BADGES);
-  badges.forEach((denomination, index) => {
-    const x = LOGICAL_WIDTH - 2 - (index + 1) * (BADGE_SIZE + BADGE_GAP);
-    ctx.fillStyle = BADGE_COLORS[denomination] ?? '#ffffff';
-    ctx.fillRect(x, LOGICAL_HEIGHT - 12, BADGE_SIZE, BADGE_SIZE);
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(x + 2, LOGICAL_HEIGHT - 10, BADGE_SIZE - 4, BADGE_SIZE - 4);
+  drawStageBadges(ctx, state, LOGICAL_WIDTH - 2, LOGICAL_HEIGHT - 12);
+}
+
+/**
+ * The badge row, laid out right to left from `right` so the largest badge ends
+ * up furthest from the edge — the original's order.
+ *
+ * Exported because the between-stage screen shows the row too, and a second
+ * layout would be a second thing to get wrong.
+ */
+export function drawStageBadges(
+  ctx: CanvasRenderingContext2D,
+  state: Pick<HudState, 'stage' | 'badges' | 'sheet'>,
+  right: number,
+  y: number,
+): void {
+  const { sheet, badges } = state;
+  if (sheet === undefined || badges === undefined || badges.length === 0) return;
+  // Past the row's width the original's badges overlap the reserve fighters; we
+  // drop the overflow instead, which is cosmetic either way (reference section 10).
+  const shown = badgesForStage(state.stage, badges).slice(0, MAX_BADGES);
+  shown.forEach((badge, index) => {
+    drawSprite(ctx, sheet, badge.sprite, right - (index + 1) * (BADGE_SIZE + BADGE_GAP), y);
   });
 }

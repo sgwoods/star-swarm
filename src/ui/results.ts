@@ -33,11 +33,42 @@ export interface RunStats {
   /**
    * Extra lives awarded during the run.
    *
-   * Seam: the extra-life rule itself is a sibling's task. The sim already raises
-   * `extra-life`, so this counts them and the screens can show them without
-   * anything here knowing the thresholds.
+   * The sim raises `extra-life` when its own rule fires, so this counts them and
+   * the screens show them without anything here knowing the thresholds.
    */
   readonly extraLives: number;
+  /** Challenge stages finished. */
+  readonly challengeStages: number;
+  /** Enemies destroyed across every challenge stage, and how many flew past. */
+  readonly challengeHits: number;
+  readonly challengeEnemies: number;
+  /** Challenge stages cleared to the last enemy. */
+  readonly perfectStages: number;
+  /** Everything the challenge stages paid: impact, groups and the end awards. */
+  readonly challengeScore: number;
+  /**
+   * The challenge stage that just finished, for the between-stage screen. Absent
+   * until one has, and it stays put afterwards so the card can be re-drawn.
+   */
+  readonly challenge: ChallengeSummary | undefined;
+}
+
+/**
+ * What one challenge stage amounted to — the `challenge-ended` event's payload.
+ *
+ * Declared here rather than imported so the screens depend on a value shape and
+ * not on the simulation's event union; {@link countEvents} is the one place the
+ * two meet.
+ */
+export interface ChallengeSummary {
+  readonly stage: number;
+  readonly ordinal: number;
+  readonly hits: number;
+  readonly total: number;
+  readonly perfect: boolean;
+  readonly impactScore: number;
+  readonly groupBonus: number;
+  readonly endBonus: number;
 }
 
 export const EMPTY_STATS: RunStats = Object.freeze({
@@ -47,6 +78,12 @@ export const EMPTY_STATS: RunStats = Object.freeze({
   score: 0,
   stage: 0,
   extraLives: 0,
+  challengeStages: 0,
+  challengeHits: 0,
+  challengeEnemies: 0,
+  perfectStages: 0,
+  challengeScore: 0,
+  challenge: undefined,
 });
 
 /**
@@ -57,6 +94,8 @@ export const EMPTY_STATS: RunStats = Object.freeze({
  */
 export function countEvents(stats: RunStats, events: readonly SimEvent[]): RunStats {
   let { shotsFired, hits, destroyed, score, stage, extraLives } = stats;
+  let { challengeStages, challengeHits, challengeEnemies, perfectStages, challengeScore } = stats;
+  let challenge = stats.challenge;
 
   for (const event of events) {
     switch (event.type) {
@@ -79,12 +118,38 @@ export function countEvents(stats: RunStats, events: readonly SimEvent[]): RunSt
       case 'extra-life':
         extraLives += 1;
         break;
+      case 'challenge-ended': {
+        const { type: _type, ...summary } = event;
+        challenge = summary;
+        challengeStages += 1;
+        challengeHits += event.hits;
+        challengeEnemies += event.total;
+        if (event.perfect) perfectStages += 1;
+        // One place the challenge money is totalled: the impact awards and the
+        // group bonuses are already in `score`, and re-deriving them from a
+        // per-hit value on a screen would get the ninth challenge stage wrong.
+        challengeScore += event.impactScore + event.groupBonus + event.endBonus;
+        break;
+      }
       default:
         break;
     }
   }
 
-  return { shotsFired, hits, destroyed, score, stage, extraLives };
+  return {
+    shotsFired,
+    hits,
+    destroyed,
+    score,
+    stage,
+    extraLives,
+    challengeStages,
+    challengeHits,
+    challengeEnemies,
+    perfectStages,
+    challengeScore,
+    challenge,
+  };
 }
 
 /** Hits per shot, 0..1. A run that never fired is 0, not a division by zero. */
@@ -115,23 +180,67 @@ export interface ResultRow {
 }
 
 /**
- * The rows every run shows.
+ * The rows every run shows, plus the challenge-stage tally when the run reached
+ * one.
  *
- * Seam: challenge-stage results (enemies hit, group bonuses, the perfect bonus)
- * are a sibling's task. That work appends its rows to this list rather than
- * editing the screen — {@link drawResults} draws whatever rows it is given.
+ * The challenge rows are appended rather than built into the screen —
+ * {@link drawResults} draws whatever rows it is given — so a run that never saw
+ * a challenge stage shows the same three rows it always did.
  */
 export function resultRows(stats: RunStats): ResultRow[] {
-  return [
+  const rows: ResultRow[] = [
     { label: 'SHOTS FIRED', value: String(stats.shotsFired) },
     { label: 'HITS', value: String(stats.hits) },
     { label: 'HIT RATIO', value: formatHitRatio(hitRatio(stats)), colour: '#ffd400' },
   ];
+  if (stats.challengeStages > 0) {
+    rows.push({
+      label: 'CHALLENGE HITS',
+      value: `${String(stats.challengeHits)}/${String(stats.challengeEnemies)}`,
+    });
+    rows.push({ label: 'CHALLENGE BONUS', value: String(stats.challengeScore) });
+    if (stats.perfectStages > 0) {
+      rows.push({
+        label: 'PERFECT STAGES',
+        value: String(stats.perfectStages),
+        colour: PERFECT_COLOUR,
+      });
+    }
+  }
+  return rows;
+}
+
+/**
+ * The between-stage rows the original shows after a challenge stage: "NUMBER OF
+ * HITS", then either "BONUS" or, for all forty, "SPECIAL BONUS".
+ *
+ * The bonus shown is the end-of-stage award alone, because that is the one the
+ * original displays — the impact awards and the group bonuses have already
+ * ticked the counter during the stage. The label changes with the branch since
+ * the perfect bonus **replaces** the per-hit one rather than adding to it, and a
+ * row reading "BONUS 10000" would suggest otherwise.
+ */
+export function challengeResultRows(summary: ChallengeSummary): ResultRow[] {
+  return [
+    { label: 'NUMBER OF HITS', value: `${String(summary.hits)}/${String(summary.total)}` },
+    {
+      label: summary.perfect ? 'SPECIAL BONUS' : 'BONUS',
+      value: String(summary.endBonus),
+      ...(summary.perfect && { colour: PERFECT_COLOUR }),
+    },
+  ];
+}
+
+/** The heading the between-stage card carries: which challenge stage it was. */
+export function challengeHeading(summary: ChallengeSummary): string {
+  return `CHALLENGE ${String(summary.ordinal + 1)}`;
 }
 
 const HEADING_COLOUR = '#ff2b2b';
 const LABEL_COLOUR = '#ffffff';
 const VALUE_COLOUR = '#00d8ff';
+/** What a perfect challenge stage is picked out in. */
+const PERFECT_COLOUR = '#c6ff2e';
 
 /** Row pitch, in logical pixels. */
 const ROW_PITCH = 12;
@@ -145,6 +254,8 @@ export interface ResultsOptions {
   /** Rows to draw. Defaults to {@link resultRows}. */
   readonly rows?: readonly ResultRow[];
   readonly heading?: string;
+  /** The line under the rows. Defaults to the run's stage and score. */
+  readonly footer?: string;
   /** Top of the card. Defaults to the clear band under the formation. */
   readonly y?: number;
 }
@@ -152,11 +263,13 @@ export interface ResultsOptions {
 /**
  * Draw the results screen over whatever is already on the backbuffer.
  *
- * The card grows with the rows it is given, so the challenge-stage rows a
- * sibling adds need no second layout.
+ * The card grows with the rows it is given, which is what lets the between-stage
+ * challenge card ({@link drawChallengeResults}) share this layout rather than
+ * having one of its own.
  */
 export function drawResults(ctx: CanvasRenderingContext2D, options: ResultsOptions): void {
   const { stats, rows = resultRows(stats), heading = 'RESULTS', y = CARD_TOP } = options;
+  const footer = options.footer ?? `STAGE ${String(stats.stage)}   SCORE ${String(stats.score)}`;
   const centre = LOGICAL_WIDTH / 2;
   const left = Math.round(centre - BLOCK_WIDTH / 2);
   const right = left + BLOCK_WIDTH;
@@ -172,10 +285,44 @@ export function drawResults(ctx: CanvasRenderingContext2D, options: ResultsOptio
     drawText(ctx, row.value, right, rowY, { colour: row.colour ?? VALUE_COLOUR, align: 'right' });
   });
 
-  drawText(ctx, `STAGE ${String(stats.stage)}   SCORE ${String(stats.score)}`, centre, footerY, {
-    colour: '#b9c9ff',
-    align: 'center',
+  drawText(ctx, footer, centre, footerY, { colour: '#b9c9ff', align: 'center' });
+}
+
+export interface ChallengeResultsOptions {
+  readonly stats: RunStats;
+  readonly summary: ChallengeSummary;
+  /** The flow's phase step counter, which is what makes "PERFECT !" flash. */
+  readonly steps: number;
+  readonly y?: number;
+}
+
+/**
+ * The between-stage card the original shows after a challenge stage.
+ *
+ * "PERFECT !" flashes above the card on the perfect branch, as the original's
+ * does, on the same blink the game-over banner uses — and on **simulation
+ * steps**, so the screen looks the same at the same step on any machine.
+ */
+export function drawChallengeResults(
+  ctx: CanvasRenderingContext2D,
+  options: ChallengeResultsOptions,
+): void {
+  const { stats, summary, steps, y = CARD_TOP } = options;
+  drawResults(ctx, {
+    stats,
+    rows: challengeResultRows(summary),
+    heading: challengeHeading(summary),
+    footer: `STAGE ${String(summary.stage)}   SCORE ${String(stats.score)}`,
+    y,
   });
+
+  if (!summary.perfect) return;
+  if (Math.floor(steps / BANNER_BLINK_STEPS) % 2 !== 0) return;
+  const text = 'PERFECT !';
+  const centre = LOGICAL_WIDTH / 2;
+  const bannerY = y - 28;
+  drawCentredPanel(ctx, centre, bannerY - 6, measureText(text) + 16, 20);
+  drawText(ctx, text, centre, bannerY, { colour: PERFECT_COLOUR, align: 'center' });
 }
 
 /** Blink period of the game-over banner, in simulation steps. */
