@@ -200,15 +200,23 @@ and font through the real pipeline into `docs/media/`, which is the contact shee
 - `tests/helpers/rules.ts` holds the content fixtures, not only the rules ones:
   `classicPack`, `classicRules`, `classicStages` and `classicFormation` read the
   shipped pack through the real loader, `stageSourceOf` wraps a hand-written
-  stage for a shape the pack does not ship, and `minimalRules` is the smallest
-  document the schema accepts. Tests use them rather than writing content
-  inline, so a new required field is one edit.
+  stage for a shape the pack does not ship, `minimalRules` is the smallest
+  document the schema accepts, and `quickRunRules` bends the shipped rules so a
+  whole run fits in a test. Tests use them rather than writing content inline,
+  so a new required field is one edit.
 - Art is original by rule, not by preference: `docs/DESIGN.md` section 2 bars
   ripped sprites, traced art, ROM data and the original's names. Enemy roles are
   `drone`, `wing` and `warden` everywhere outside
   `docs/reference/arcade-reference.md`.
 - `tests/unit/sim-boundary.test.ts` briefly writes `src/sim/__boundary_probe__.ts`
   and removes it again. The path is gitignored in case a run dies mid-test.
+- The game boots into **attract mode**, not into play: `src/ui/flow.ts` is the
+  one state machine (attract, playing, game over, results, high-score entry) and
+  `src/main.ts` only calls `flow.step(frame)` and draws the phase. Anything
+  driving the browser has to push start first — that is what `startGame()` in
+  `tests/e2e/smoke.spec.ts` is for — and every phase timer counts **simulation
+  steps**, never the wall clock. The attract demo is the real simulation played
+  through `src/engine/replay.ts`, so it cannot drift from the game.
 - Headings are degrees, **clockwise positive, with 0 pointing down the screen**
   (`src/content/schema.ts`), so on a y-down playfield a heading θ is the vector
   `(−sin θ, cos θ)` and 90° points _left_. `src/sim/paths.ts` restates it as a

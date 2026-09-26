@@ -13,6 +13,9 @@
  * - {@link stageSourceOf} wraps a hand-written stage in a {@link StageSource}, for
  *   a test that needs a shape the Classic pack does not ship — a challenge stage,
  *   a one-enemy wave, a formation with no grid.
+ * - {@link quickRunRules} is the Classic rules bent so a whole run fits in a test:
+ *   one fighter, and a shot that hits whatever is on the field. The front-end
+ *   tests need a game that scores and then *ends*, not a realistic one.
  */
 
 import { resolve } from 'node:path';
@@ -118,4 +121,27 @@ export function minimalRules(id = 'r'): Record<string, unknown> {
     challengeStages: { firstStage: 3, everyStages: 4 },
     difficulty: { defaultRank: 'A', ranks: { A: { stageTable: { rows: [] } } } },
   };
+}
+
+/**
+ * Classic rules bent so a whole run fits inside a test: **one** fighter, and a
+ * shot whose hit window covers the playfield, so anything targetable on the
+ * field dies to the next shot fired.
+ *
+ * A world on these rules scores within a few dozen steps of the first wave
+ * launching. Ending it is the caller's job and takes one line — nothing in the
+ * simulation fires at the player yet, so `tests/unit/flow.test.ts` launches an
+ * enemy bullet into `world.enemyBullets` the way `tests/unit/world.test.ts`
+ * does, and with one fighter that bullet is the game over.
+ *
+ * Deliberately not a hand-written rules object: it is the shipped pack with
+ * three fields moved, so a schema change still reaches it.
+ */
+export function quickRunRules(): Rules {
+  const rules = structuredClone(classicRules());
+  const everywhere = { dxMin: -224, dxMax: 224, dyMin: -288, dyMax: 288 };
+  rules.lives.default = 1;
+  rules.player.shot.windows.single = [{ ...everywhere }];
+  rules.player.shot.windows.dual = [{ ...everywhere }];
+  return rules;
 }

@@ -5,21 +5,31 @@
  * `src/sim/`, and the events the sim raises are handed to `src/render/`,
  * `src/ui/` and `src/audio/`. The sim itself has no idea any of this exists — it
  * cannot import a canvas, and lint would stop it trying (see `eslint.config.js`).
+ *
+ * What runs each step is decided by the state machine in `src/ui/flow.ts`: this
+ * file owns the display, the input device, the sprite sheet, the starfield and
+ * the audio, and nothing else. Attract demo, play, game over, results and
+ * high-score entry all arrive through one `flow.step(frame)` call, which is why
+ * there are no phase flags here.
  */
 
+import { createSfx, createSynth } from './audio/index.js';
 import { bundledPackSource } from './content/bundle.js';
 import { createRegistry, createStageSource, loadPackOrThrow } from './content/index.js';
 import { createKeyboardInput, type InputFrame } from './engine/input.js';
 import { createLoop, STEP_HZ } from './engine/loop.js';
 import { createRng } from './engine/rng.js';
-import { createSfx, createSynth } from './audio/index.js';
 import { createDisplay, LOGICAL_HEIGHT, LOGICAL_WIDTH } from './render/canvas.js';
 import { drawScene } from './render/scene.js';
 import { createSpriteSheet } from './render/sprites.js';
 import { createStarfield } from './render/starfield.js';
 import type { SimEvent } from './sim/events.js';
-import { createWorld, stepWorld } from './sim/world.js';
+import { drawAttract } from './ui/attract.js';
+import { createGameFlow, type GamePhase } from './ui/flow.js';
+import { createHighScoreBoard, createWebStorage, drawInitialsEntry } from './ui/highscores.js';
 import { drawHud } from './ui/hud.js';
+import { CARD_TOP } from './ui/panel.js';
+import { drawGameOver, drawResults } from './ui/results.js';
 
 const container = document.getElementById('app');
 if (container === null) throw new Error('Missing #app container');
@@ -46,10 +56,23 @@ if (rules === undefined) throw new Error('the bundled classic pack has no rules.
 const registry = createRegistry([pack]);
 
 // Seeded from a constant so a session is reproducible and a recorded replay
-// means something. A real game seeds from the start-of-game state and records
-// the seed alongside the input log (`src/engine/replay.ts`).
+// means something. The flow derives each game's seed, and the attract demo's,
+// from this one.
 const SEED = 'star-swarm-m2';
-const world = createWorld({ seed: SEED, rules, stages: createStageSource(registry) });
+
+// The high-score table survives the tab if the browser lets it, and quietly
+// becomes a session-only table if it does not (`src/ui/highscores.ts`).
+const highScores = createHighScoreBoard({ storage: createWebStorage() });
+
+// The flow builds every world the game runs — the attract demo's and each
+// game's — so the rules and the stage source go to it rather than to a world
+// this file keeps.
+const flow = createGameFlow({
+  rules,
+  stages: createStageSource(registry),
+  seed: SEED,
+  highScores,
+});
 
 // Everything derived from pack data is built once, here, and never per frame:
 // the sheet rasterises every sprite frame up front (`src/render/README.md`).
@@ -82,8 +105,6 @@ for (const gesture of ['keydown', 'pointerdown'] as const) {
   window.addEventListener(gesture, unlockAudio, { once: true, passive: true });
 }
 
-let highScore = 0;
-
 /** Render, UI and audio subscribe to the sim; they never call back into it. */
 function applyEvents(events: readonly SimEvent[]): void {
   sfx.handle(events);
@@ -91,9 +112,9 @@ function applyEvents(events: readonly SimEvent[]): void {
     switch (event.type) {
       case 'stage-started':
         starfield.setSpeedByte(event.starfieldSpeed);
-        break;
-      case 'score-changed':
-        if (event.score > highScore) highScore = event.score;
+        // A new stage — including the first of a new game or a restarted attract
+        // demo — is what brings the stars back after a game over.
+        starfield.paused = false;
         break;
       case 'game-over':
         starfield.paused = true;
@@ -104,13 +125,11 @@ function applyEvents(events: readonly SimEvent[]): void {
   }
 }
 
-applyEvents(world.events);
-
 const loop = createLoop({
   update() {
     // Exactly one input sample per simulation step (docs/DESIGN.md pillar 4).
     const frame: InputFrame = input.sample();
-    applyEvents(stepWorld(world, frame));
+    applyEvents(flow.step(frame).events);
   },
   render() {
     starfield.advance();
@@ -120,14 +139,47 @@ const loop = createLoop({
     ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 
     starfield.draw(ctx);
+
+    const world = flow.world;
     drawScene(ctx, world, { sheet: sprites });
     drawHud(ctx, {
       score: world.score,
-      highScore,
+      highScore: Math.max(flow.highScores.best(), world.score),
       lives: world.lives.reserve,
       stage: world.stage,
-      gameOver: world.status === 'game-over',
     });
+
+    switch (flow.phase) {
+      case 'attract':
+        drawAttract(ctx, {
+          steps: flow.phaseSteps,
+          highScores: flow.highScores.entries(),
+          persistent: flow.highScores.persistent,
+        });
+        break;
+      case 'game-over':
+        drawGameOver(ctx, flow.phaseSteps);
+        break;
+      case 'results':
+        drawResults(ctx, { stats: flow.stats, rows: flow.resultRows() });
+        break;
+      case 'high-score-entry': {
+        const entry = flow.entry;
+        if (entry !== undefined) {
+          drawInitialsEntry(ctx, {
+            entry,
+            rank: flow.entryRank ?? 0,
+            score: flow.stats.score,
+            steps: flow.phaseSteps,
+            x: LOGICAL_WIDTH / 2,
+            y: CARD_TOP,
+          });
+        }
+        break;
+      }
+      case 'playing':
+        break;
+    }
 
     display.present();
   },
@@ -136,12 +188,13 @@ const loop = createLoop({
 loop.start();
 
 // Handy from the devtools console, and what the Playwright smoke test reads to
-// confirm the loop and the display agree about the logical size.
+// confirm the loop, the display and the game flow agree.
 declare global {
   interface Window {
     starSwarm?: {
       readonly stepHz: number;
       readonly step: number;
+      readonly phase: GamePhase;
       readonly score: number;
       readonly stage: number;
       readonly lives: number;
@@ -151,6 +204,9 @@ declare global {
       readonly enemiesHome: number;
       /** Which motion the formation is running: sway, breathe or still. */
       readonly formationMotion: string;
+      readonly shotsFired: number;
+      readonly hits: number;
+      readonly highScore: number;
       readonly layout: ReturnType<typeof createDisplay>['layout'];
     };
   }
@@ -159,28 +215,42 @@ declare global {
 window.starSwarm = {
   stepHz: STEP_HZ,
   get step(): number {
-    return world.step;
+    // The flow's own counter, not the world's: a world is replaced whenever a
+    // game starts or the attract demo loops, and this must only ever go up.
+    return flow.steps;
+  },
+  get phase(): GamePhase {
+    return flow.phase;
   },
   get score(): number {
-    return world.score;
+    return flow.world.score;
   },
   get stage(): number {
-    return world.stage;
+    return flow.world.stage;
   },
   get lives(): number {
-    return world.lives.reserve;
+    return flow.world.lives.reserve;
   },
   get playerX(): number {
-    return world.player.x;
+    return flow.world.player.x;
   },
   get enemiesAlive(): number {
-    return world.fleet.enemies.filter((enemy) => enemy.state !== 'dead').length;
+    return flow.world.fleet.enemies.filter((enemy) => enemy.state !== 'dead').length;
   },
   get enemiesHome(): number {
-    return world.fleet.enemies.filter((enemy) => enemy.state === 'home').length;
+    return flow.world.fleet.enemies.filter((enemy) => enemy.state === 'home').length;
   },
   get formationMotion(): string {
-    return world.formation?.motion ?? 'none';
+    return flow.world.formation?.motion ?? 'none';
+  },
+  get shotsFired(): number {
+    return flow.stats.shotsFired;
+  },
+  get hits(): number {
+    return flow.stats.hits;
+  },
+  get highScore(): number {
+    return flow.highScores.best();
   },
   get layout(): ReturnType<typeof createDisplay>['layout'] {
     return display.layout;
