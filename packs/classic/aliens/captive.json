@@ -1,0 +1,9 @@
+{
+  "id": "captive",
+  "role": "captive",
+  "hp": 1,
+  "sprite": "player-captured",
+  "score": { "base": 500 },
+  "fire": { "pattern": "aimed", "shotsPerDive": 1, "cooldownFrames": 40 },
+  "dive": { "paths": ["dive-captive"], "weight": 1, "returns": true }
+}

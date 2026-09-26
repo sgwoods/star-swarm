@@ -54,8 +54,10 @@ describe('the aliens', () => {
     // The three formation roles, plus the three transform types — which are
     // roles of their own rather than one shared "transform" role, because the
     // pack's role vocabulary is what everything else keys by and a sprite, a
-    // score and a dive belong to each type separately.
+    // score and a dive belong to each type separately — plus the captive, which
+    // is the player's own stolen fighter as an alien (`src/sim/capture.ts`).
     expect([...pack.aliens.keys()].sort()).toEqual([
+      'captive',
       'drone',
       'ensign',
       'manta',

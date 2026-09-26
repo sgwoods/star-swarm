@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 import { resolveDifficultyRow } from '../../src/content/rules.js';
 import { EMPTY_FRAME, frameOf, isDown } from '../../src/engine/input.js';
-import { createReplaySource, parseReplay, recordInput } from '../../src/engine/replay.js';
+import { createReplaySource, parseReplay } from '../../src/engine/replay.js';
+import { capturedFighter } from '../../src/sim/capture.js';
 import { eventsOfType, type SimEvent } from '../../src/sim/events.js';
 import { startX } from '../../src/sim/player.js';
 import type { World } from '../../src/sim/world.js';
@@ -13,7 +14,7 @@ import {
   classicStages,
   GOLDENS,
   goldenPath,
-  pilotFor,
+  playGolden,
   runWorld,
 } from '../../scripts/record-replay.js';
 import { classicRules } from '../helpers/rules.js';
@@ -67,9 +68,7 @@ describe.each(GOLDENS)('golden replay: $name', (spec) => {
   it('is the log the recorded pilot still produces', () => {
     // Guards the recorder itself: if the pilot or the input encoding changed,
     // the golden would still replay but would no longer be the run it claims.
-    const recorder = recordInput(pilotFor(spec), spec.seed);
-    runWorld(spec.seed, recorder.source, spec.steps, goldenRules, stages, spec.stage);
-    expect(recorder.finish().runs).toEqual(replay.runs);
+    expect(playGolden(spec).recorder.finish().runs).toEqual(replay.runs);
   });
 });
 
@@ -202,8 +201,85 @@ describe('what the goldens actually cover', () => {
     expect(transformed).toHaveLength(1);
     expect(transformed[0]?.group).toHaveLength(rules.transform?.groupSize ?? 0);
     expect(rules.transform?.types).toContain(transformed[0]?.alienId);
-    // The trio leaves the screen rather than rejoining the formation.
-    expect(eventsOfType(events, 'enemy-departed').length).toBeGreaterThan(0);
+
+    // Every one of the trio is off the field by the end, and each left the only
+    // two ways it can: shot, or out of the bottom for good. In *this* run all
+    // three are shot — the alternative, that they leave undestroyed because their
+    // alien says `dive.returns: false`, is pinned by group id in
+    // `tests/unit/dive.test.ts` rather than left to whatever a recorded pilot
+    // happens to hit.
+    const group = transformed[0]?.group ?? [];
+    const gone = new Set([
+      ...eventsOfType(events, 'target-destroyed').map((event) => event.targetId),
+      ...eventsOfType(events, 'enemy-departed').map((event) => event.targetId),
+    ]);
+    expect(group).toHaveLength(rules.transform?.groupSize ?? 0);
+    for (const id of group) {
+      expect(gone.has(id)).toBe(true);
+      expect(world.fleet.enemies.find((enemy) => enemy.id === id)?.state).toBe('dead');
+    }
+  });
+
+  it('takes a fighter with a tractor beam and parks it in the formation', () => {
+    const { events, world } = replayEvents('capture-beam');
+
+    // Beams came out and took fighters, and the loss is its own event: a
+    // subscriber can tell being captured from being shot. Nothing in this log is
+    // *shot* — the cabinet it is recorded on drops no bombs, so the beam is the
+    // only thing that can cost a fighter.
+    expect(eventsOfType(events, 'capture-started').length).toBeGreaterThan(0);
+    expect(eventsOfType(events, 'player-captured').length).toBeGreaterThan(0);
+    expect(eventsOfType(events, 'player-hit')).toHaveLength(0);
+    // Every one of them cost a fighter, and no attempt ended any other way.
+    expect(eventsOfType(events, 'player-captured').at(-1)?.livesRemaining).toBe(
+      world.lives.reserve,
+    );
+
+    // The captured fighter is an enemy in the formation's captive row now, in its
+    // captor's column, and the channel is held — so no second beam can appear.
+    const captive = capturedFighter(world.capture, world.fleet);
+    expect(captive?.inCaptiveSlot).toBe(true);
+    expect(captive?.alienId).toBe(rules.capture.captiveAlien);
+    expect(world.capture.phase).toBe('held');
+    expect(world.formation?.captiveCaptor[world.capture.captiveSlot ?? -1]).toBe(
+      world.capture.captorSlot,
+    );
+  });
+
+  it('frees it again when its captor dies with both of them attacking', () => {
+    const { events, world } = replayEvents('capture-rescue');
+
+    // One rescue, one dock, and a dual fighter out of it. The captive turned into a
+    // *rogue* on none of these frames, which is the other branch of the same kill.
+    expect(eventsOfType(events, 'fighter-rescued')).toHaveLength(1);
+    expect(eventsOfType(events, 'fighter-docked')).toHaveLength(1);
+    expect(eventsOfType(events, 'captive-rogue')).toHaveLength(0);
+    expect(world.player.mode).toBe('dual');
+    expect(world.capture.phase).toBe('dual');
+  });
+
+  it('plays on as a dual fighter, and is never targeted again', () => {
+    const { events, world } = replayEvents('dual-fighter');
+
+    // Two ships, playing: the stage gets cleared and the run rolls on.
+    expect(world.player.mode).toBe('dual');
+    expect(eventsOfType(events, 'stage-cleared').length).toBeGreaterThan(0);
+    expect(eventsOfType(events, 'target-destroyed').length).toBeGreaterThan(40);
+
+    // And **no beam at all after the rescue docked**, however many captors launched
+    // in the two and a half thousand steps that follow: a dual fighter is never
+    // targeted, because the channel is not idle (report acceptance test R6).
+    const docked = events.findIndex((event) => event.type === 'fighter-docked');
+    expect(docked).toBeGreaterThan(0);
+    expect(eventsOfType(events.slice(docked), 'capture-started')).toHaveLength(0);
+    expect(world.capture.launches).toBeGreaterThan(0);
+
+    // Still two logical shots, each carrying the dual fighter's two windows with the
+    // dead gap between them — the cap did not double.
+    expect(world.shots).toHaveLength(rules.player.maxShots);
+    for (const shot of world.shots) {
+      if (shot.active) expect(shot.windows).toHaveLength(2);
+    }
   });
 
   /**

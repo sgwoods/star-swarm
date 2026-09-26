@@ -2,9 +2,8 @@
 
 The arcade-faithful pack. The manifest, the palette, the formation, the rules,
 the entry, dive and challenge paths, the sprite set, the sound set, the three
-roles plus the transform trio, the normal stages through 8 and the eight
-challenge stages are here; the capture beam lands with the sibling Milestone 2
-task.
+roles plus the transform trio, the capture mechanic's content, the normal stages
+through 8 and the eight challenge stages are all here.
 
 ## Roles
 
@@ -17,6 +16,13 @@ this project's own. For anyone checking a number against
 | `drone`  | bee role       | two rows of 10, columns 0, 2 … 18  |
 | `wing`   | butterfly role | two rows of 8, columns 2, 4 … 16   |
 | `warden` | boss role      | top row of 4, columns 6, 8, 10, 12 |
+
+One further role, `captive`, is not an alien the pack invented: it is the
+player's own fighter after a capture, which sits in the formation, attacks and
+can be shot down for points (`src/sim/capture.ts`). It is a role so that the rest
+of the pack — the formation's captive slots, the dive lottery, the score — can
+address it the same way it addresses everything else, and its art is `player-captured`
+rather than a sprite of its own name, because that is what it is.
 
 ## What is already populated
 
@@ -31,8 +37,9 @@ this project's own. For anyone checking a number against
   a flat pair gets a captor's latched escort bonus wrong. The `warden` is the
   two-hit role: `hp: 2` and `hitSprites: ["warden-hit"]`, which is how its first
   hit changes its colour instead of destroying it. Each also carries its `fire`
-  pattern and its `dive`, from the dive task; the capture beam is a sibling task
-  and is deliberately not declared here yet.
+  pattern and its `dive`, from the dive task. Plus the three transform types and
+  `captive`, the player's own captured fighter — base 500, so it is 500 parked
+  and 1,000 attacking through the same doubling rule as everything else.
 - **`stages/`** — five documents covering the normal stages through 8. Each is
   five waves of eight, as reference section 5's `db_attk_wav_IDs` composes them:
   4 `wing` + 4 `drone`, then all four `warden`s with 4 `wing`, then 8 `wing`,
@@ -192,6 +199,11 @@ ROM closed them, and both changed a shape rather than a number:
   which is why this is a rule and not just a cap. `slotsPerCaptor` stays 1: the
   four home slots are one per possible captor, not four simultaneous captives.
   `docs/reference/arcade-reference.md` section 7.
+- The difficulty rows' sixth parameter is `beamStepFrames`, **not a capture rate**.
+  It is the tractor beam's animation step period in frames, falling from 12 to 3
+  across rank A, and the same countdown paces the beam's extension, its retraction
+  and the pull-in — so a late beam extends and pulls four times faster rather than
+  appearing more often. Reference section 6, parameter 6.
 
 One narrower question is still open, and it is the one that decides what a
 challenge stage's second wave contains: whether four of the forty are the two-hit

@@ -32,8 +32,18 @@ const PACK_DIR = resolve(import.meta.dirname, '..', '..', 'packs', 'classic');
 /** The three shapes of reference section 5, one authored path each. */
 const ENTRY_PATHS = ['entry-side-file', 'entry-wide-arc', 'entry-long-row'] as const;
 
-/** The attack paths: one per role, plus the transform group's. */
-const DIVE_PATHS = ['dive-drone', 'dive-wing', 'dive-warden', 'dive-transform'] as const;
+/**
+ * The attack paths: one per role, the transform group's, and the capture pair — a
+ * captor's descent to beam position and the captured fighter's own swoop.
+ */
+const DIVE_PATHS = [
+  'dive-drone',
+  'dive-wing',
+  'dive-warden',
+  'dive-transform',
+  'dive-capture',
+  'dive-captive',
+] as const;
 
 /**
  * Formation slots a dive is flown from, with the side each would sweep towards.

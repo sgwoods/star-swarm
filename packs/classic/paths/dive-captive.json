@@ -1,0 +1,10 @@
+{
+  "id": "dive-captive",
+  "mirror": true,
+  "segments": [
+    { "type": "arc", "radius": 22, "degrees": 35, "dir": "cw", "speed": 1.9 },
+    { "type": "fire", "count": 1 },
+    { "type": "aimAtPlayer", "speed": 1.9, "duration": 48 },
+    { "type": "exitBottom", "speed": 1.9 }
+  ]
+}

@@ -21,11 +21,19 @@ import { createRegistry } from '../src/content/registry.js';
 import type { Rules } from '../src/content/schema.js';
 import type { StageSource } from '../src/content/stages.js';
 import { createStageSource } from '../src/content/stages.js';
-import { constantInput, frameOf, type InputFrame, type InputSource } from '../src/engine/input.js';
+import {
+  type Action,
+  constantInput,
+  frameOf,
+  type InputFrame,
+  type InputSource,
+} from '../src/engine/input.js';
 import { createLoop, STEP_MS } from '../src/engine/loop.js';
+import type { Recorder } from '../src/engine/replay.js';
 import { recordInput, serializeReplay } from '../src/engine/replay.js';
 import { createRng } from '../src/engine/rng.js';
-import { createWorld, fingerprintWorld, stepWorld } from '../src/sim/world.js';
+import { beamCaptor, capturedFighter, captorOfCaptive, holdsFighter } from '../src/sim/capture.js';
+import { createWorld, fingerprintWorld, stepWorld, type World } from '../src/sim/world.js';
 
 const GOLDEN_DIR = resolve(import.meta.dirname, '..', 'tests', 'sim', 'golden');
 
@@ -118,24 +126,92 @@ export function sweepingPilot(period: number): InputSource {
 }
 
 /**
+ * A pilot that gets itself captured on purpose and then shoots its way back out.
+ *
+ * It watches the world, which a golden is allowed to do: what gets recorded is the
+ * frames it produced, and a replay feeds those exact frames back. So an adaptive
+ * pilot at record time still leaves a plain, reproducible log — and it is the only
+ * way to record a rescue, which needs a shot landed on one particular enemy inside
+ * one particular window.
+ *
+ * It **holds its fire** until it has something to shoot for, and that is the whole
+ * trick: a captor has to survive its descent for a beam to come out at all, and has
+ * to survive being in formation for a rescue to be possible later. So:
+ *
+ * 1. **A beam is out, or a captor is on its way down: walk into it**, silently.
+ *    Getting captured on purpose is the standard way to go after a dual fighter.
+ * 2. **A fighter is held and the pair is attacking: line up under the captor and
+ *    fire.** That is the manual's rescue condition, and firing only there is the
+ *    difference between a rescue and a rogue.
+ * 3. **A dual fighter: play.** Sweep with the button held, which is what puts the
+ *    two-bullet spread and the two windows into the log.
+ * 4. **Otherwise: sweep, silently.**
+ */
+export function capturePilot(world: World): InputSource {
+  const sweep = sweepingPilot(90);
+
+  /** Towards `x`, or nothing if we are already there. */
+  const towards = (x: number, extra: Action[] = []): InputFrame => {
+    const dx = x - world.player.x;
+    const actions: Action[] = [...extra];
+    if (dx > 1) actions.push('right');
+    else if (dx < -1) actions.push('left');
+    return frameOf(...actions);
+  };
+
+  return {
+    sample(): InputFrame {
+      const { capture, fleet } = world;
+
+      if (capture.phase === 'diving' || capture.phase === 'beam') {
+        const captor = beamCaptor(capture, fleet);
+        if (captor !== undefined) return towards(captor.x);
+      }
+
+      if (holdsFighter(capture)) {
+        const captor = captorOfCaptive(capture, fleet);
+        const captive = capturedFighter(capture, fleet);
+        if (captor !== undefined && captive?.state === 'diving' && captor.state === 'diving') {
+          return towards(captor.x, ['fire']);
+        }
+      }
+
+      const frame = sweep.sample();
+      // The sweep holds fire, except once there are two ships to show off.
+      return capture.phase === 'dual' ? frame : frame & ~frameOf('fire');
+    },
+  };
+}
+
+/** What one recorded or replayed run comes back as. */
+export interface WorldRun {
+  readonly fingerprint: string;
+  readonly trace: string[];
+}
+
+/**
  * Run the world through the real fixed-step loop. Exported so the test drives
  * the simulation exactly as this recorder did — a replay proved against a
  * different harness proves nothing.
+ *
+ * `input` may be a source or a factory over the world, for a pilot that has to see
+ * what it is shooting at. See {@link capturePilot}.
  */
 export function runWorld(
   seed: string,
-  input: InputSource,
+  input: InputSource | ((world: World) => InputSource),
   steps: number,
   rules: Rules = CLASSIC.rules,
   stages: StageSource = CLASSIC.stages,
   stage?: number,
-): { readonly fingerprint: string; readonly trace: string[] } {
+): WorldRun {
   const world = createWorld({ seed, rules, stages, ...(stage !== undefined && { stage }) });
+  const source = typeof input === 'function' ? input(world) : input;
   const trace: string[] = [];
 
   const loop = createLoop({
     update: () => {
-      stepWorld(world, input.sample());
+      stepWorld(world, source.sample());
       trace.push(fingerprintWorld(world));
     },
     render: () => {},
@@ -173,6 +249,11 @@ export interface GoldenSpec {
    * scripted pilot. See {@link sweepingPilot}.
    */
   readonly sweepPeriod?: number;
+  /**
+   * Record with the capture pilot, which watches the world. See
+   * {@link capturePilot}.
+   */
+  readonly capture?: boolean;
 }
 
 /**
@@ -186,6 +267,21 @@ export interface GoldenSpec {
  */
 function fiveShipCabinet(): Rules {
   return { ...CLASSIC.rules, lives: { ...CLASSIC.rules.lives, default: 5 } };
+}
+
+/**
+ * A five-ship cabinet whose enemies drop no bombs: the global bullet cap at zero.
+ *
+ * Used by the capture goldens, and not for convenience. Enemy fire is the only thing
+ * that can shoot the fighter down, and an idle-ish pilot in front of forty bombers
+ * loses every ship inside half a minute — so a capture log recorded against the
+ * shipped cap would be a record of being bombed, with the mechanic barely started.
+ * Bombing has its own goldens (`player-core`, `player-survival`, `stage-dives`); these
+ * record the channel, and the only thing that can cost a fighter in them is the beam.
+ */
+function unbombedCabinet(): Rules {
+  const rules = fiveShipCabinet();
+  return { ...rules, enemies: { ...rules.enemies, maxBullets: 0 } };
 }
 
 export const GOLDENS: readonly GoldenSpec[] = [
@@ -218,6 +314,48 @@ export const GOLDENS: readonly GoldenSpec[] = [
     steps: 5_400,
     sweepPeriod: 100,
     rules: fiveShipCabinet(),
+  },
+  // The capture mechanic: three goldens over one pilot and one seed, each cut a
+  // little further along the same run (`capturePilot`, `unbombedCabinet`).
+  //
+  // Stage 20 rather than stage 1 because its row launches captors often and gives
+  // the beam a 3-frame step period where stage 1's is 12 — the shipped row, not a
+  // softened one, and the one that makes the whole channel fit in a recordable run.
+  //
+  // A capture: a captor descends, opens its beam, drags the fighter up the screen
+  // and parks it in its own captive slot — which costs a fighter and leaves the
+  // channel held, so no second beam can ever appear.
+  {
+    name: 'capture-beam',
+    seed: 'golden-capture',
+    inputSeed: 'capture',
+    steps: 2_200,
+    stage: 20,
+    capture: true,
+    rules: unbombedCabinet(),
+  },
+  // A rescue: the captor dives again with its captive beside it, is shot while they
+  // are both attacking, and the freed ship spins and docks as a second fighter.
+  {
+    name: 'capture-rescue',
+    seed: 'golden-capture',
+    inputSeed: 'capture',
+    steps: 3_400,
+    stage: 20,
+    capture: true,
+    rules: unbombedCabinet(),
+  },
+  // And a dual fighter playing on: two ships, a two-bullet spread per shot with the
+  // cap still at two logical shots, and still no capture attempt — a dual fighter is
+  // never targeted.
+  {
+    name: 'dual-fighter',
+    seed: 'golden-capture',
+    inputSeed: 'capture',
+    steps: 5_400,
+    stage: 20,
+    capture: true,
+    rules: unbombedCabinet(),
   },
   // Stage 20 from the start: the difficulty ramp selecting a *different* row.
   // Four divers rising to six, launch counters of 8 where stage 1 has 0, the
@@ -273,23 +411,53 @@ export function goldenPath(name: string): string {
   return join(GOLDEN_DIR, `${name}.replay.json`);
 }
 
-/** The input a golden is recorded with: one held frame, a steady sweep, or the pilot. */
-export function pilotFor(spec: GoldenSpec): InputSource {
+/**
+ * The input a golden is recorded with: one held frame, the capture pilot, a
+ * steady sweep, or the scripted pilot.
+ *
+ * The capture pilot is a *factory* over the world rather than a plain source —
+ * see {@link capturePilot} for why a golden is allowed to watch the run it is
+ * recording.
+ */
+export function pilotFor(spec: GoldenSpec): InputSource | ((world: World) => InputSource) {
   if (spec.hold !== undefined) return constantInput(spec.hold);
+  if (spec.capture === true) return capturePilot;
   if (spec.sweepPeriod !== undefined) return sweepingPilot(spec.sweepPeriod);
   return scriptedPilot(spec.inputSeed);
 }
 
-export function recordGolden(spec: GoldenSpec): string {
-  const recorder = recordInput(pilotFor(spec), spec.seed);
+/**
+ * Play a golden's own pilot against a fresh world, recording as it goes.
+ *
+ * The one place a golden is *produced*, used both by the writer below and by the
+ * test that checks the committed log is still the log this pilot produces. It has
+ * to be one function because a pilot may be a plain source or a factory over the
+ * world ({@link capturePilot}), and the recorder has to wrap whichever it is.
+ */
+export function playGolden(spec: GoldenSpec): {
+  readonly recorder: Recorder;
+  readonly run: WorldRun;
+} {
+  const pilot = pilotFor(spec);
+  let recorder: Recorder | undefined;
+  const source = (world: World): InputSource => {
+    recorder = recordInput(typeof pilot === 'function' ? pilot(world) : pilot, spec.seed);
+    return recorder.source;
+  };
   const run = runWorld(
     spec.seed,
-    recorder.source,
+    source,
     spec.steps,
     spec.rules ?? CLASSIC.rules,
     CLASSIC.stages,
     spec.stage,
   );
+  if (recorder === undefined) throw new Error(`golden "${spec.name}" never built its pilot`);
+  return { recorder, run };
+}
+
+export function recordGolden(spec: GoldenSpec): string {
+  const { recorder, run } = playGolden(spec);
   return `${serializeReplay(recorder.finish(run.fingerprint))}\n`;
 }
 

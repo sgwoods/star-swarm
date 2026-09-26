@@ -15,20 +15,36 @@
  *
  * Milestone 2 scope so far: entry waves, formation sway and breathe, slot homing,
  * dive attacks, enemy fire and the difficulty ramp that drives both
- * (`src/sim/dive.ts`), challenge stages and their three awards
- * (`src/sim/challenge.ts`), and extra lives. The capture beam, the captured
- * fighter, rescue and the dual fighter are the sibling tasks that build on this,
- * and are deliberately absent rather than stubbed. The seam the capture task
- * wants is {@link World.dive}: a captor's dive is an ordinary dive with a beam on
- * it, so it launches through the same director and the same `beginDive`.
+ * (`src/sim/dive.ts`), the capture channel — beam, captured fighter, rogue,
+ * rescue and dual fighter (`src/sim/capture.ts`) — challenge stages and their
+ * three awards (`src/sim/challenge.ts`), and extra lives. A captor's dive is an
+ * ordinary dive with a beam on it, so it launches through the same director and
+ * the same `beginDive`.
+ *
+ * Two loss conditions reach the same end, and they are not the same event. Being
+ * shot raises `player-hit`; being **captured** raises `player-captured`, and on the
+ * last fighter it ends the game — a distinct loss condition the design plan
+ * originally missed and the original's manual is explicit about
+ * (`docs/reference/arcade-reference.md` section 7).
  */
 
-import { extraLivesEarned, starfieldSpeedByte } from '../content/rules.js';
+import { extraLivesEarned, maxXFor, starfieldSpeedByte } from '../content/rules.js';
 import type { Rules } from '../content/schema.js';
 import type { StageContent, StageSource } from '../content/stages.js';
 import { EMPTY_STAGE_SOURCE } from '../content/stages.js';
 import { isDown, type InputFrame } from '../engine/input.js';
 import { createRng, type Rng, type RngState } from '../engine/rng.js';
+import type { CaptureState } from './capture.js';
+import {
+  beamHasFighter,
+  captureAllowsFire,
+  captureFingerprint,
+  captureNoteDestroyed,
+  captureNoteHalfLost,
+  createCaptureState,
+  enterStageCapture,
+  stepCapture,
+} from './capture.js';
 import type { ChallengeStage } from './challenge.js';
 import { createChallengeStage, endChallengeStage, recordChallengeHit } from './challenge.js';
 import { hitWindowIndex } from './collision.js';
@@ -42,7 +58,15 @@ import {
   stepAttacks,
 } from './dive.js';
 import type { Enemy, Fleet } from './enemies.js';
-import { aliveEnemies, createFleet, enemyScore, isTargetable, stepFleet } from './enemies.js';
+import type { EnemyState, ScriptedTrigger } from './enemies.js';
+import {
+  aliveEnemies,
+  createFleet,
+  enemyScore,
+  fleetEnemies,
+  isTargetable,
+  stepFleet,
+} from './enemies.js';
 import type { SimEvent } from './events.js';
 import type { FormationState } from './formation.js';
 import { createFormation, stepFormation } from './formation.js';
@@ -110,6 +134,14 @@ export interface World {
   fleet: Fleet;
   /** Dives, enemy fire and the difficulty row in force. Replaced every stage. */
   dive: DiveState;
+  /**
+   * The capture channel — one, globally, for the whole run.
+   *
+   * Carried across stages rather than rebuilt with the stage, because a captured
+   * fighter stays with its captor for the rest of the game
+   * (`src/sim/capture.ts`).
+   */
+  capture: CaptureState;
   rng: Rng;
   /** Events raised by the step just run. Replaced every step, never appended to across steps. */
   events: SimEvent[];
@@ -174,6 +206,7 @@ export function createWorld(options: WorldOptions): World {
     challenge: createChallengeStage(rules, stage, content),
     fleet: content === undefined ? NO_FLEET() : createFleet(content, rules),
     dive: createDiveState(rules, stage, options.rank),
+    capture: createCaptureState(rules, stage, options.rank),
     rng,
     events: [],
   };
@@ -278,8 +311,14 @@ function resolvePlayerShots(world: World): void {
       } else {
         const award = destroyAward(world, enemy);
         const transformBonus = noteDestroyed(world.dive, world.rules, world.stage, enemy);
+        const priorState = enemy.state;
         enemy.state = 'dead';
         world.fleet.flights.delete(enemy.id);
+        // What this kill meant to the capture channel, read before the score is
+        // added so a rescue and its points land in the order they happened. Marked
+        // dead first, and handed the state it *had*: a rescue recalls every diver,
+        // and this one must not be recalled.
+        resolveCaptureKill(world, enemy, priorState);
         world.events.push({
           type: 'target-destroyed',
           targetId: enemy.id,
@@ -303,6 +342,66 @@ function resolvePlayerShots(world: World): void {
   }
 }
 
+/**
+ * Route a kill through the capture channel.
+ *
+ * Every arcade path out of the channel that is caused by a player shot comes
+ * through here: an attempt lost, a fighter taken anyway because the shot was too
+ * late, a rescue, and a captured fighter turning rogue. The channel decides; this
+ * only turns the answer into events and a possible loss.
+ */
+function resolveCaptureKill(world: World, enemy: Enemy, priorState: EnemyState): void {
+  const { content, formation } = world;
+  if (content === undefined || formation === undefined) return;
+
+  const kill = captureNoteDestroyed(
+    world.capture,
+    { fleet: world.fleet, content, formation, rules: world.rules, playerAt: playerTarget(world) },
+    enemy,
+    priorState,
+  );
+  if (kill.failed) world.events.push({ type: 'capture-failed', targetId: enemy.id });
+  if (kill.rogue) {
+    world.events.push({ type: 'captive-rogue', targetId: world.capture.captiveId ?? -1 });
+  }
+  if (kill.rescued !== undefined) {
+    const [x, y] = kill.rescued;
+    world.events.push({ type: 'fighter-rescued', x, y });
+  }
+  // Shot after the beam had the ship but before it was pulled in: the arcade does
+  // not rescue, and the fighter is lost (report acceptance test R10).
+  if (kill.captured) capturePlayer(world);
+}
+
+/**
+ * The fighter is lost to a tractor beam.
+ *
+ * A loss condition of its own: it raises `player-captured` rather than
+ * `player-hit`, and **being captured on the last fighter ends the game**, which
+ * `capture.lastFighterCaptureEndsGame` states so a pack that wants a gentler beam
+ * can say so.
+ */
+function capturePlayer(world: World): void {
+  const x = world.player.x;
+  const y = world.player.y;
+  world.player.alive = false;
+  world.player.respawnTimer = world.rules.player.respawnFrames;
+  world.player.stepFlag = 0;
+  world.player.mode = 'single';
+  clearShots(world.shots);
+
+  const endsGame = world.rules.capture.lastFighterCaptureEndsGame;
+  if (world.lives.reserve <= 0 && endsGame) {
+    world.status = 'game-over';
+    world.events.push({ type: 'player-captured', x, y, livesRemaining: 0 });
+    world.events.push({ type: 'game-over', score: world.score });
+    return;
+  }
+
+  if (world.lives.reserve > 0) world.lives.reserve -= 1;
+  world.events.push({ type: 'player-captured', x, y, livesRemaining: world.lives.reserve });
+}
+
 /** Take a life, and end the game if that was the last one. */
 function killPlayer(world: World, x: number, y: number): void {
   world.player.alive = false;
@@ -322,31 +421,67 @@ function killPlayer(world: World, x: number, y: number): void {
   world.events.push({ type: 'player-hit', x, y, livesRemaining: world.lives.reserve });
 }
 
-/** Enemy bullets against the fighter — one test per ship, so a dual has two. */
+/**
+ * Enemy bullets against the fighter — one test per ship, so a dual has two.
+ *
+ * A dual fighter hit **loses that half**, not the ship in play: the survivor keeps
+ * flying and the reserve is untouched, so a rescue is worth having. Which half was
+ * hit decides where the survivor is, because the second ship is drawn to the right
+ * of the anchor and the remaining one has to become the anchor. The rules state
+ * whether the loss costs a fighter (`dualFighter.losingHalfCostsLife`); the arcade
+ * says it does not.
+ *
+ * Nothing can hit the fighter while a beam is dragging it — it is already lost to
+ * the beam, and killing it here would swallow the capture.
+ */
 function resolveEnemyBullets(world: World): void {
-  if (!world.player.alive) return;
+  if (!world.player.alive || beamHasFighter(world.capture)) return;
   const hitWindow = world.rules.player.hitWindow;
   const anchors = shipAnchors(world.player, world.rules);
 
   for (const bullet of world.enemyBullets) {
     if (!bullet.active) continue;
-    for (const anchor of anchors) {
+    for (const [index, anchor] of anchors.entries()) {
       if (hitWindowIndex(bullet, anchor, [hitWindow]) < 0) continue;
       bullet.active = false;
-      killPlayer(world, anchor.x, anchor.y);
+      if (world.player.mode === 'dual') loseDualHalf(world, index, anchor.x, anchor.y);
+      else killPlayer(world, anchor.x, anchor.y);
       return;
     }
   }
 }
 
+/**
+ * One half of a dual fighter is shot away.
+ *
+ * Releases the capture channel, which is the last of the arcade's ways back to
+ * idle: beams resume once you are a single fighter again (report acceptance test
+ * R6).
+ */
+function loseDualHalf(world: World, index: number, x: number, y: number): void {
+  const { player, rules } = world;
+  player.mode = 'single';
+  // Losing the left ship promotes the right one, which was drawn at the offset.
+  if (index === 0) player.x += rules.player.secondShipOffsetX;
+  player.x = Math.min(maxXFor(rules, 'single'), Math.max(rules.player.minX, player.x));
+  captureNoteHalfLost(world.capture);
+  world.events.push({ type: 'dual-half-lost', x, y, livesRemaining: world.lives.reserve });
+  if (rules.dualFighter.losingHalfCostsLife) killPlayer(world, x, y);
+}
+
 /** Bring the next fighter on after a hit. */
 function resolveRespawn(world: World): void {
   if (world.player.alive || world.status === 'game-over') return;
+  // A beam still dragging the ship has not finished taking it.
+  if (beamHasFighter(world.capture)) return;
   world.player.respawnTimer -= 1;
   if (world.player.respawnTimer > 0) return;
   world.player.respawnTimer = 0;
   world.player.alive = true;
   world.player.x = startX(world.rules, world.player.mode);
+  // And back onto its own row: a tractor beam is the one thing that moves the
+  // fighter off it, so the next one has to be put back.
+  world.player.y = world.rules.player.y;
   world.events.push({ type: 'player-ready', x: world.player.x, y: world.player.y });
 }
 
@@ -361,6 +496,22 @@ function enterStage(world: World, stage: number): void {
   world.challenge = createChallengeStage(world.rules, stage, world.content);
   world.fleet = world.content === undefined ? NO_FLEET() : createFleet(world.content, world.rules);
   world.dive = createDiveState(world.rules, stage, world.rank);
+  // The capture channel is *not* replaced: a captured fighter stays with its
+  // captor for the rest of the game, and re-enters as the last ship of this
+  // stage's wave.
+  if (world.content !== undefined && world.formation !== undefined) {
+    enterStageCapture(
+      world.capture,
+      {
+        fleet: world.fleet,
+        content: world.content,
+        formation: world.formation,
+        rules: world.rules,
+      },
+      stage,
+      world.rank,
+    );
+  }
   world.events.push({
     type: 'stage-started',
     stage,
@@ -419,7 +570,9 @@ function resolveChallengeEnd(world: World): void {
  */
 function resolveStageEnd(world: World): void {
   if (world.fleet.enemies.length === 0) return;
-  if (aliveEnemies(world.fleet.enemies).length > 0) return;
+  // Your own captured fighter is not something to clear: it stays with its captor
+  // for the rest of the game, so a stage holding nothing else still ends.
+  if (fleetEnemies(world.fleet.enemies).length > 0) return;
 
   resolveChallengeEnd(world);
   world.events.push({ type: 'stage-cleared', stage: world.stage });
@@ -495,6 +648,7 @@ function stepEnemies(world: World): void {
     stage: world.stage,
     rng: world.rng,
     bullets: world.enemyBullets,
+    capture: world.capture,
     playerAt,
     scripted: step.fired,
   });
@@ -529,6 +683,61 @@ function stepEnemies(world: World): void {
       group: attack.transformed.map((enemy) => enemy.id),
     });
   }
+
+  resolveCapture(world, content, formation, step.triggered, playerAt);
+}
+
+/**
+ * The capture channel, stepped after the fleet.
+ *
+ * After, because everything it measures is taken from where the captor has just
+ * flown to: the beam's origin, the catch test and the drag all read the captor's
+ * current anchor. It is also where the beam's `trigger` from a path lands, which is
+ * the only thing that opens a beam.
+ */
+function resolveCapture(
+  world: World,
+  content: StageContent,
+  formation: FormationState,
+  triggered: readonly ScriptedTrigger[],
+  playerAt: Vec2 | undefined,
+): void {
+  const step = stepCapture(world.capture, {
+    fleet: world.fleet,
+    content,
+    formation,
+    rules: world.rules,
+    stage: world.stage,
+    player: world.player,
+    rng: world.rng,
+    triggered,
+    playerAt,
+  });
+
+  if (step.beamStarted !== undefined) {
+    const captor = step.beamStarted;
+    world.events.push({
+      type: 'capture-started',
+      targetId: captor.id,
+      x: captor.x,
+      y: captor.y,
+    });
+  }
+  if (step.failed) world.events.push({ type: 'capture-failed', targetId: -1 });
+  if (step.dived !== undefined) {
+    const captive = step.dived;
+    world.events.push({
+      type: 'enemy-dived',
+      targetId: captive.id,
+      alienId: captive.alienId,
+      x: captive.x,
+      y: captive.y,
+    });
+  }
+  if (step.captured) capturePlayer(world);
+  if (step.docked) {
+    world.events.push({ type: 'fighter-docked', x: world.player.x, y: world.player.y });
+  }
 }
 
 /**
@@ -545,11 +754,18 @@ export function stepWorld(world: World, frame: InputFrame): readonly SimEvent[] 
   }
 
   resolveRespawn(world);
-  stepPlayer(world.player, frame, world.rules);
+  // A beam dragging the ship flies it; the stick does nothing until it lets go.
+  if (!beamHasFighter(world.capture)) stepPlayer(world.player, frame, world.rules);
 
   // No edge detection: holding fire fires whenever a slot is free. The cap and
-  // the flight time are the whole of the fire rate.
-  if (world.player.alive && isDown(frame, 'fire')) {
+  // the flight time are the whole of the fire rate. Fire is disabled outright once
+  // a captor has connected — "disables your rockets when the boss has finally
+  // connected" (`docs/reference/arcade-reference.md` section 7).
+  if (
+    world.player.alive &&
+    captureAllowsFire(world.capture, world.rules) &&
+    isDown(frame, 'fire')
+  ) {
     const shot = fireShot(
       world.shots,
       world.player.x,
@@ -668,6 +884,7 @@ export function fingerprintWorld(world: World): string {
         vy,
       ]),
       dive: diveFingerprint(world.dive),
+      capture: captureFingerprint(world.capture),
       formation: world.formation && [
         world.formation.frame,
         world.formation.motion,

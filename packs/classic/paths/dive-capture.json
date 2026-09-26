@@ -1,0 +1,10 @@
+{
+  "id": "dive-capture",
+  "mirror": true,
+  "segments": [
+    { "type": "loop", "radius": 12, "turns": 1, "dir": "cw", "speed": 1.5 },
+    { "type": "aimAtPlayer", "speed": 1.5, "duration": 72 },
+    { "type": "trigger", "ability": "captureBeam" },
+    { "type": "exitBottom", "speed": 1.5 }
+  ]
+}

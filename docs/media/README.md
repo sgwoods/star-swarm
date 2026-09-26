@@ -18,6 +18,13 @@ The clips are screen recordings of the dev build.
   and homing back into their own slots, a warden turning blue on its first hit,
   and the last few enemies turning nasty. The controls are untouched for the
   first nineteen seconds, so the clip opens on the whole fleet.
+- `m2-capture.gif` — the capture mechanic end to end: a captor loops out of the
+  formation, slides down and opens its tractor beam; the beam takes the fighter
+  and drags it up into the captor's own captive slot; the captured fighter then
+  dives _with_ its captor, is freed when the captor is shot while they are both
+  attacking, spins in and docks as a second ship. Played back from the committed
+  `dual-fighter` golden replay through the real simulation and the real renderer,
+  so the clip is the golden — fast-forwarded to the capture and cut at the dock.
 - `m2-challenge.gif` — the first challenge stage played to a perfect and the
   between-stage card that follows it: forty enemies in five groups of eight
   flying scripted convoys and **leaving without attacking**, the fighter standing

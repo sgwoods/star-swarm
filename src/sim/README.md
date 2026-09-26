@@ -9,17 +9,44 @@ Milestone 1 landed the player half: `world.ts`, `player.ts`, `shots.ts`,
 the static stand-in with real enemies: `enemies.ts` (entry waves, the four-phase
 update, slot homing) and `formation.ts` (the coordinate axes, sway and breathe).
 The dive task added `dive.ts` — dive attacks, enemy fire and the difficulty ramp
-that drives both — and `challenge.ts` followed with challenge stages and their
-three awards. The capture beam, the captured fighter, rescue and the dual fighter
-are the sibling tasks that build on those.
+that drives both — `challenge.ts` followed with challenge stages and their three
+awards, and `capture.ts` with the tractor beam, the captured fighter, the rogue,
+rescue and the dual fighter.
 
 **The attack is one director, and dives are where capture hooks in.** `dive.ts`
 resolves the stage's difficulty row once and reads it: the per-role launch rates,
 the diver limit and its later bump, the continuous-bombing threshold. Diving
 begins from `formation-settled` and nowhere else, launch decisions are taken once
 per round robin, and each enemy's own bombing decision is taken on its own phase.
-A captor's dive is an ordinary dive with a beam on it, so it launches through
-`beginDive` like everything else.
+A captor's dive is an ordinary dive with a beam on it: the director asks
+`capture.ts` one question when a captor-role launch comes up — is this one an
+attempt? — and launches it through the same credit, the same diver limit and the
+same `beginDive` whichever way the answer goes. All that differs is the path.
+
+**Capture is one channel, and the channel is the rule.** There is exactly one
+captured fighter in a run, ever, and a captor may only be chosen while the channel
+is idle. A successful capture does **not** free it, so no second beam appears
+while a fighter is held — including while it is parked as a rogue, and including
+while it is flying beside you as a dual. "A dual fighter is never targeted" is
+therefore not a special case anywhere; it falls out of the flag. The complete set
+of ways the channel is released is the list of `releaseCapture`'s callers, and
+each one is an arcade release site the rules-and-scoring report traced.
+
+Two consequences worth knowing before editing `capture.ts`:
+
+- **The captured fighter is an `Enemy`.** It sits in the formation, dives with its
+  captor, is shot for 500 or 1,000 by the ordinary doubling rule, and re-enters as
+  the last ship of the next stage's wave. Its `home` indexes the formation's
+  _captive_ slots rather than its alien slots, which is the whole of what
+  `Enemy.inCaptiveSlot` is for.
+- **Being captured is a loss condition of its own.** It raises `player-captured`
+  rather than `player-hit`, and on the last fighter it ends the game — which
+  `docs/DESIGN.md` originally missed and the original's manual is explicit about.
+- **The channel is stepped outside the attack director.** `stepAttacks` gates a
+  challenge stage in one place; `stepCapture` does not go through it, because a
+  beam in flight has to finish whatever the stage is. So the parts of it that
+  attack ask `allowsAttacks` themselves, and a held fighter sits a challenge
+  stage out rather than joining its wave.
 
 Two fields of a difficulty row are carried as data and **read by nothing yet**:
 `bombEnable` (the arcade's "parameter for set bomb drop enable flags") and
