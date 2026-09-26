@@ -39,14 +39,44 @@ the right-hand half of a wave is the same data evaluated with the slot's
 halves at once — that is what makes it the only pattern entering from both
 sides.
 
-## Not here yet
+## Dive paths
 
-- **Dive paths.** The bees' "wide, sweeping, diving arcs", the round swoop back
-  up from behind and the bottom exit with re-entry at the top are all confirmed
-  in reference section 5, but dives are Milestone 2 and none of the thirteen
-  scripts' geometry is derivable from the reference as it stands.
-- **Entry bombing.** Reference section 5 puts it in the script row's header byte
-  and the per-stage difficulty table, not in the flight path, so no `fire`
-  segment belongs in an entry path.
+Dive attacks are the Milestone 2 dive task. One per role, plus one for the
+transform group and one shared return leg.
+
+| File                  | Shape (reference sections 5 and 6)                          |
+| --------------------- | ----------------------------------------------------------- |
+| `dive-drone.json`     | the bees' wide sweeping arc, a loop, and out of the bottom  |
+| `dive-wing.json`      | the butterflies' faster arc dive, swinging away at the end  |
+| `dive-warden.json`    | the captor's slow, weaving descent — the one you shoot at   |
+| `dive-transform.json` | the trio: arc, two scripted shots, one final loop, and gone |
+| `dive-return.json`    | re-entry at the top, then `toSlot` and nothing else         |
+
+Three things about their shape are not free choices:
+
+- **A dive path states no `start` and uses no `line` or `bezier`.** It is flown
+  from wherever the enemy already sits, so every segment has to be relative to
+  the flyer's pose: `arc`, `loop`, `sine`, `aimAtPlayer`, `exitBottom`. A dive
+  authored with absolute targets would drag all forty enemies through the same
+  piece of screen whatever slot they left.
+- **The outward sweep is `mirror`, not a second file**, exactly as the entry
+  paths are: `src/sim/dive.ts` mirrors the dive of any enemy in the right-hand
+  half of the formation, so one authored path fans both ways. The radii were
+  chosen so that the widest case — the outermost column sweeping outwards —
+  stays on screen; `tests/unit/classic-paths.test.ts` is what holds that.
+- **Every dive ends in `exitBottom`.** Confirmed behaviour: divers leave the
+  bottom and re-enter at the top (reference section 5). Whether an alien comes
+  back is its own `dive.returns` flag — the transform trio's is `false`, which is
+  the one confirmed exception.
+
+`dive-transform.json` is the only file here with `fire` segments, and
+deliberately so: the trio "fires on the way down" is a scripted moment in its
+dive, where the roles' bombing is a timer the difficulty row governs. Entry
+bombing likewise belongs to the row and not to a path, so no `fire` segment
+appears in an entry path.
+
+The geometry is this pack's rendition of shapes the reference describes in words.
+None of the thirteen ROM scripts' actual flight-vector programs are derivable
+from the reference as it stands, so nothing here should be read as a ROM value.
 
 Preview any of these with `npm run dev` and `/lab` (`src/ui/lab/`).

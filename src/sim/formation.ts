@@ -178,6 +178,20 @@ export function slotPosition(
   };
 }
 
+/**
+ * Is slot `index` in the right-hand half of the formation?
+ *
+ * Answered from the slot's **column index** rather than from its pixel x, so the
+ * answer cannot flip while the formation sways or breathes — a dive that mirrored
+ * one way at launch and the other way a frame later would be a bug nobody could
+ * see in a screenshot. With an even number of columns the two halves are equal;
+ * with an odd number the middle column counts as the right.
+ */
+export function isRightOfCentre(state: FormationState, index: number): boolean {
+  const column = state.slotColumn[index] ?? 0;
+  return column * 2 >= state.columnsAtRest.length - 1;
+}
+
 /** Where captive slot `index` is right now. The arcade's row never breathes. */
 export function captivePosition(
   state: FormationState,

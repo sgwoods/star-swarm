@@ -29,13 +29,13 @@
  * No constants: every number arrives in the `Rules` value or the stage document.
  */
 
-import type { Rules, Wave } from '../content/schema.js';
+import type { Alien, Rules, Wave } from '../content/schema.js';
 import type { StageContent } from '../content/stages.js';
 import type { HitPadding } from './collision.js';
 import type { FormationState } from './formation.js';
 import { completeEntry, slotPosition, slotPositionAhead } from './formation.js';
-import type { CompiledPath, PathPose, TargetResolver, Vec2 } from './paths.js';
-import { compilePath, samplePath } from './paths.js';
+import type { CompiledPath, PathPose, PathSample, TargetResolver, Vec2 } from './paths.js';
+import { compilePath, pathEventsBetween, samplePath } from './paths.js';
 
 /**
  * Where an enemy is in its life, in the arcade's own terms.
@@ -47,10 +47,12 @@ import { compilePath, samplePath } from './paths.js';
  * entry wave scores the diving value, and one shot on its way back into its slot
  * scores the formation value.
  *
- * `returning` is unreachable until the dive task lands; it is named here because
- * the scoring rule is meaningless without it.
+ * So the five live states are: waiting to launch, flying in, sitting in the
+ * formation, attacking, and rotating back into the slot afterwards. Only the last
+ * two of those are new to the dive task, and only the *last* of them scores the
+ * formation value while visibly moving.
  */
-export type EnemyState = 'standby' | 'entering' | 'home' | 'returning' | 'dead';
+export type EnemyState = 'standby' | 'entering' | 'home' | 'diving' | 'returning' | 'dead';
 
 /** States that score the formation value rather than the doubled one. */
 const AT_HOME_VALUE: ReadonlySet<EnemyState> = new Set<EnemyState>(['home', 'returning']);
@@ -83,6 +85,15 @@ export interface Enemy {
   readonly movingMultiplier: number;
   readonly hitPadding: HitPadding;
 
+  /** The attack paths this alien may dive along; empty for one that never dives. */
+  readonly divePaths: readonly string[];
+  /** This alien's share of the dive lottery within its role. */
+  readonly diveWeight: number;
+  /** False for an alien that leaves for good after a dive instead of returning. */
+  readonly returnsFromDive: boolean;
+  /** How this alien bombs, or `undefined` for one that never does. */
+  readonly fire: EnemyFire | undefined;
+
   state: EnemyState;
   /** Sprite anchor, matching every other anchor in the simulation. */
   x: number;
@@ -92,6 +103,26 @@ export interface Enemy {
   hitsRemaining: number;
   /** Frames into its current flight path; `-1` before it has launched. */
   pathFrame: number;
+  /**
+   * Frames until this enemy may drop its next bomb.
+   *
+   * **This is the per-enemy inter-shot delay** (`docs/DESIGN.md` section 4), and
+   * it lives on the enemy rather than on a global timer for exactly the reason the
+   * plan gives: forty enemies with one shared timer fire in lockstep. It is
+   * loaded at stage start from `rules.enemies.bomberReadyTimers` for the enemy's
+   * role and reloaded from the alien's own `fire.cooldownFrames` after each shot.
+   */
+  bombTimer: number;
+  /** Bombs left in this attack run; reloaded when a dive or an entry begins. */
+  bombsLeft: number;
+}
+
+/** What an alien's `fire` block resolves to on the enemy that carries it. */
+export interface EnemyFire {
+  readonly pattern: NonNullable<Alien['fire']>['pattern'];
+  readonly shotsPerDive: number;
+  readonly cooldownFrames: number;
+  readonly spreadOffsets: readonly number[];
 }
 
 export interface Fleet {
@@ -120,9 +151,17 @@ export interface Fleet {
  */
 const SLOT_PREDICTION_PASSES = 3;
 
+/** States in which the enemy is on the field and a shot can be tested against it. */
+const TARGETABLE: ReadonlySet<EnemyState> = new Set<EnemyState>([
+  'entering',
+  'home',
+  'diving',
+  'returning',
+]);
+
 /** Everything on the field that a shot can be tested against. */
 export function isTargetable(enemy: Enemy): boolean {
-  return enemy.state === 'entering' || enemy.state === 'home' || enemy.state === 'returning';
+  return TARGETABLE.has(enemy.state);
 }
 
 export function aliveEnemies(enemies: readonly Enemy[]): Enemy[] {
@@ -183,6 +222,69 @@ export class StageContentError extends Error {
   }
 }
 
+/** What one enemy needs beyond its alien to exist: its identity in the stage. */
+interface EnemySeed {
+  readonly id: number;
+  readonly home: number;
+  readonly launchFrame: number;
+  readonly path: string;
+  readonly mirror: boolean;
+  readonly trailing: boolean;
+  readonly wave: number;
+}
+
+/**
+ * One enemy, from an alien and its place in the stage.
+ *
+ * Everything the simulation needs is copied off the alien here rather than looked
+ * up per frame, which is what lets `stepFleet` and the attack director work on
+ * plain values — and what keeps an `Enemy` serialisable for a fingerprint.
+ */
+function createEnemy(alien: Alien, seed: EnemySeed, rules: Rules): Enemy {
+  const fire = alien.fire;
+  return {
+    id: seed.id,
+    alienId: alien.id,
+    role: alien.role,
+    sprite: alien.sprite,
+    hitSprites: alien.hitSprites,
+    home: seed.home,
+    phase: seed.id % rules.enemies.updatePhases,
+    launchFrame: seed.launchFrame,
+    path: seed.path,
+    mirror: seed.mirror,
+    trailing: seed.trailing,
+    wave: seed.wave,
+    hp: alien.hp,
+    scoreBase: alien.score.base,
+    movingMultiplier: alien.score.movingMultiplier ?? rules.scoring.movingMultiplier,
+    hitPadding: alien.hitPadding,
+    divePaths: alien.dive?.paths ?? [],
+    diveWeight: alien.dive?.weight ?? 0,
+    returnsFromDive: alien.dive?.returns ?? true,
+    fire:
+      fire === undefined
+        ? undefined
+        : {
+            pattern: fire.pattern,
+            shotsPerDive: fire.shotsPerDive,
+            cooldownFrames: fire.cooldownFrames ?? 0,
+            spreadOffsets: fire.spreadOffsets,
+          },
+    state: 'standby',
+    x: 0,
+    y: 0,
+    heading: 0,
+    hitsRemaining: alien.hp,
+    pathFrame: -1,
+    // The stage-start bomb timer is per *role* and loaded unconditionally, which
+    // is the arcade's own `16 02 02` init (reference section 6). An alien whose
+    // role the rules say nothing about starts ready to fire.
+    bombTimer: rules.enemies.bomberReadyTimers[alien.role] ?? 0,
+    bombsLeft: 0,
+  };
+}
+
 /**
  * Build every enemy a stage will put on the field, all in `standby`.
  *
@@ -192,7 +294,6 @@ export class StageContentError extends Error {
  */
 export function createFleet(content: StageContent, rules: Rules): Fleet {
   const { stage, formation, aliens } = content;
-  const phases = rules.enemies.updatePhases;
   const enemies: Enemy[] = [];
 
   /** Per-role cursor for a slot that does not name its own home. */
@@ -229,31 +330,21 @@ export function createFleet(content: StageContent, rules: Rules): Fleet {
           `stage "${stage.id}" wave ${String(waveIndex)} slot ${String(slotIndex)}: no entry path`,
         );
       }
-      const id = enemies.length;
-      enemies.push({
-        id,
-        alienId: alien.id,
-        role: alien.role,
-        sprite: alien.sprite,
-        hitSprites: alien.hitSprites,
-        home: slot.home ?? claimSlot(alien.role),
-        phase: id % phases,
-        launchFrame: launchFrames[slotIndex] ?? wave.at,
-        path,
-        mirror: slot.mirror,
-        trailing: slot.trailing,
-        wave: waveIndex,
-        hp: alien.hp,
-        scoreBase: alien.score.base,
-        movingMultiplier: alien.score.movingMultiplier ?? rules.scoring.movingMultiplier,
-        hitPadding: alien.hitPadding,
-        state: 'standby',
-        x: 0,
-        y: 0,
-        heading: 0,
-        hitsRemaining: alien.hp,
-        pathFrame: -1,
-      });
+      enemies.push(
+        createEnemy(
+          alien,
+          {
+            id: enemies.length,
+            home: slot.home ?? claimSlot(alien.role),
+            launchFrame: launchFrames[slotIndex] ?? wave.at,
+            path,
+            mirror: slot.mirror,
+            trailing: slot.trailing,
+            wave: waveIndex,
+          },
+          rules,
+        ),
+      );
     });
   });
 
@@ -320,21 +411,201 @@ export function launchEnemy(
     ...(from !== undefined && { start: from }),
   });
 
+  beginFlight(fleet, enemy, compiled, 'entering');
+}
+
+/** Put a compiled flight on an enemy and start it flying, in `state`. */
+function beginFlight(fleet: Fleet, enemy: Enemy, compiled: CompiledPath, state: EnemyState): void {
   fleet.flights.set(enemy.id, compiled);
-  enemy.state = 'entering';
+  enemy.state = state;
   enemy.pathFrame = 0;
   enemy.x = compiled.start.x;
   enemy.y = compiled.start.y;
   enemy.heading = compiled.start.heading;
+  // A fresh flight is a fresh attack run: the arcade reloads the bomb allowance
+  // when an object starts moving, not when the stage starts.
+  enemy.bombsLeft = enemy.fire?.shotsPerDive ?? 0;
+}
+
+/**
+ * Compile and begin one enemy's dive.
+ *
+ * The attack path is flown **from wherever the enemy is**, which is why a dive
+ * path states no `start` and is built out of the segment types that are relative
+ * to the flyer's pose — `arc`, `loop`, `sine`, `aimAtPlayer`, `exitBottom`. A
+ * dive authored with absolute `line` or `bezier` targets would drag all forty
+ * enemies through the same piece of screen whatever slot they left.
+ *
+ * `mirror` reflects the evaluation rather than naming a second path, so one
+ * authored dive serves both halves of the formation: the enemies on the right
+ * sweep right and the ones on the left sweep left
+ * (`docs/reference/arcade-reference.md` section 5, and `paths.ts`).
+ */
+export function beginDive(
+  fleet: Fleet,
+  enemy: Enemy,
+  content: StageContent,
+  formation: FormationState,
+  rules: Rules,
+  pathId: string,
+  mirror: boolean,
+  playerAt?: Vec2,
+): void {
+  const path = content.paths.get(pathId);
+  if (path === undefined) {
+    throw new StageContentError(`enemy ${String(enemy.id)}: no dive path "${pathId}"`);
+  }
+  const compiled = compilePath(path, {
+    playfield: rules.playfield,
+    mirror,
+    slot: slotResolver(formation, rules, enemy.home, 1),
+    player: playerTarget(rules, playerAt),
+    start: [enemy.x, enemy.y],
+    heading: enemy.heading,
+  });
+  beginFlight(fleet, enemy, compiled, 'diving');
+}
+
+/**
+ * Send a diver that has left the bottom back into its slot from the top.
+ *
+ * The return leg is a path the pack names (`enemies.dive.returnPath`) and it
+ * homes with `toSlot` and nothing else — the same segment the entry uses, so
+ * there is exactly one homing implementation in the simulation. Returns `false`
+ * when the pack has no return path, which means the diver is gone for good.
+ */
+export function beginReturn(
+  fleet: Fleet,
+  enemy: Enemy,
+  content: StageContent,
+  formation: FormationState,
+  rules: Rules,
+  playerAt?: Vec2,
+): boolean {
+  const { returnPath, reentryY } = rules.enemies.dive;
+  if (returnPath === undefined) return false;
+  const path = content.paths.get(returnPath);
+  if (path === undefined) {
+    throw new StageContentError(`no return path "${returnPath}"`);
+  }
+  const compiled = compilePath(path, {
+    playfield: rules.playfield,
+    slot: slotResolver(formation, rules, enemy.home, 1),
+    player: playerTarget(rules, playerAt),
+    // Re-entry is at the x it left by and a row above the top of the screen: the
+    // arcade's divers reappear at the top rather than flying back up the field.
+    start: [enemy.x, reentryY],
+    heading: 0,
+  });
+  beginFlight(fleet, enemy, compiled, 'returning');
+  return true;
+}
+
+/** Where and how a mid-stage arrival starts flying. */
+export interface SpawnOptions {
+  /** Its anchor on the frame it appears. */
+  readonly at: Vec2;
+  /** Degrees, clockwise positive, 0 down the screen. Defaults to straight down. */
+  readonly heading?: number;
+  /** The formation slot it owns. A spawn that never returns never uses it. */
+  readonly home: number;
+  /** The wave it is reported as belonging to. Defaults to 0. */
+  readonly wave?: number;
+  readonly pathId: string;
+  readonly mirror?: boolean;
+  readonly playerAt?: Vec2 | undefined;
+}
+
+/**
+ * Add an enemy to a fleet mid-stage, already flying an attack path.
+ *
+ * This is what a transform produces: the group is in no entry wave, so it has no
+ * launch frame and no slot of its own — it borrows `home` from the enemy it
+ * replaced and, being an alien that does not return, never uses it.
+ */
+export function spawnDiver(
+  fleet: Fleet,
+  alien: Alien,
+  content: StageContent,
+  formation: FormationState,
+  rules: Rules,
+  options: SpawnOptions,
+): Enemy {
+  const enemy = createEnemy(
+    alien,
+    {
+      id: nextEnemyId(fleet),
+      home: options.home,
+      launchFrame: fleet.frame,
+      path: options.pathId,
+      mirror: options.mirror ?? false,
+      trailing: false,
+      wave: options.wave ?? 0,
+    },
+    rules,
+  );
+  enemy.x = options.at[0];
+  enemy.y = options.at[1];
+  enemy.heading = options.heading ?? 0;
+  fleet.enemies.push(enemy);
+  beginDive(
+    fleet,
+    enemy,
+    content,
+    formation,
+    rules,
+    options.pathId,
+    options.mirror ?? false,
+    options.playerAt,
+  );
+  return enemy;
+}
+
+/**
+ * The next free enemy id.
+ *
+ * Ids are dense and never reused while the stage runs, because they are what
+ * events and the compiled-flight map address an enemy by; a recycled id would
+ * hand a new enemy an old one's flight.
+ */
+function nextEnemyId(fleet: Fleet): number {
+  let next = 0;
+  for (const enemy of fleet.enemies) {
+    if (enemy.id >= next) next = enemy.id + 1;
+  }
+  return next;
+}
+
+/**
+ * Where `aimAtPlayer` aims: the fighter, or the bottom centre of the playfield.
+ *
+ * The fallback is what lets a test — or `/lab` — compile a dive with no world
+ * around it and still get a path that points down the screen rather than a
+ * compile error. It is a *position*, passed in per call rather than held
+ * anywhere, because two worlds stepped in one process must not be able to aim
+ * each other's dives.
+ */
+function playerTarget(rules: Rules, playerAt: Vec2 | undefined): TargetResolver {
+  return playerAt ?? [rules.playfield.width / 2, rules.playfield.height];
+}
+
+/** One scripted `fire` reached on the timeline, for the world to turn into bullets. */
+export interface ScriptedFire {
+  readonly enemy: Enemy;
+  readonly count: number;
 }
 
 /** What one step of the fleet did, for the world to turn into events. */
 export interface FleetStep {
   /** Enemies that began their entry flight on this frame. */
   readonly launched: readonly Enemy[];
-  /** Enemies that reached their slot on this frame. */
+  /** Enemies that reached their slot on this frame, entering or returning. */
   readonly homed: readonly Enemy[];
-  /** True on the frame the last of them arrived. */
+  /** Enemies that finished a dive and left the field for good on this frame. */
+  readonly departed: readonly Enemy[];
+  /** `fire` segments a flight passed through on this frame. */
+  readonly fired: readonly ScriptedFire[];
+  /** True on the frame the last of the entry waves arrived. */
   readonly entryFinished: boolean;
 }
 
@@ -342,23 +613,50 @@ export interface FleetStep {
  * Advance every enemy by one frame.
  *
  * Positions move every frame; **state advances only on the enemy's own phase of
- * the round robin**, which is the arcade's cadence and the reason a launch lands
- * within `updatePhases` frames of when it was due rather than exactly on it.
+ * the round robin**, which is the arcade's cadence and the reason a launch — or
+ * the end of a dive — lands within `updatePhases` frames of when it was due
+ * rather than exactly on it.
+ *
+ * `playerAt` is where a dive that ends in `aimAtPlayer` aims when it compiles a
+ * return leg; the world passes the fighter's anchor.
  */
 export function stepFleet(
   fleet: Fleet,
   content: StageContent,
   formation: FormationState,
   rules: Rules,
+  playerAt?: Vec2,
 ): FleetStep {
   fleet.frame += 1;
   const phase = fleet.frame % rules.enemies.updatePhases;
 
   const launched: Enemy[] = [];
   const homed: Enemy[] = [];
+  const departed: Enemy[] = [];
+  const fired: ScriptedFire[] = [];
+
+  /** Fly one frame of the enemy's current path, collecting any scripted fire. */
+  const advanceFlight = (enemy: Enemy): PathSample | undefined => {
+    const flight = fleet.flights.get(enemy.id);
+    if (flight === undefined) return undefined;
+    enemy.pathFrame += 1;
+    const sample = samplePath(flight, enemy.pathFrame);
+    enemy.x = sample.x;
+    enemy.y = sample.y;
+    enemy.heading = sample.heading;
+    // Half-open at the start, so a `fire` segment on the timeline is drained
+    // exactly once however many frames a caller steps.
+    for (const event of pathEventsBetween(flight, enemy.pathFrame - 1, enemy.pathFrame)) {
+      if (event.kind === 'fire') fired.push({ enemy, count: event.count });
+    }
+    return sample;
+  };
 
   for (const enemy of fleet.enemies) {
     const onPhase = enemy.phase === phase;
+    // The bomb delay is frames, so it counts down every frame; whether the enemy
+    // may *act* on it is the attack director's decision, on this enemy's phase.
+    if (enemy.bombTimer > 0) enemy.bombTimer -= 1;
 
     switch (enemy.state) {
       case 'standby': {
@@ -369,19 +667,30 @@ export function stepFleet(
         break;
       }
 
-      case 'entering': {
-        const flight = fleet.flights.get(enemy.id);
-        if (flight === undefined) break;
-        enemy.pathFrame += 1;
-        const sample = samplePath(flight, enemy.pathFrame);
-        enemy.x = sample.x;
-        enemy.y = sample.y;
-        enemy.heading = sample.heading;
+      case 'entering':
+      case 'returning': {
+        const sample = advanceFlight(enemy);
+        if (sample === undefined) break;
         if (onPhase && sample.done) {
           enemy.state = 'home';
           fleet.flights.delete(enemy.id);
           homed.push(enemy);
         }
+        break;
+      }
+
+      case 'diving': {
+        const sample = advanceFlight(enemy);
+        if (sample === undefined) break;
+        if (!onPhase || !sample.done) break;
+        fleet.flights.delete(enemy.id);
+        // The dive is over. An alien that returns re-enters from the top and
+        // homes; one that does not is simply gone, with no score and no kill —
+        // leaving the screen is not the same event as being destroyed.
+        if (enemy.returnsFromDive && beginReturn(fleet, enemy, content, formation, rules, playerAt))
+          break;
+        enemy.state = 'dead';
+        departed.push(enemy);
         break;
       }
 
@@ -408,7 +717,7 @@ export function stepFleet(
     completeEntry(formation);
   }
 
-  return { launched, homed, entryFinished };
+  return { launched, homed, departed, fired, entryFinished };
 }
 
 function isStillArriving(enemy: Enemy): boolean {

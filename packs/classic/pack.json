@@ -2,7 +2,7 @@
   "id": "classic",
   "name": "Classic",
   "version": "0.1.0",
-  "description": "The arcade-faithful pack. Sprites, sounds, paths, the three alien roles and stage 1 have landed; stages 2-8, dive paths and the challenge stages follow with their own Milestone 2 tasks.",
+  "description": "The arcade-faithful pack. Sprites, sounds, entry and dive paths, the three alien roles, the transform trio and stage 1 have landed; stages 2-8, the capture beam and the challenge stages follow with their own Milestone 2 tasks.",
   "palette": [
     "#0000",
     "#ffffff",
@@ -28,6 +28,15 @@
     },
     "warden": {
       "label": "Warden"
+    },
+    "scourge": {
+      "label": "Scourge"
+    },
+    "manta": {
+      "label": "Manta"
+    },
+    "ensign": {
+      "label": "Ensign"
     }
   },
   "formations": {
@@ -274,6 +283,7 @@
     "extra-life": "extra-life",
     "game-over": "game-over",
     "enemy-dived": "dive",
+    "enemy-transformed": "dive",
     "capture-started": "capture-beam",
     "fighter-rescued": "rescue",
     "challenge-bonus": "challenge-bonus",

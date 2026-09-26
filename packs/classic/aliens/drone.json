@@ -3,5 +3,7 @@
   "role": "drone",
   "hp": 1,
   "sprite": "drone",
-  "score": { "base": 50 }
+  "score": { "base": 50 },
+  "fire": { "pattern": "aimed", "shotsPerDive": 1, "cooldownFrames": 56 },
+  "dive": { "paths": ["dive-drone"], "weight": 1 }
 }

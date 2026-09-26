@@ -1,0 +1,11 @@
+{
+  "id": "dive-drone",
+  "mirror": true,
+  "segments": [
+    { "type": "arc", "radius": 26, "degrees": 55, "dir": "cw", "speed": 1.8 },
+    { "type": "arc", "radius": 38, "degrees": 90, "dir": "ccw", "speed": 1.8 },
+    { "type": "aimAtPlayer", "speed": 1.8, "duration": 26 },
+    { "type": "loop", "radius": 20, "turns": 1, "dir": "cw", "speed": 1.8 },
+    { "type": "exitBottom", "speed": 1.8 }
+  ]
+}

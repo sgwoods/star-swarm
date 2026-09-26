@@ -32,6 +32,28 @@ const PACK_DIR = resolve(import.meta.dirname, '..', '..', 'packs', 'classic');
 /** The three shapes of reference section 5, one authored path each. */
 const ENTRY_PATHS = ['entry-side-file', 'entry-wide-arc', 'entry-long-row'] as const;
 
+/** The attack paths: one per role, plus the transform group's. */
+const DIVE_PATHS = ['dive-drone', 'dive-wing', 'dive-warden', 'dive-transform'] as const;
+
+/**
+ * Formation slots a dive is flown from, with the side each would sweep towards.
+ *
+ * The outermost columns are the whole point: a dive sweeps *outwards*, so the
+ * widest excursion any enemy makes is the one an enemy in column 0 or column 9
+ * makes, and that is the case that has to stay on screen.
+ */
+const DIVE_STARTS: readonly { readonly at: Vec2; readonly mirror: boolean }[] = [
+  { at: [32, 108], mirror: false },
+  { at: [80, 56], mirror: false },
+  { at: [96, 96], mirror: false },
+  { at: [112, 84], mirror: true },
+  { at: [160, 72], mirror: true },
+  { at: [176, 108], mirror: true },
+];
+
+/** Where the fighter sits, for a dive segment that aims at it. */
+const PLAYER: Vec2 = [112, 248];
+
 /**
  * Somewhere plausible in the formation for `toSlot` to aim at. `pack.json`
  * states slots as logical `(row, column)` because their pixel spacing is
@@ -56,8 +78,10 @@ function compile(path: MovementPath, mirror: boolean): CompiledPath {
 }
 
 describe('the Classic entry paths', () => {
-  it('ships one path per perceived entry shape, and no more', () => {
-    expect([...pack.paths.keys()].sort()).toEqual([...ENTRY_PATHS].sort());
+  it('ships one path per perceived entry shape, plus the attack paths', () => {
+    expect([...pack.paths.keys()].sort()).toEqual(
+      [...ENTRY_PATHS, ...DIVE_PATHS, 'dive-return'].sort(),
+    );
   });
 
   it.each(ENTRY_PATHS)('%s flies from off screen into its slot', (id) => {
@@ -122,5 +146,114 @@ describe('the Classic entry paths', () => {
       expect(compile(path, false).start.x).toBeLessThan(0);
       expect(compile(path, true).start.x).toBeGreaterThan(DEFAULT_PLAYFIELD.width);
     }
+  });
+});
+
+/**
+ * The attack paths.
+ *
+ * These carry a constraint the entry paths do not: a dive is flown **from
+ * wherever the enemy already is**, so it must state no `start` and must use only
+ * the segment types that are relative to the flyer's pose. A dive built from
+ * absolute `line` or `bezier` targets would drag all forty enemies through the
+ * same piece of screen, and no assertion about one starting position would
+ * notice. See `packs/classic/paths/README.md`.
+ */
+describe('the Classic dive paths', () => {
+  /** The segment types whose geometry is relative to where the flyer already is. */
+  const RELATIVE = new Set([
+    'arc',
+    'loop',
+    'lissajous',
+    'sine',
+    'wait',
+    'aimAtPlayer',
+    'toSlot',
+    'exitBottom',
+    'fire',
+    'trigger',
+  ]);
+
+  function dive(id: string, at: Vec2, mirror: boolean): CompiledPath {
+    const path = pack.paths.get(id);
+    if (path === undefined) throw new Error(`missing path ${id}`);
+    return compilePath(path, {
+      mirror,
+      slot: SLOT,
+      player: PLAYER,
+      playfield: DEFAULT_PLAYFIELD,
+      start: at,
+      heading: 0,
+    });
+  }
+
+  it.each(DIVE_PATHS)('%s is flown from the slot it left, not from a stated start', (id) => {
+    const path = pack.paths.get(id);
+    if (path === undefined) throw new Error(`missing path ${id}`);
+    expect(path.start).toBeUndefined();
+    for (const segment of path.segments) {
+      expect([id, segment.type, RELATIVE.has(segment.type)]).toEqual([id, segment.type, true]);
+    }
+    // And it fans both ways from one file, as the entry paths do.
+    expect(path.mirror).toBe(true);
+  });
+
+  it.each(DIVE_PATHS)('%s leaves the bottom of the screen from every slot', (id) => {
+    for (const { at, mirror } of DIVE_STARTS) {
+      const compiled = dive(id, at, mirror);
+      const end = samplePath(compiled, compiled.totalFrames);
+
+      // It terminates, and takes a plausible time doing it: a dive over in half a
+      // second or lasting ten is a content bug.
+      expect(Number.isFinite(compiled.totalFrames)).toBe(true);
+      expect(compiled.totalFrames).toBeGreaterThan(60);
+      expect(compiled.totalFrames).toBeLessThan(600);
+
+      // Confirmed behaviour (reference section 5): divers leave by the bottom.
+      // Whether they come back is the alien's own `dive.returns`.
+      expect(end.done).toBe(true);
+      expect(end.y).toBeGreaterThanOrEqual(DEFAULT_PLAYFIELD.height);
+    }
+  });
+
+  it.each(DIVE_PATHS)('%s stays on screen sideways, sweeping outwards from any column', (id) => {
+    // The outward sweep is the widest case and the one a radius chosen by eye
+    // gets wrong. A sprite is 16 px, so an anchor inside [0, width − 16] keeps the
+    // whole sprite on the playfield rather than merely its anchor.
+    for (const { at, mirror } of DIVE_STARTS) {
+      const bounds = pathBounds(dive(id, at, mirror));
+      expect([id, at, bounds.minX >= 0]).toEqual([id, at, true]);
+      expect([id, at, bounds.maxX <= DEFAULT_PLAYFIELD.width - 16]).toEqual([id, at, true]);
+      expect(bounds.minY).toBeGreaterThanOrEqual(at[1] - OFF_SCREEN_MARGIN);
+    }
+  });
+
+  it('scripts the transform group’s shots on its path, and nobody else’s', () => {
+    // The trio "fires on the way down" is a moment in its dive; the roles' own
+    // bombing is a timer the difficulty row governs, so no other path fires.
+    const fires = (id: string): number =>
+      dive(id, [112, 84], false).events.filter((event) => event.kind === 'fire').length;
+    expect(fires('dive-transform')).toBeGreaterThan(0);
+    for (const id of ['dive-drone', 'dive-wing', 'dive-warden']) expect(fires(id)).toBe(0);
+    for (const id of ENTRY_PATHS) {
+      const path = pack.paths.get(id);
+      expect(path?.segments.some((segment) => segment.type === 'fire')).toBe(false);
+    }
+  });
+
+  it('homes with toSlot and nothing else on the way back', () => {
+    const path = pack.paths.get('dive-return');
+    expect(path?.segments.map((segment) => segment.type)).toEqual(['toSlot']);
+    expect(path?.start).toBeUndefined();
+    // Compiled from above the top of the screen, it lands exactly in the slot.
+    const compiled = compilePath(path ?? { id: 'x', mirror: false, segments: [] }, {
+      slot: SLOT,
+      playfield: DEFAULT_PLAYFIELD,
+      start: [40, -16],
+      heading: 0,
+    });
+    const end = samplePath(compiled, compiled.totalFrames);
+    expect(end.x).toBeCloseTo(SLOT[0], 6);
+    expect(end.y).toBeCloseTo(SLOT[1], 6);
   });
 });

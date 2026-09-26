@@ -1,0 +1,10 @@
+{
+  "id": "dive-warden",
+  "mirror": true,
+  "segments": [
+    { "type": "arc", "radius": 18, "degrees": 26, "dir": "cw", "speed": 1.6 },
+    { "type": "sine", "amplitude": 10, "wavelength": 64, "duration": 40, "speed": 1.6 },
+    { "type": "aimAtPlayer", "speed": 1.6, "duration": 50 },
+    { "type": "exitBottom", "speed": 1.6 }
+  ]
+}

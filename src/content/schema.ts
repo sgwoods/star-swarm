@@ -421,6 +421,12 @@ export const alienSchema = z.strictObject({
       shotsPerDive: z.number().int().nonnegative().default(0),
       /** Minimum simulation frames between this alien's own shots. */
       cooldownFrames: framesSchema.optional(),
+      /**
+       * For `spread`: one bullet per entry, offset from the aim by that many
+       * degrees. The default is a single bullet along the aim, so `spread` with
+       * nothing stated behaves as `aimed` rather than as nothing at all.
+       */
+      spreadOffsets: z.array(z.number()).default([0]),
     })
     .optional(),
   dive: z
@@ -428,6 +434,15 @@ export const alienSchema = z.strictObject({
       paths: z.array(refSchema).min(1),
       /** Relative likelihood of this alien being chosen to dive. */
       weight: z.number().nonnegative().default(1),
+      /**
+       * Whether a diver that leaves the bottom of the screen comes back.
+       *
+       * The arcade's bees and butterflies re-enter from the top and rejoin the
+       * formation; its transformed trio leaves for good
+       * (`docs/reference/arcade-reference.md` sections 5 and 6). Which of the two
+       * an alien does is therefore the alien's business, not the engine's.
+       */
+      returns: z.boolean().default(true),
     })
     .optional(),
   abilities: z.array(abilitySchema).default([]),
@@ -885,6 +900,93 @@ export const rulesSchema = z.strictObject({
       width: z.number().positive(),
       height: z.number().positive(),
     }),
+    /**
+     * How the attack director turns a difficulty row into dives.
+     *
+     * The row says how *eagerly* each role attacks and how many may attack at
+     * once (`difficultyRowSchema`); it does not say how often the launcher runs
+     * or what one launch costs. Those live here, so the ramp stays a table of
+     * literal rows with no multiplier hiding behind it — change a number here
+     * and every stage changes together, which is exactly the distinction
+     * between a rule and a difficulty curve.
+     *
+     * The launcher runs once per round robin (`updatePhases` frames) and grants
+     * every role `baseLaunchRate` plus that role's own rate from the row, then
+     * launches one diver per `launchCost` of accumulated credit.
+     */
+    dive: z
+      .strictObject({
+        /**
+         * Credit every role is granted per launch tick, before its row rate.
+         *
+         * Must be positive for a row of all-zero rates to attack at all, which
+         * the arcade's stage 1 requires: its three launch counters are 0 and it
+         * certainly dives. A rate of zero is the floor of the ramp, not silence.
+         */
+        baseLaunchRate: z.number().nonnegative().default(1),
+        /** Credit one launch costs. Higher means a longer gap at the same rate. */
+        launchCost: z.number().positive().default(1),
+        /**
+         * Frames of diving after which a row's `maxDiversBump` replaces its
+         * `maxDivers`. Zero means the bump is in force from the first dive.
+         */
+        bumpAfterFrames: framesSchema.default(0),
+        /**
+         * The path a diver flies to rejoin the formation, having left the bottom
+         * of the screen and re-entered at the top. It is compiled from the
+         * re-entry point, so it states no `start` and ends in `toSlot`. Omitted
+         * means divers that leave the bottom are gone for good.
+         */
+        returnPath: refSchema.optional(),
+        /** The y a diver re-enters at, above the top of the playfield. */
+        reentryY: z.number().default(0),
+      })
+      .prefault({}),
+    /**
+     * When an enemy may drop a bomb at all, over and above its own delay.
+     *
+     * Both fields are thresholds on the game's state rather than rates: the
+     * arcade original has no entry bombing on its first stage, and bombing turns
+     * continuous once few enough enemies are left — the row's
+     * `continuousBombingAt` is that count, and this is what continuous means.
+     */
+    bombing: z
+      .strictObject({
+        /**
+         * First stage on which an enemy still flying its entry path may bomb.
+         * Omitted means never: entering enemies hold their fire on every stage.
+         */
+        entryFromStage: z.number().int().positive().optional(),
+        /**
+         * The inter-shot delay that replaces an alien's own once the live enemy
+         * count has fallen to the row's `continuousBombingAt`. Omitted leaves
+         * each alien's own delay in force, so the threshold does nothing.
+         */
+        continuousCooldownFrames: framesSchema.optional(),
+        /**
+         * The headings a bomb may be launched along, in degrees.
+         *
+         * **A bomb travels along one of a fixed set of vectors, not along a
+         * heading computed to the pixel.** The arcade original drives its bombs
+         * from a bombing flight-vector table
+         * (`docs/reference/arcade-reference.md` section 6, parameter 9), and the
+         * difference is the whole feel of being shot at: an exactly-aimed bomb
+         * fired from above is unavoidable, while a quantised one can be
+         * side-stepped, which is why the original is dodgeable at all. An
+         * `aimed` alien picks the vector nearest the fighter; a `straight` one
+         * ignores the table and drops down the screen.
+         *
+         * One entry is a game whose bombs all travel the same way.
+         */
+        vectors: z.array(z.number()).min(1).default([0]),
+        /**
+         * The alternative table a row's `reloadBombVectors` swaps in — the
+         * arcade's "reload bombing flight vector table pointer after stage 8".
+         * Omitted means the row's flag changes nothing.
+         */
+        altVectors: z.array(z.number()).min(1).optional(),
+      })
+      .prefault({}),
   }),
 
   stages: z
@@ -1073,7 +1175,12 @@ export const rulesSchema = z.strictObject({
       enabled: z.boolean().default(false),
       /** First stage it can happen on. */
       fromStage: z.number().int().positive().default(1),
-      /** Enemies remaining at which it is enabled. */
+      /**
+       * It fires once **fewer than** this many enemies remain — a strict
+       * comparison, which the ROM settles: `f_1A80` returns while the live count
+       * is greater than or equal to the threshold
+       * (`docs/reference/arcade-reference.md` section 6).
+       */
       remainingThreshold: z.number().int().nonnegative().default(0),
       /** How many stages each entry in `types` holds for before the next. */
       stagesPerType: z.number().int().positive().default(1),
@@ -1081,6 +1188,20 @@ export const rulesSchema = z.strictObject({
       types: z.array(refSchema).default([]),
       /** How many appear together. */
       groupSize: z.number().int().positive().default(1),
+      /**
+       * Which roles may transform, in the order they are considered: the first
+       * settled enemy of the first role that has one is taken. Ordered rather
+       * than a set because the arcade prefers its bee role and falls back to its
+       * butterfly role only when no bee is left. Empty means any role.
+       */
+      fromRoles: z.array(idSchema).default([]),
+      /**
+       * Frames the chosen enemy pulses in place before the group appears — the
+       * tell that warns the player. Zero means it happens instantly.
+       */
+      tellFrames: framesSchema.default(0),
+      /** How many times per stage it may happen. The arcade allows exactly one. */
+      perStage: z.number().int().positive().default(1),
     })
     .optional(),
 

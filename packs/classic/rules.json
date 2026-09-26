@@ -213,6 +213,19 @@
       "speed": 2,
       "width": 1,
       "height": 3
+    },
+    "dive": {
+      "baseLaunchRate": 1,
+      "launchCost": 16,
+      "bumpAfterFrames": 900,
+      "returnPath": "dive-return",
+      "reentryY": -16
+    },
+    "bombing": {
+      "entryFromStage": 2,
+      "continuousCooldownFrames": 30,
+      "vectors": [-30, -15, 0, 15, 30],
+      "altVectors": [-45, -30, -15, 0, 15, 30, 45]
     }
   },
   "stages": {
@@ -291,8 +304,11 @@
     "fromStage": 4,
     "remainingThreshold": 10,
     "stagesPerType": 4,
-    "types": [],
-    "groupSize": 3
+    "types": ["scourge", "manta", "ensign"],
+    "groupSize": 3,
+    "fromRoles": ["drone", "wing"],
+    "tellFrames": 64,
+    "perStage": 1
   },
   "difficulty": {
     "defaultRank": "A",
@@ -1951,6 +1967,74 @@
     "enemies.updatePhases": {
       "confidence": "verified",
       "note": "Reference section 2: enemy object state advances on a four-frame round robin at 15 Hz, with the objects split across the four frames. Positions still move every frame; it is the state machine that takes turns."
+    },
+    "enemies.dive.baseLaunchRate": {
+      "confidence": "provisional",
+      "note": "Ours. The reference gives the per-role launch counters but not the launcher that reads them, so how a counter becomes a cadence is this pack's. It must be positive: rank A stage 1 has all three counters at 0 and the original certainly dives, so a rate of 0 is the floor of the ramp rather than silence."
+    },
+    "enemies.dive.launchCost": {
+      "confidence": "provisional",
+      "note": "Ours, and the companion to baseLaunchRate: the launcher runs once per four-frame round robin and grants each role baseLaunchRate + its row rate, so 16 makes a rate-0 role try every 64 frames and a rate-8 role every 8. Raising this slows every stage together, which is what keeps it a rule and not a difficulty curve."
+    },
+    "enemies.dive.bumpAfterFrames": {
+      "confidence": "provisional",
+      "note": "Ours. Reference section 6 confirms parameter 5 \"increases allowable max bombers after a time\" but does not say how long, so 900 frames — fifteen seconds of diving — is a choice. The two limits either side of it are verified table values."
+    },
+    "enemies.dive.returnPath": {
+      "confidence": "verified",
+      "note": "That divers leaving the bottom re-enter from the top and rejoin the formation is confirmed in reference section 5. Which path they fly back is this pack's; that it ends in toSlot is the engine's single homing implementation."
+    },
+    "enemies.dive.reentryY": {
+      "confidence": "provisional",
+      "note": "One sprite height above the top of the playfield, so the sprite is fully clear when it re-enters. Presentation, not a ROM figure."
+    },
+    "enemies.bombing.entryFromStage": {
+      "confidence": "verified",
+      "note": "There is no entry bombing on stage 1; enemies bomb during entry from stage 2 onward. docs/DESIGN.md section 4, and acceptance test R14 of the rules-and-scoring report."
+    },
+    "enemies.bombing.vectors": {
+      "confidence": "provisional",
+      "note": "That a bomb travels along one of a fixed set of flight vectors rather than along an exactly computed heading is verified in shape (reference section 6 names the bombing flight-vector table and its reload flag) but the table's own headings were never decoded, so these five are ours. They are what makes a bomb dodgeable: an exactly-aimed one dropped from above cannot be side-stepped."
+    },
+    "enemies.bombing.altVectors": {
+      "confidence": "provisional",
+      "note": "The second table a row's reloadBombVectors swaps in from stage 8. That the swap happens is verified (reference section 6, parameter 9); the headings are ours, and are wider and finer than the first table so the later stages bomb over a broader arc."
+    },
+    "enemies.bombing.continuousCooldownFrames": {
+      "confidence": "provisional",
+      "note": "Ours. That bombing turns continuous once the live enemy count reaches the row's continuousBombingAt is verified (reference section 6, parameter 7, rising 6 to 12 across rank A); how short \"continuous\" is, is not in the reference."
+    },
+    "transform.types": {
+      "confidence": "provisional",
+      "note": "Three types cycling on a four-stage period is verified (reference section 6); the names and the art are this pack's, because docs/DESIGN.md section 2 bars the original's."
+    },
+    "transform.fromStage": {
+      "confidence": "verified",
+      "note": "Exactly stage 4. The enabling value is 0 below stage 3 and 0 on a challenge stage, and stage 3 is a challenge stage. Reference section 6, ASM new_stage.s l_2C3F."
+    },
+    "transform.remainingThreshold": {
+      "confidence": "verified",
+      "note": "The ROM stores 10 and the transform fires when fewer than 10 enemies remain: f_1A80 returns while the live count is greater than or equal to the threshold. Reference section 6 as corrected by report section 7.6."
+    },
+    "transform.stagesPerType": {
+      "confidence": "verified",
+      "note": "The trio type cycles on a four-stage period: stages 4-6, 8-10, 12-14, then repeating. Reference section 6 and MANUAL lines 1892-1898."
+    },
+    "transform.groupSize": {
+      "confidence": "verified",
+      "note": "\"Special attack squadrons made up of three ships each\". MANUAL line 1892."
+    },
+    "transform.fromRoles": {
+      "confidence": "verified",
+      "note": "A bee, or a butterfly if no bees remain — the ROM takes the first bee-role object in STAND_BY and falls back to the butterfly-role objects. Reference section 6, LIST main $1A95-$1AAE."
+    },
+    "transform.perStage": {
+      "confidence": "verified",
+      "note": "Once per stage: the task disables itself after launching the group. Reference section 6, LIST main $1B5B."
+    },
+    "transform.tellFrames": {
+      "confidence": "provisional",
+      "note": "That the enemy pulses between two colours before transforming is confirmed (reference section 6, a countdown alternating colour every 16 ticks), but the reference's $C0 byte and its \"64 ticks\" reading disagree on the length, so 64 frames is ours."
     },
     "formation.sway": {
       "confidence": "verified",

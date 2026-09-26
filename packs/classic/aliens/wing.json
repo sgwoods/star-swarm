@@ -3,5 +3,7 @@
   "role": "wing",
   "hp": 1,
   "sprite": "wing",
-  "score": { "base": 80 }
+  "score": { "base": 80 },
+  "fire": { "pattern": "aimed", "shotsPerDive": 2, "cooldownFrames": 44 },
+  "dive": { "paths": ["dive-wing"], "weight": 1 }
 }

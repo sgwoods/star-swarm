@@ -88,6 +88,26 @@ export function scriptedPilot(seed: string, holdSteps = 48): InputSource {
 }
 
 /**
+ * A pilot that sweeps the whole playfield with the button held, reversing on a
+ * fixed period.
+ *
+ * The scripted pilot above plays like someone jabbing at the controls; this one
+ * plays like someone covering the screen. The difference matters now that the
+ * game shoots back: a pilot that sometimes stands still in front of a diver
+ * cannot clear a stage, so the golden that has to reach stage 2 uses this one.
+ */
+export function sweepingPilot(period: number): InputSource {
+  let step = 0;
+  return {
+    sample(): InputFrame {
+      const rightwards = Math.floor(step / period) % 2 === 0;
+      step += 1;
+      return frameOf(rightwards ? 'right' : 'left', 'fire');
+    },
+  };
+}
+
+/**
  * Run the world through the real fixed-step loop. Exported so the test drives
  * the simulation exactly as this recorder did — a replay proved against a
  * different harness proves nothing.
@@ -98,8 +118,9 @@ export function runWorld(
   steps: number,
   rules: Rules = CLASSIC.rules,
   stages: StageSource = CLASSIC.stages,
+  stage?: number,
 ): { readonly fingerprint: string; readonly trace: string[] } {
-  const world = createWorld({ seed, rules, stages });
+  const world = createWorld({ seed, rules, stages, ...(stage !== undefined && { stage }) });
   const trace: string[] = [];
 
   const loop = createLoop({
@@ -122,6 +143,8 @@ export interface GoldenSpec {
   readonly inputSeed: string;
   readonly steps: number;
   readonly rules?: Rules;
+  /** The stage to start on. Omitted means the rules' own `firstStage`. */
+  readonly stage?: number;
   /**
    * `true` records with the sticks and the button untouched. A golden of the
    * entry choreography wants exactly that: nothing the player does can change
@@ -129,13 +152,33 @@ export interface GoldenSpec {
    * the formation alone.
    */
   readonly idle?: boolean;
+  /**
+   * Reverse every this many steps, with the button held, instead of playing the
+   * scripted pilot. See {@link sweepingPilot}.
+   */
+  readonly sweepPeriod?: number;
+}
+
+/**
+ * A cabinet started on five fighters — one of the four settings
+ * `rules.lives.options` offers.
+ *
+ * Used by the goldens that have to survive long enough to clear a stage. It is
+ * the shipped pack with one switch thrown, not a softened rules file, and it
+ * covers a second thing for free: five starting ships resolve a *different* set
+ * of extra-life thresholds (`resolveExtraLifeAward`).
+ */
+function fiveShipCabinet(): Rules {
+  return { ...CLASSIC.rules, lives: { ...CLASSIC.rules.lives, default: 5 } };
 }
 
 export const GOLDENS: readonly GoldenSpec[] = [
   // A whole stage-1 entry with the controls untouched: five waves of eight along
   // the entry paths, forty enemies taking their own slots, the sway running
   // throughout and ending centred, and the breathe starting. The formation settles
-  // on frame 1024, so 1,400 steps carry it past a further full breathe cycle.
+  // on frame 1024, so 1,400 steps carry it past a further full breathe cycle —
+  // and, since the dive task landed, past the first dives, which begin from that
+  // same settle frame against a fighter that never moves or fires.
   {
     name: 'stage-entry',
     seed: 'golden-stage-entry',
@@ -143,16 +186,35 @@ export const GOLDENS: readonly GoldenSpec[] = [
     steps: 1_400,
     idle: true,
   },
-  // Three minutes of ordinary play. Covers movement, the shot cap, collisions,
-  // the score rule against enemy state, clearing a stage and rolling on.
+  // Three minutes of ordinary play. Covers movement, the shot cap, collisions and
+  // the score rule against enemy state — and now dives, bombing and losing the
+  // last fighter, because a pilot that jabs at the controls in front of a diver
+  // does not survive three minutes. The frozen tail after game over is part of
+  // what it locks: the world must do nothing at all once the run is over.
   { name: 'player-core', seed: 'golden-player-core', inputSeed: 'pilot-1', steps: 10_800 },
-  // Four minutes, another pilot: a second, longer path through the same code,
-  // far enough in to clear more than one stage.
+  // A five-ship cabinet with a pilot that keeps moving: far enough in to clear
+  // stage 1 with dives and bombs in play and roll on to stage 2, which is the
+  // first stage on which an entering enemy may bomb.
   {
     name: 'player-survival',
     seed: 'golden-player-survival',
     inputSeed: 'pilot-2',
-    steps: 14_400,
+    steps: 5_400,
+    sweepPeriod: 100,
+    rules: fiveShipCabinet(),
+  },
+  // Stage 20 from the start: the difficulty ramp selecting a *different* row.
+  // Four divers rising to six, launch counters of 8 where stage 1 has 0, the
+  // alternative bombing-vector table that row's `reloadBombVectors` swaps in, and
+  // enough bombs in the air to reach the eight-slot cap.
+  {
+    name: 'stage-dives',
+    seed: 'golden-stage-dives',
+    inputSeed: 'pilot-dive',
+    steps: 5_400,
+    stage: 20,
+    sweepPeriod: 90,
+    rules: fiveShipCabinet(),
   },
 ];
 
@@ -160,14 +222,23 @@ export function goldenPath(name: string): string {
   return join(GOLDEN_DIR, `${name}.replay.json`);
 }
 
-/** The input a golden is recorded with: a scripted pilot, or nothing at all. */
+/** The input a golden is recorded with: nothing, a steady sweep, or the pilot. */
 export function pilotFor(spec: GoldenSpec): InputSource {
-  return spec.idle === true ? constantInput(0) : scriptedPilot(spec.inputSeed);
+  if (spec.idle === true) return constantInput(0);
+  if (spec.sweepPeriod !== undefined) return sweepingPilot(spec.sweepPeriod);
+  return scriptedPilot(spec.inputSeed);
 }
 
 export function recordGolden(spec: GoldenSpec): string {
   const recorder = recordInput(pilotFor(spec), spec.seed);
-  const run = runWorld(spec.seed, recorder.source, spec.steps, spec.rules ?? CLASSIC.rules);
+  const run = runWorld(
+    spec.seed,
+    recorder.source,
+    spec.steps,
+    spec.rules ?? CLASSIC.rules,
+    CLASSIC.stages,
+    spec.stage,
+  );
   return `${serializeReplay(recorder.finish(run.fingerprint))}\n`;
 }
 

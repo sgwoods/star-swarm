@@ -89,6 +89,133 @@ export function resolveLaunchRate(
   return resolveDifficultyRow(rules, stage, rank)?.launchRates[role] ?? 0;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Reading a difficulty row: the ramp selects, it never scales                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The simultaneous-diver limit in force, `framesDiving` frames into the attack.
+ *
+ * Every row carries two limits and a rule for moving between them: the arcade's
+ * parameter 5 "increases allowable max bombers after a time"
+ * (`docs/reference/arcade-reference.md` section 6). Which of the two applies is
+ * therefore a function of elapsed frames and nothing else — in particular it is
+ * **not** a ramp between the two numbers, which is why this returns one of them
+ * rather than an interpolation. How long "a time" is belongs to the pack, as
+ * `enemies.dive.bumpAfterFrames`.
+ */
+export function resolveMaxDivers(
+  rules: Rules,
+  row: DifficultyRow | undefined,
+  framesDiving: number,
+): number {
+  if (row === undefined) return 0;
+  return framesDiving >= rules.enemies.dive.bumpAfterFrames ? row.maxDiversBump : row.maxDivers;
+}
+
+/**
+ * Launch credit one role is granted per launch tick on this row.
+ *
+ * The row's rate is read literally and added to the pack's floor: a rate of zero
+ * is the bottom of the ramp, not silence, because the arcade's stage 1 has all
+ * three counters at zero and unquestionably dives. Nothing multiplies here —
+ * that is the whole point of the table being literal rows.
+ */
+export function resolveLaunchCredit(
+  rules: Rules,
+  row: DifficultyRow | undefined,
+  role: string,
+): number {
+  if (row === undefined) return 0;
+  const rate = row.launchRates[role];
+  // A role the row says nothing about does not attack at all, which is how a
+  // pack switches a role out of the lottery without touching the engine.
+  if (rate === undefined) return 0;
+  return rules.enemies.dive.baseLaunchRate + rate;
+}
+
+/**
+ * Has bombing turned continuous, with `alive` enemies left on the field?
+ *
+ * The row's `continuousBombingAt` is the arcade's "number of aliens left when
+ * continuous bombing can start", so the test is on the live count reaching it,
+ * not on a timer. A row of zero — every challenge-stage row — disables it, since
+ * a stage with no enemies left is already over.
+ */
+export function isContinuousBombing(row: DifficultyRow | undefined, alive: number): boolean {
+  if (row === undefined || row.continuousBombingAt <= 0) return false;
+  return alive <= row.continuousBombingAt;
+}
+
+/** The inter-shot delay in force for an alien whose own delay is `cooldownFrames`. */
+export function resolveBombCooldown(
+  rules: Rules,
+  cooldownFrames: number,
+  continuous: boolean,
+): number {
+  const override = rules.enemies.bombing.continuousCooldownFrames;
+  return continuous && override !== undefined ? override : cooldownFrames;
+}
+
+/**
+ * The bombing flight vectors in force, which a row may swap for its alternative.
+ *
+ * The arcade's parameter 9 is a *pointer reload*: from stage 8 the bombing
+ * vectors come from a second table rather than the first
+ * (`docs/reference/arcade-reference.md` section 6). Modelling it as a swap
+ * between two declared tables keeps it the selector the ROM makes it, rather
+ * than a widening of one table.
+ */
+export function resolveBombVectors(
+  rules: Rules,
+  row: DifficultyRow | undefined,
+): readonly number[] {
+  const { vectors, altVectors } = rules.enemies.bombing;
+  return row?.reloadBombVectors === true && altVectors !== undefined ? altVectors : vectors;
+}
+
+/**
+ * The vector nearest a heading, comparing the short way round the circle.
+ *
+ * Ties go to the earlier entry, so the choice is a function of the table's order
+ * and nothing else — a bomb aimed exactly between two vectors must not depend on
+ * floating-point noise.
+ */
+export function nearestBombVector(vectors: readonly number[], heading: number): number {
+  let best = vectors[0] ?? 0;
+  let bestGap = Number.POSITIVE_INFINITY;
+  for (const vector of vectors) {
+    const delta = Math.abs(((heading - vector + 540) % 360) - 180);
+    if (delta < bestGap) {
+      bestGap = delta;
+      best = vector;
+    }
+  }
+  return best;
+}
+
+/** May an enemy still flying its entry path drop a bomb on stage `n`? */
+export function allowsEntryBombing(rules: Rules, stage: number): boolean {
+  const from = rules.enemies.bombing.entryFromStage;
+  return from !== undefined && stage >= from;
+}
+
+/**
+ * May a transform be attempted on stage `n` with `alive` enemies left?
+ *
+ * Three gates, all of them the arcade's: the stage, the stage *kind* — the
+ * enabling value is zero on a challenge stage, which is why stage 4 rather than
+ * stage 3 is the first — and a **strictly fewer than** test on the live count
+ * (`docs/reference/arcade-reference.md` section 6).
+ */
+export function allowsTransform(rules: Rules, stage: number, alive: number): boolean {
+  const transform = rules.transform;
+  if (transform === undefined || !transform.enabled) return false;
+  if (stage < transform.fromStage || isChallengeStage(rules, stage)) return false;
+  if (transform.types.length === 0) return false;
+  return alive < transform.remainingThreshold;
+}
+
 /**
  * The sequence in force for a rank: the pack's, with whichever half the rank
  * overrides swapped in.

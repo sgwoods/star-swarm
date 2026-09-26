@@ -17,9 +17,9 @@ const FIRE = frameOf('fire');
  * One enemy, standing still exactly where the test puts it.
  *
  * `returning` is the state to use for that, and not by accident: it is the one
- * targetable state whose position the fleet does not drive, because an enemy
- * rotating back into its slot is steered by the dive that is bringing it home
- * rather than by the formation. It also scores the *formation* value, which is
+ * targetable state whose position comes from a flight rather than from the
+ * formation, so an enemy in it with no flight registered stays exactly where it
+ * was put. It also scores the *formation* value while visibly moving, which is
  * the arcade rule (`docs/reference/arcade-reference.md` section 9).
  */
 function enemyAt(overrides: Partial<Enemy> = {}): Enemy {
@@ -40,12 +40,18 @@ function enemyAt(overrides: Partial<Enemy> = {}): Enemy {
     scoreBase: 50,
     movingMultiplier: 2,
     hitPadding: { x: 0, y: 0 },
+    divePaths: [],
+    diveWeight: 0,
+    returnsFromDive: true,
+    fire: undefined,
     state: 'returning',
     x: 0,
     y: 0,
     heading: 0,
     hitsRemaining: 1,
     pathFrame: 0,
+    bombTimer: 0,
+    bombsLeft: 0,
     ...overrides,
   };
 }
@@ -267,7 +273,17 @@ describe('the entry, end to end', () => {
   it('launches five waves of eight and settles the formation exactly once', () => {
     const world = createWorld({ seed: 'entry', rules, stages });
     const events: SimEvent[] = [];
-    for (let i = 0; i < 1_400; i += 1) events.push(...stepWorld(world, EMPTY_FRAME));
+    // Whether every enemy is in its slot is only true *on* the settle frame:
+    // diving begins from it, so a later snapshot finds enemies already peeling
+    // off. Capturing it here is what keeps this a test of the entry.
+    let statesAtSettle: string[] = [];
+    for (let i = 0; i < 1_400; i += 1) {
+      const step = stepWorld(world, EMPTY_FRAME);
+      if (eventsOfType(step, 'formation-settled').length > 0) {
+        statesAtSettle = world.fleet.enemies.map((enemy) => enemy.state);
+      }
+      events.push(...step);
+    }
 
     const launched = eventsOfType(events, 'enemy-launched');
     expect(launched).toHaveLength(40);
@@ -281,7 +297,7 @@ describe('the entry, end to end', () => {
     expect(settled[0]?.enemies).toBe(40);
     expect(world.formation?.swayOffset).toBe(0);
     expect(world.formation?.motion).toBe('breathe');
-    expect(world.fleet.enemies.every((enemy) => enemy.state === 'home')).toBe(true);
+    expect(statesAtSettle).toEqual(Array.from({ length: 40 }, () => 'home'));
   });
 
   it('never leaves an enemy off the playfield once it is flying', () => {
@@ -290,7 +306,7 @@ describe('the entry, end to end', () => {
     for (let i = 0; i < 1_400; i += 1) {
       stepWorld(world, EMPTY_FRAME);
       for (const enemy of world.fleet.enemies) {
-        if (enemy.state !== 'entering' && enemy.state !== 'home') continue;
+        if (enemy.state === 'standby' || enemy.state === 'dead') continue;
         expect(enemy.x).toBeGreaterThanOrEqual(-margin);
         expect(enemy.x).toBeLessThanOrEqual(rules.playfield.width + margin);
         expect(enemy.y).toBeGreaterThanOrEqual(-margin);
