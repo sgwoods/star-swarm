@@ -272,6 +272,23 @@ challenge script — leaves it `departed`, gone from the field without having be
 hit. The **path** decides, never the stage kind, so a challenge stage and its
 `kind: "challenge"` document cannot disagree.
 
+## Three ways to lose a fighter, two events
+
+A bomb and an enemy **body** are the same loss — the arcade has one routine for
+every hit on the fighter — so both end in `killPlayer` and raise `player-hit`.
+Being **captured** is the loss that gets its own event. `resolveBodyCollisions`
+in `src/sim/world.ts` is the body half, and it adds no geometry: it is the
+fighter's own `player.hitWindow` with the enemy's `hitPadding` on top, the same
+primitive from the other side. A body is an _attack_, so it sits behind
+`allowsAttacks` and nothing rams you on a challenge stage.
+
+Two things the reference does **not** settle, recorded as its section 11 item 2:
+whether the collision destroys the enemy, and whether it scores. The engine takes
+the negative reading of both — every kill and every point traced anywhere in the
+reference arrives through the _rocket_ hit dispatcher — so a ram costs a fighter
+and changes nothing else. Do not "improve" that into a free kill without the
+observation the reference asks for; it would let a collision clear a stage.
+
 ## Capture is one channel, and the flag is the rule
 
 `src/sim/capture.ts` holds the tractor beam, the captured fighter, the rogue, the

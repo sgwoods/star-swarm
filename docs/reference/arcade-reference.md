@@ -137,6 +137,37 @@ seventh digit simply appears in the next tile position. ([SW] _Walkthrough_, "Sc
 describes the player-1/player-2 display split; the award ceiling above is what the code does.) The
 ones digit is never stored — every score is a multiple of 10.
 
+### Collision with an enemy body
+
+**Confirmed that it kills the fighter.** [MANUAL] line 1962, quoted in section 5, is explicit that it
+is a way the game kills you and not an accident of the sprites: “If they can’t bomb you, they’ll ram you
+in the rear. That’s one of their favorite tricks, to fly in a circle and come up behind you.” [SW]
+_Gameplay_ says the same thing about the swoop back upwards — “attempting to hit the fighter from
+behind”.
+
+**The geometry is the fighter's own window, and there is only one.** `hitd_det_fghtr` is the single
+routine that tests anything against the fighter (the player table above), Δx ∈ [−6, +6] and Δy ∈ [−3,
++3] in the ROM's half-scaled Y units, run once per ship sprite so that a dual fighter is tested twice.
+Enemy size is baked into that one window rather than carried per alien, which is why the Star Swarm
+rules state the window on the fighter and give a body nothing of its own.
+
+**Three narrower questions are _not_ settled by any source read so far**, and the readings Star Swarm
+takes are the ones consistent with the rest of this document rather than observations:
+
+| Question                                    | What the sources show                                                                                                                                                                                                                                                                                    | Reading taken        |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| Does the collision destroy the enemy too?   | Every destruction traced anywhere in this document is reached through `hitd_dspchr`, the **rocket** hit dispatcher (section 8, and the report's section 3.1 traces it link by link). Nothing puts an enemy's destruction on the fighter-hit path, whose exits are `hitd_fghtr_notif` / `hitd_fghtr_hit`. | **No.** It flies on. |
+| Does it score?                              | The accumulator is only ever reached from `l_0808`, and `l_0808` is only ever reached from `hitd_dspchr` (section 9). A ram that scored would need a second entry to it that no listing read shows.                                                                                                      | **No.**              |
+| Does a diver differ from a formation enemy? | The fighter-hit path carries **no state test**, unlike the scoring path, which carries the `(state − 1) AND $FE` one that decides the doubling (section 9). So "any object on the field", with no exception for one at home.                                                                             | **No difference.**   |
+
+Confidence: **high** for the first two, because both rest on the same enumerated path and the
+alternative requires an untraced second entry point; **medium** for the third, which is an absence of
+evidence rather than evidence of absence — though on the original's formation geometry no enemy at home
+can reach the fighter's row, so nothing observable rests on it. The cheapest closing observation for all
+three is one video: fly into a diving enemy and watch whether it explodes and whether the score moves.
+
+Section 11 item 2 carries this as the open item.
+
 ---
 
 ## 4. Enemies and formation
@@ -842,7 +873,7 @@ award = **19,000**. (The one residual in section 11 could move this to 20,200; 1
 All four items originally listed here were closed by a second pass, and their findings are folded into
 the sections above: the formation sway and breathe parameters (section 5), per-hit scoring on challenge
 stages (section 8), whether more than one captured fighter can be held (section 7), and the starfield
-speed byte → visible scroll rate (section 2). **One narrower question remains.**
+speed byte → visible scroll rate (section 2). **Two narrower questions remain.**
 
 1. **Do the four boss-class objects of challenge-stage wave 2 keep the boss sprite and score group 0?**
    Every stage's 40 objects come from `db_attk_wav_IDs` ([ASM] `gg1-3.s`), whose wave 2 is
@@ -871,6 +902,22 @@ speed byte → visible scroll rate (section 2). **One narrower question remains.
    eight slots — so whichever way the observation lands, the engine rule (per-hit = group base × 2 for
    anything not at home or returning) is the part that must be right, and which aliens a challenge
    stage contains is one line of pack data.
+
+2. **What else a collision with an enemy body does, beyond killing the fighter.** That it kills the
+   fighter is confirmed and the window is known (section 3, "Collision with an enemy body"). What no
+   source read so far states is whether the enemy is destroyed as well, whether the collision scores,
+   and whether an enemy at home differs from a diver. The path evidence points one way for all three —
+   every kill and every point in this document is reached through the _rocket_ hit dispatcher, and the
+   fighter-hit path carries no state test — so Star Swarm takes the negative reading of the first two
+   and no distinction for the third, and says so in `packs/classic/rules.json`'s provenance for
+   `enemies.collision.enabled`.
+
+   **Nothing in the build turns on it beyond generosity.** A collision that also destroyed the enemy
+   would hand the player a free kill and could clear a stage; the reading taken cannot. If the
+   observation lands the other way it is a change in `src/sim/world.ts`'s `resolveBodyCollisions` and
+   one `provenance` note, and it rewrites the goldens it touches. _Test:_ on any combat stage, fly into
+   a diving enemy and watch whether it explodes and whether the score moves. Thirty seconds in an
+   emulator, or one clear video.
 
 Two smaller things were looked at and deliberately not chased, because nothing depends on them: the
 `f_2000` "wings closed" rescue branch (section 7), and the mapping from each of the thirteen entry

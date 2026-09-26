@@ -503,6 +503,30 @@ function filesIn(dir: string, extension: string): string[] {
   }
 }
 
+/** The reference, which is the one document whose open items are counted. */
+const REFERENCE = 'docs/reference/arcade-reference.md';
+
+/**
+ * Top-level numbered items in the section whose heading contains `heading`.
+ *
+ * Stops at the next heading of the same level or higher, and ignores indented
+ * continuation lines, so a nested list inside an item counts once.
+ */
+function numberedItemsUnder(source: string, heading: string): number {
+  const text = blankFences(source);
+  const start = [...text.matchAll(/^(#{2,6})\s+(.+)$/gm)].find((match) =>
+    (match[2] ?? '').includes(heading),
+  );
+  if (start?.index === undefined) {
+    throw new Error(`no heading containing "${heading}" — has it been renamed?`);
+  }
+  const level = (start[1] ?? '##').length;
+  const body = text.slice(start.index + start[0].length);
+  const end = body.search(new RegExp(`^#{1,${String(level)}}\\s`, 'm'));
+  const section = end < 0 ? body : body.slice(0, end);
+  return [...section.matchAll(/^\d+\.\s/gm)].length;
+}
+
 /** The number of quoted strings in a declaration, e.g. a string-union type. */
 function quotedIn(source: string, declaration: RegExp, what: string): number {
   const match = declaration.exec(source);
@@ -594,6 +618,18 @@ export function counters(root = REPO_ROOT): ReadonlyMap<string, () => number> {
         return [...counts][0] ?? 0;
       },
     ],
+
+    /**
+     * Arcade questions the reference still lists as unresolved.
+     *
+     * Counted from the numbered items under its own "Unresolved items" heading,
+     * because that section exists to *shrink*: every item in it is one
+     * observation away from being closed, and a state document saying "one
+     * question is open" after a second one lands is the exact rot this suite is
+     * for. Structural rather than textual — the heading and the list markers, not
+     * the words — so rewording an item cannot move the number.
+     */
+    ['reference.openQuestions', () => numberedItemsUnder(read(REFERENCE), 'Unresolved items')],
 
     /* The rules layer. */
     ['rules.ranks', () => Object.keys(classicRules().difficulty.ranks).length],

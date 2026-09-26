@@ -9,7 +9,7 @@ import {
 } from '../../src/content/rules.js';
 import type { Rules } from '../../src/content/schema.js';
 import { allowsEntryBombing } from '../../src/content/rules.js';
-import { frameOf } from '../../src/engine/input.js';
+import { EMPTY_FRAME, frameOf } from '../../src/engine/input.js';
 import {
   createChallengeStage,
   endChallengeStage,
@@ -377,6 +377,41 @@ describe('a challenge stage does not fight back', () => {
       expect([stage, world.formation?.motion]).toEqual([stage, 'still']);
       expect([stage, allowsEntryBombing(rules, stage)]).toEqual([stage, false]);
     }
+  });
+
+  it('cannot kill the fighter by collision either, where a combat stage would', () => {
+    // The third leak to look for, after dives and bombs: `enemies.collision` made
+    // enemy *bodies* lethal, and a body is an attack — so it is behind the same
+    // `allowsAttacks` gate, and a challenge flyer passing through the fighter must
+    // do nothing. Stated as the pair, because "nothing happened" is only evidence
+    // if the identical setup on a combat stage kills: the enemy is parked on the
+    // fighter in `diving` with no compiled flight, so it stays exactly there.
+    const park = (stage: number): World => {
+      const world = createWorld({ rules, stages, stage });
+      const enemy = world.fleet.enemies[0];
+      expect(enemy, `stage ${String(stage)} should have enemies`).toBeDefined();
+      if (enemy === undefined) return world;
+      world.fleet.flights.delete(enemy.id);
+      enemy.state = 'diving';
+      enemy.x = world.player.x;
+      enemy.y = world.player.y;
+      world.fleet.entryComplete = true;
+      return world;
+    };
+
+    const challenge = park(3);
+    // Fire is held nowhere here: a shot would destroy the parked enemy on the
+    // first frame and the remaining fifty-nine would prove nothing.
+    for (let i = 0; i < 60; i += 1) stepWorld(challenge, EMPTY_FRAME);
+    expect(challenge.fleet.enemies[0]?.state).toBe('diving');
+    expect(challenge.player.alive).toBe(true);
+    expect(challenge.lives.reserve).toBe(rules.lives.default - 1);
+
+    // Stage 4 is the next combat stage, and it is the same fixture.
+    const combat = park(4);
+    stepWorld(combat, EMPTY_FRAME);
+    expect(combat.player.alive).toBe(false);
+    expect(combat.lives.reserve).toBe(rules.lives.default - 2);
   });
 
   it('fires no bomb on the second challenge stage either, where the ramp is hotter', () => {

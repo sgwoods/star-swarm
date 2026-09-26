@@ -77,8 +77,9 @@ implies an order and none of them has one yet.
 
 ## Open questions this roadmap does not answer
 
-Two decisions are the captain's, and neither is settled here. A document may
-record that they are open; none may pick a side.
+Three questions are open and none is settled here — two arcade observations
+nobody has made, and one decision that is the captain's. A document may record
+that they are open; none may pick a side.
 
 1. **Does a challenge stage's second wave keep four boss-class objects?** It
    changes what a perfect first challenge stage pays — the two readings differ by
@@ -86,7 +87,15 @@ record that they are open; none may pick a side.
    [`docs/reference/arcade-reference.md`](reference/arcade-reference.md) section 11
    and [`packs/classic/stages/README.md`](../packs/classic/stages/README.md), and
    the pack is built to one of them. Nothing under `src/` turns on the answer.
-2. **Cross-platform bit-identical simulation.** `Math.sin`, `Math.cos` and
+2. **What does flying into an enemy do, beyond killing the fighter?** Whether the
+   collision destroys the enemy as well, and whether it scores. That it costs a
+   fighter is confirmed; the rest is not, and
+   [`docs/reference/arcade-reference.md`](reference/arcade-reference.md) section 11
+   carries the evidence and the one observation that closes it. The engine is
+   built to the negative reading of both, so a ram cannot clear a stage. Changing
+   it is `resolveBodyCollisions` in `src/sim/world.ts` and the golden replays it
+   moves.
+3. **Cross-platform bit-identical simulation.** `Math.sin`, `Math.cos` and
    `Math.atan2` are engine-defined and can differ by one unit in the last place
    between CPU architectures. The golden replays quantise around it rather than
    solve it, which is stated as a limit in

@@ -36,6 +36,14 @@ The clips are screen recordings of the dev build.
   playing means surviving stages 1 and 2 now that dives and bombs have landed,
   and that is several minutes of fighting the clip does not show anyway. What
   plays from there is the ordinary game.
+- `m2-collision.gif` — the loss `enemies.collision` added: a diver flies into the
+  fighter and the fighter is gone, three times over, ending in GAME OVER with the
+  score still on zero — the pilot never fires, so the clip is also the evidence
+  that a ram pays nothing. Played back from the committed `collision-game-over`
+  golden replay through the real simulation and the real renderer, on the same
+  bombs-off cabinet the golden records, so nothing on screen could have been a
+  bomb. The opening 300 steps of entry choreography and the quiet stretch between
+  the first and second fighter are fast-forwarded; what plays is the golden.
 - `m2-attract.gif` — the front-end shell's attract mode: the two cards over the
   demo, which is the real game playing itself.
 - `m2-game-over.gif` — a run ending into the game-over banner, the results screen

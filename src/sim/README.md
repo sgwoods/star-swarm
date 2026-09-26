@@ -18,7 +18,18 @@ update, slot homing) and `formation.ts` (the coordinate axes, sway and breathe).
 The dive task added `dive.ts` — dive attacks, enemy fire and the difficulty ramp
 that drives both — `challenge.ts` followed with challenge stages and their three
 awards, and `capture.ts` with the tractor beam, the captured fighter, the rogue,
-rescue and the dual fighter.
+rescue and the dual fighter. The one pairing `collision.ts` had never been asked
+for — an enemy's **body** against the fighter — is wired in `world.ts`.
+
+**Three ways to lose a fighter, two events.** A bomb and a body are the same loss:
+the arcade has one routine for every hit on the fighter, so both raise
+`player-hit`, and `resolveBodyCollisions` reuses the fighter's own
+`player.hitWindow` widened by the enemy's `hitPadding` rather than introducing a
+window of its own. Being **captured** is the loss that does get its own event. A
+body is an _attack_, so it is behind the same `allowsAttacks` gate the director
+is: nothing rams you on a challenge stage. What the reference does not settle —
+whether the collision destroys the enemy or scores — is recorded as an open item
+in its section 11, and the engine takes the negative reading of both.
 
 **The attack is one director, and dives are where capture hooks in.** `dive.ts`
 resolves the stage's difficulty row once and reads it: the per-role launch rates,

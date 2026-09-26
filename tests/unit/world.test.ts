@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import { starfieldSpeedByte } from '../../src/content/rules.js';
+import type { Rules } from '../../src/content/schema.js';
 import { EMPTY_FRAME, frameOf } from '../../src/engine/input.js';
 import type { Enemy } from '../../src/sim/enemies.js';
 import { eventsOfType, type SimEvent } from '../../src/sim/events.js';
+import { createFormation, homePosition, stepFormation } from '../../src/sim/formation.js';
 import { launchEnemyBullet } from '../../src/sim/shots.js';
 import { createWorld, fingerprintWorld, stepWorld, type World } from '../../src/sim/world.js';
-import { classicRules, classicStages } from '../helpers/rules.js';
+import { classicFormation, classicRules, classicStages, stageSourceOf } from '../helpers/rules.js';
 
 const rules = classicRules();
 const stages = classicStages();
@@ -153,6 +155,180 @@ describe('player shots against the fleet', () => {
     world.player.x = 0;
     runUntil(world, FIRE, (w) => w.score > 0);
     expect(world.score).toBe(100);
+  });
+});
+
+/**
+ * Enemy **bodies** against the fighter — `resolveBodyCollisions` in
+ * `src/sim/world.ts`.
+ *
+ * The pairing Milestone 2 left unconnected: bombs killed the fighter and the beam
+ * took it, but a diver flew straight through it. [MANUAL] is explicit that it is a
+ * way to die — "if they can’t bomb you, they’ll ram you in the rear"
+ * (`docs/reference/arcade-reference.md` section 5) — and the geometry is the
+ * fighter's own verified window with the alien's padding on top, the same
+ * arrangement a player shot uses from the other side.
+ *
+ * A `diving` enemy with no compiled flight stays exactly where the test puts it,
+ * which is what lets these state the offset rather than fly to it.
+ */
+describe('enemy bodies against the player', () => {
+  /** A diver parked exactly `dx` to the right of the fighter, on its row. */
+  function diverAt(dx: number, overrides: Partial<Enemy> = {}): World {
+    const world = worldWith([]);
+    world.fleet.enemies.push(
+      enemyAt({ state: 'diving', x: world.player.x + dx, y: world.player.y, ...overrides }),
+    );
+    return world;
+  }
+
+  it('kills the fighter a diver flies into, and takes a life', () => {
+    const world = diverAt(0);
+    const events = runUntil(world, EMPTY_FRAME, (w) => !w.player.alive, 5);
+
+    const hits = eventsOfType(events, 'player-hit');
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toMatchObject({ x: world.player.x, livesRemaining: 1 });
+    expect(world.lives.reserve).toBe(1);
+  });
+
+  it('is the same loss as being shot, not an event of its own', () => {
+    // One ROM routine handles every hit on the fighter, so there is no
+    // `player-rammed`: a subscriber that drew an explosion for a bomb already
+    // draws one for this. Being *captured* is the loss that does get its own
+    // event, and this is not it.
+    const events = runUntil(diverAt(0), EMPTY_FRAME, (w) => !w.player.alive, 5);
+    expect(eventsOfType(events, 'player-captured')).toHaveLength(0);
+    expect(eventsOfType(events, 'player-hit')).toHaveLength(1);
+  });
+
+  it("misses a diver one pixel outside the fighter's window", () => {
+    // Δx = +7 is one past the verified [−6, +6] — the same boundary the bullets
+    // are held to, because it is the same window.
+    const world = diverAt(7);
+    for (let i = 0; i < 30; i += 1) stepWorld(world, EMPTY_FRAME);
+    expect(world.player.alive).toBe(true);
+    expect(world.lives.reserve).toBe(2);
+  });
+
+  it("widens the window by the enemy's own padding, not by a constant", () => {
+    // The same Δx = +7, and a 1 px padded alien reaches the fighter with it. A
+    // fatter alien is easier to shoot *and* harder to fly past, from one number.
+    const padded = diverAt(7, { hitPadding: { x: 1, y: 0 } });
+    runUntil(padded, EMPTY_FRAME, (w) => !w.player.alive, 5);
+    expect(padded.lives.reserve).toBe(1);
+  });
+
+  it('leaves the enemy flying and scores nothing for it', () => {
+    // The reading the reference supports: every point and every kill in it comes
+    // through the *rocket* hit dispatcher, and nothing puts either on the
+    // fighter-hit path. A ram that also destroyed the enemy would hand out free
+    // kills nothing traced — see reference section 11 item 2.
+    const world = diverAt(0);
+    const events = runUntil(world, EMPTY_FRAME, (w) => !w.player.alive, 5);
+    expect(eventsOfType(events, 'target-destroyed')).toHaveLength(0);
+    expect(eventsOfType(events, 'score-changed')).toHaveLength(0);
+    expect(world.score).toBe(0);
+    expect(world.fleet.enemies[0]?.state).toBe('diving');
+  });
+
+  it('spares the fighter an enemy its own shot destroyed on the same frame', () => {
+    // The order `stepWorld` resolves these in, stated as the behaviour it buys:
+    // shots first, so nothing kills you from a position it has already left. On
+    // this frame the shot has climbed 6 px and the enemy is Δy = +6 above it,
+    // which is inside the single fighter's window.
+    const world = diverAt(0);
+    const events = runUntil(world, FIRE, (w) => w.score > 0, 5);
+    expect(eventsOfType(events, 'target-destroyed')).toHaveLength(1);
+    expect(eventsOfType(events, 'player-hit')).toHaveLength(0);
+    expect(world.player.alive).toBe(true);
+  });
+
+  it('ends the game when the last fighter is flown into', () => {
+    const world = diverAt(0);
+    world.lives.reserve = 0;
+    const events = runUntil(world, EMPTY_FRAME, (w) => w.status === 'game-over', 5);
+    expect(eventsOfType(events, 'player-hit')[0]?.livesRemaining).toBe(0);
+    expect(eventsOfType(events, 'game-over')).toHaveLength(1);
+  });
+
+  it('brings the next fighter back, and the diver is still there to fly into', () => {
+    // Nothing clears the field of *enemies* on a hit — only the shots and the
+    // bombs — so the same diver takes the next fighter too. Three in a row is a
+    // whole game, which is what the `collision-game-over` golden records.
+    const world = diverAt(0);
+    const events = runUntil(world, EMPTY_FRAME, (w) => w.status === 'game-over', 400);
+    expect(eventsOfType(events, 'player-hit')).toHaveLength(3);
+    expect(eventsOfType(events, 'player-ready')).toHaveLength(2);
+  });
+
+  it('can be switched off by a pack whose enemies are not solid', () => {
+    const soft: Rules = {
+      ...rules,
+      enemies: { ...rules.enemies, collision: { enabled: false } },
+    };
+    const world = createWorld({ seed: 'soft', rules: soft, stages });
+    world.fleet.enemies.splice(0, world.fleet.enemies.length);
+    world.fleet.enemies.push(enemyAt({ state: 'diving', x: world.player.x, y: world.player.y }));
+    world.fleet.entryComplete = true;
+    for (let i = 0; i < 60; i += 1) stepWorld(world, EMPTY_FRAME);
+    expect(world.player.alive).toBe(true);
+    expect(world.lives.reserve).toBe(2);
+  });
+
+  it('applies to an enemy at rest in the formation, with no state exception', () => {
+    // The fighter-hit path carries no state test — unlike the *scoring* path,
+    // which carries one — so "any enemy on the field" is the rule and a formation
+    // slot is not a safe place to sit. Stated on a formation that puts one there,
+    // because the shipped one cannot: see the test below.
+    const onTheRow = stageSourceOf(
+      {
+        id: 'on-the-row',
+        formation: 'one-low-slot',
+        waves: [{ at: 0, entryPath: 'entry-side-file', slots: [{ alien: 'drone', home: 0 }] }],
+      },
+      {
+        id: 'one-low-slot',
+        grid: { originX: 103, originY: 248, columnSpacing: 16, rowSpacing: 16 },
+        slots: [{ row: 0, column: 0, role: 'drone' }],
+      },
+    );
+    const world = createWorld({ seed: 'at-home', rules, stages: onTheRow });
+    const enemy = world.fleet.enemies[0];
+    expect(enemy).toBeDefined();
+    if (enemy === undefined) return;
+    // Put it straight into its slot rather than flying it in, so this is about
+    // the state and not about the entry path.
+    enemy.state = 'home';
+    world.fleet.entryComplete = true;
+
+    const events = runUntil(world, EMPTY_FRAME, (w) => !w.player.alive, 10);
+    expect(eventsOfType(events, 'player-hit')).toHaveLength(1);
+    expect(world.fleet.enemies[0]?.state).toBe('home');
+  });
+
+  it('is kept away from the fighter by the shipped formation, not by a rule', () => {
+    // Why the generality above costs nothing: on `classic40` the lowest slot at
+    // full breathe is still far above the fighter's window, so nothing at home can
+    // reach it. If a pack moved its formation down the playfield, the rule above is
+    // what would happen — which is the honest answer, and the arcade's.
+    const formation = createFormation(classicFormation(), rules, 'normal');
+    formation.entryComplete = true;
+    formation.motion = 'breathe';
+    expect(formation.slotRow).toHaveLength(40);
+    let lowest = -Infinity;
+    // A full breathe cycle is 256 frames; run two to be sure of both extremes.
+    for (let i = 0; i < 512; i += 1) {
+      stepFormation(formation, rules);
+      for (let slot = 0; slot < formation.slotRow.length; slot += 1) {
+        lowest = Math.max(lowest, homePosition(formation, rules, slot).y);
+      }
+    }
+    // The fighter's window reaches this far up from its own row.
+    const reach = rules.player.y + rules.player.hitWindow.dyMin;
+    expect(lowest).toBeLessThan(reach);
+    // And by a wide margin, so this is not a one-pixel accident.
+    expect(reach - lowest).toBeGreaterThan(rules.player.height);
   });
 });
 

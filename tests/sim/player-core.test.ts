@@ -282,6 +282,37 @@ describe('what the goldens actually cover', () => {
     }
   });
 
+  it('ends a whole run by collision, and nothing else took a fighter', () => {
+    const { events, world } = replayEvents('collision-game-over');
+
+    // Three fighters lost, the third one ending the run, and no bomb was ever in
+    // the air to have done it — the cabinet's bullet cap is zero, so every one of
+    // these is a body. The pilot never fires either, so the score says the other
+    // half of the rule: a ram is worth nothing.
+    expect(eventsOfType(events, 'enemy-fired')).toHaveLength(0);
+    expect(eventsOfType(events, 'shot-fired')).toHaveLength(0);
+    expect(eventsOfType(events, 'player-hit')).toHaveLength(3);
+    expect(eventsOfType(events, 'player-hit').at(-1)?.livesRemaining).toBe(0);
+    expect(eventsOfType(events, 'target-destroyed')).toHaveLength(0);
+    expect(world.score).toBe(0);
+
+    // Through the existing state machine: the same `game-over` a bomb reaches, on
+    // the step after the hit that caused it, and nothing after.
+    // The *last* hit, not the first with an empty reserve: the second fighter
+    // leaves the reserve at zero and the third one is still on the field.
+    const hits = events.flatMap((event, index) => (event.type === 'player-hit' ? [index] : []));
+    const hit = hits[hits.length - 1] ?? -1;
+    expect(events[hit + 1]?.type).toBe('game-over');
+    expect(eventsOfType(events, 'game-over')).toHaveLength(1);
+    expect(world.status).toBe('game-over');
+
+    // The first fighter goes during the entry waves, before anything has settled:
+    // an *entering* enemy is as solid as a diver, which is the arcade's answer and
+    // not a special case anywhere.
+    expect(eventsOfType(events, 'player-hit')).toHaveLength(3);
+    expect(eventsOfType(events, 'enemy-dived').length).toBeGreaterThan(0);
+  });
+
   /**
    * The two quality-bar items of `docs/DESIGN.md` section 11 that are golden
    * replays: a perfect run of the first two challenge stages **without moving**,
