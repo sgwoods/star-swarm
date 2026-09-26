@@ -14,7 +14,9 @@ enforce that, which is what makes the headless tests and replays possible
 | `starfield.ts` | The scrolling background, at the stage's scroll speed               |
 | `scene.ts`     | Composes one frame out of the above                                 |
 
-`crt.ts`, the optional scanline filter, is still to come. `scene.ts` draws from
+`crt.ts`, the optional scanline filter, is still to come.
+<!-- check:absent src/render/crt.ts --> `scene.ts` draws from
+
 the rasterised sheet when it is given one and falls back to flat shapes when it
 is not, which is what lets a test — or a build before the pack has loaded — draw
 a frame with no art at all.

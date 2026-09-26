@@ -41,6 +41,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # The unit project carries `docs-accuracy`, which holds every document in
+      # the tree to the code it describes. A pull request that falsifies a
+      # checked claim fails here rather than in a reader's head later.
       - name: Unit tests
         run: npm run test:unit
 

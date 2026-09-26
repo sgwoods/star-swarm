@@ -1,18 +1,27 @@
-# Star Swarm — Design & Build Plan
+<!-- doc:layer vision -->
+
+# Star Swarm — Vision & Design Plan
 
 *Working title. A 1981-arcade-style formation shooter that plays like the classic, plus a content system that lets you prompt new aliens, stages and movements into existence.*
 
 Captain: Steven · Plan version 1 · 2026-09-24
 
+> **What this document is, and what it is not.** This is the captain's plan: why the project exists, the ground rules it is built under, and the arcade behaviour it is aiming at. It is written in **intent tense** and **asserts nothing about what the code currently is** — that is the whole of its contract, and the reason the file listing it used to carry named three modules nobody ever wrote.
+>
+> - What exists today, and how to run it: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md). Every factual claim there is machine-checked.
+> - What is next, and in what order: [`docs/ROADMAP.md`](ROADMAP.md).
+> - Directions nobody has committed to: [`docs/IDEAS.md`](IDEAS.md).
+> - Why an arcade number is the number it is: [`docs/reference/arcade-reference.md`](reference/arcade-reference.md).
+>
+> Section 4 is present tense, and that is not a contradiction: its claims are about the **arcade original**, which no test in this repository can reach. The reference is their verification record, and `tests/unit/classic-pack.test.ts` holds the shipped pack to it. `AGENTS.md` states the rule an author meets here.
+
 ---
 
-## 0. How to hand this to firstmate
+## 0. Where this plan came from
 
-Paste this into your first mate session once `claude` is running in the `firstmate` folder:
+The captain wrote it outside the repository and handed it to firstmate in one message, which asked for a private `star-swarm` project in direct-PR mode, for this document to be copied in as `docs/DESIGN.md`, and for Milestone 0 to start with the scout task and the scaffold task in parallel. After each milestone: review the pull requests, play the build (`npm run dev`), then say "start Milestone N".
 
-> ahoy. Create a new private GitHub project called `star-swarm` in **direct-PR** mode. Its design doc is at `~/Documents/FirstMate - 1/game-plan/star-swarm-design.md`; the first task should copy it into the repo as `docs/DESIGN.md`. Then start **Milestone 0** from section 10: run the scout task and the scaffold task in parallel. Report back when both are done.
-
-After each milestone, review the PRs, play the build (`npm run dev`), then say "start Milestone N".
+It has been a living document since. It is edited when a verified finding changes the spec, and the milestone schedule it originally carried in section 10 now lives in [`docs/ROADMAP.md`](ROADMAP.md).
 
 ---
 
@@ -132,7 +141,9 @@ A **"Classic" pack plus classic rules** reproduces the arcade game. Other packs 
 
 ## 7. Content model (what prompts generate)
 
-All of these are JSON validated by schemas in `src/content/schema.ts`. Examples are illustrative.
+All of these are JSON validated by schemas in `src/content/schema.ts`.
+
+**The examples below are illustrative, and deliberately not a copy of the schema.** They state the *shape* a document has to be able to express — why a wave is an ordered list of slots rather than a type plus a count, why a score carries a base value only — which is the part that is a design decision. Field names, defaults and which keys are required are the schema's, and the schema is the only place they are true; an example here that drifted from it would be a plan asserting something about the code, which this document does not do. For a document that really loads, read the shipped ones under `packs/classic/`.
 
 ### 7.1 Alien
 
@@ -224,67 +235,26 @@ Abilities are a **fixed registry of engine behaviours** (`captureBeam`, `splitOn
 
 ## 9. Architecture (split so crewmates don't collide)
 
-```
-src/
-  engine/      loop.ts (fixed step), rng.ts (seeded), input.ts, replay.ts
-  sim/         world.ts, player.ts, shots.ts, enemies.ts, formation.ts,
-               paths.ts (segment interpreter), dive.ts, capture.ts,
-               challenge.ts, abilities/ (one file per ability), scoring.ts,
-               stages.ts
-  render/      canvas.ts, sprites.ts (data→bitmap cache), starfield.ts, text.ts, crt.ts
-  audio/       synth.ts, sfx.ts, music.ts
-  content/     schema.ts, loader.ts, registry.ts
-  ui/          flow.ts (game-state machine), attract.ts, menus.ts, hud.ts,
-               results.ts, highscores.ts, panel.ts, lab/
-packs/
-  classic/     aliens/, paths/, stages/, sprites/, sounds/, pack.json
-tests/         unit/, sim/ (headless golden replays), e2e/
-docs/          DESIGN.md, reference/, content-guide.md
-```
+Six directories under `src/`, each with one job. This section fixes the **split** and the rule that holds it; it deliberately names no modules, because which files exist is a fact about the tree rather than a decision in a plan — and a file listing here is exactly how this document came to name three modules nobody ever wrote. [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#3-the-layers) is the as-built listing, checked against the tree; [`docs/ROADMAP.md`](ROADMAP.md) carries the modules this plan calls for that are still unwritten.
+
+| Directory | What belongs there |
+|---|---|
+| `src/engine/` | The fixed step, the seeded RNG, abstract input, input recording and replay. Knows nothing about this game, or any game |
+| `src/sim/` | The world and one step of it: the player, shots, collisions, lives, enemies, the formation, the path interpreter, dives, challenge stages, capture, and one file per engine ability under `abilities/` |
+| `src/content/` | The content platform: the schemas, the loader, the registry, and the reader of the rules layer |
+| `src/render/` | The 224×288 canvas, sprite rasterisation, the pixel font, the starfield, and the optional CRT filter |
+| `src/audio/` | The parametric synth, the event-to-sound map, and music |
+| `src/ui/` | The game-flow state machine, attract mode, menus, the HUD, results, high scores, and the `/lab` harness |
+
+Outside `src/`: `packs/` holds one directory per content pack, each a `pack.json` manifest plus the **five content directories** — `aliens/`, `paths/`, `stages/`, `sprites/`, `sounds/` — and an optional `rules.json`. `tests/` splits into `unit/`, `sim/` (headless golden replays) and `e2e/`. `docs/` holds this plan, the state and roadmap documents beside it, the arcade reference, and the content guide Milestone 4 writes.
 
 **Key rule:** `sim/` never touches the DOM, Canvas or Audio. Sim emits events; render and audio subscribe. That's what makes headless tests and replays possible.
 
 ## 10. Milestones and crew tasks
 
-Tasks in the same milestone can run in parallel. **Ship** tasks change code; **scout** tasks produce reports.
+**The milestone schedule lives in [`docs/ROADMAP.md`](ROADMAP.md).** It was written here, and it moved: a milestone list is the one part of a plan that has a *status*, and a status is a claim about what exists — which is the mix that let this document rot. The roadmap keeps every milestone and every task this plan set out, states what is next in future tense, and hands the question "what is actually done" to [`docs/ARCHITECTURE.md`](ARCHITECTURE.md), where it is checked.
 
-### Milestone 0 — Foundations
-- **Scout: arcade reference.** Verify every "(verify)" value in section 4 (scoring, extra lives, capture rules, transform stages, challenge bonuses, speeds, entry-wave choreography) from reputable sources. Output: `docs/reference/arcade-reference.md` with sources and a list of corrections to this doc.
-- **Ship: scaffold.** Vite + TS + Vitest + Playwright, 224×288 integer-scaled canvas, fixed-step loop, seeded RNG, input, CI running lint, tests and pack validation. Copy this plan to `docs/DESIGN.md`.
-
-### Milestone 1 — Playable core
-- **Ship: content schemas + loader + validator** (section 7; the empty Classic pack skeleton).
-- **Ship: path interpreter** (all segment types) + `/lab` path previewer.
-- **Ship: player, shots (2-shot cap), collisions, lives, HUD, starfield.**
-- **Ship: sprite pipeline** (data → cached bitmaps) + original Classic sprite set + font.
-- **Ship: synth + Classic SFX set.**
-
-*Exit check:* the player can move and shoot at a static formation with sound and scoring.
-
-### Milestone 2 — The classic game
-- **Ship: entry waves + formation sway/breathe + slot homing.**
-- **Ship: dive attacks + enemy fire + difficulty ramp.**
-- **Ship: capture beam + captured fighter + rescue + dual fighter.**
-- **Ship: challenge stages + results + stage badges + extra lives.**
-- **Ship: attract mode, game over, hit-ratio screen, high-score table.**
-- **Ship: Classic stages 1–8 authored as data** (uses the scout report).
-
-*Exit check:* someone who knows the arcade game plays 10 minutes and says "yep, that's it." Add golden replay tests for key behaviours.
-
-### Milestone 3 — Configurable
-- **Ship: rules layer + settings menu + difficulty presets.**
-- **Ship: pack manager + stage-sequence editor.**
-- **Ship: ability registry + first 4 new abilities** (splitOnHit, shield, teleport, spawnMinions).
-- **Ship: playability checks in the validator** (headless sim).
-
-### Milestone 4 — Prompt forge
-- **Ship: `/forge` skill + `docs/content-guide.md`** (the guide Claude reads when generating content).
-- **Ship: `/lab` for aliens, stages and sounds** + GIF capture for PRs.
-- **Ship: first forged pack** as the end-to-end proof (e.g. "Deep Sea": 3 aliens, 4 paths, 3 stages).
-
-### Milestone 5+ — Keep expanding
-- Recurring firstmate requests: "forge a new pack themed X", "add ability Y", "tune stage Z to be harder".
-- Candidates: boss stages, 2-player alternating, gamepad support, mobile touch controls, publishing a playable build (GitHub Pages).
+The shape of the schedule is unchanged and is worth stating once here, because the rest of this plan is written against it: **Milestone 0** foundations (the arcade reference scout, and the scaffold); **Milestone 1** a playable core; **Milestone 2** the classic game; **Milestone 3** configurable — the rules layer's player-facing half, the pack manager, the ability registry and playability checks; **Milestone 4** the prompt forge; **Milestone 5+** keep expanding. Tasks within a milestone run in parallel. **Ship** tasks change code; **scout** tasks produce reports.
 
 ## 11. Quality bar
 

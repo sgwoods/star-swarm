@@ -72,7 +72,7 @@ filter (`path-lab.gif` at 760x572; `arch-lab.gif` at 900x660, a viewport big
 enough for the preview canvas to take a 2x scale). `arch-lab.gif` uses `fps=8`
 and `max_colors=32` to keep a frame that large down to roughly the size of a
 playfield clip. Milestone 4 owns turning all of this into a command
-(`docs/DESIGN.md` section 10).
+(`docs/ROADMAP.md`).
 
 **Note for anyone running the dev server in two checkouts at once.** Vite's
 default port is shared, and `playwright.config.ts` reuses an existing server

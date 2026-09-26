@@ -1,3 +1,5 @@
+<!-- doc:layer state -->
+
 # Star Swarm — architecture
 
 This document describes the code as it actually stands in this repository. It is
@@ -6,6 +8,18 @@ what has been built — not a contributor's guide. Where the design plan
 ([`docs/DESIGN.md`](DESIGN.md)) and the code disagree, this document follows the
 code, and [§5](#5-what-is-not-here-yet) says where they diverge.
 
+> **This is the one document here that makes claims about what exists**, so it is
+> the one under test. `tests/unit/docs-accuracy.test.ts` checks every path it
+> names, every link and heading it points at, every command it tells you to run,
+> the Node range it quotes, every count it states, and — in [§5](#5-what-is-not-here-yet) —
+> that everything it calls absent really is. A change that falsifies one of those
+> fails its own pull request. `AGENTS.md` has the marker vocabulary; what is not
+> checked is prose about _why_, which no test can reach.
+>
+> Intent lives in [`docs/DESIGN.md`](DESIGN.md), what is next in
+> [`docs/ROADMAP.md`](ROADMAP.md), and the unpromised in
+> [`docs/IDEAS.md`](IDEAS.md). None of those describes this tree.
+
 ---
 
 ## 1. What this is
@@ -13,10 +27,11 @@ code, and [§5](#5-what-is-not-here-yet) says where they diverge.
 Two things at once, and the second is the reason for most of the structure.
 
 **A 1981-arcade formation shooter.** A 224×288 portrait playfield, a fighter on a
-rail along the bottom, forty aliens that fly in as scripted entry waves, take
-formation, breathe in and out, and then peel off in dives to bomb you. It runs at
-a fixed 60 Hz, sounds like a cabinet, and is meant to feel right to someone who
-played the original.
+rail along the bottom, forty aliens that fly in as five scripted entry waves,
+take formation, breathe in and out, and then peel off in dives to bomb you. It
+runs at a fixed 60 Hz, sounds like a cabinet, and is meant to feel right to
+someone who played the original.
+<!-- check:count classic.formation.slots 40 classic.entryWaves 5 -->
 
 **A content platform that happens to ship that game first.** Almost nothing about
 Star Swarm is written into the program. The aliens, their sprites, their sounds,
@@ -37,6 +52,7 @@ stages are authored as pack data; and the capture mechanic — tractor beam,
 captured fighter, rogue, rescue and dual fighter — is in.
 [§5](#5-what-is-not-here-yet) is what is left, and none of it belongs to
 Milestone 2.
+<!-- check:count classic.sequence.normal 6 classic.stages.challenge 8 -->
 
 ---
 
@@ -98,6 +114,7 @@ entry. The cabinet boots into attract mode, where the demo behind the cards is
 the _real_ simulation replaying a recorded input log; start begins a game; three
 fighters lost ends it into the game-over banner, the hit-ratio results card, and
 then either the high-score table or straight back to attract.
+<!-- check:count flow.phases 6 -->
 
 ![The front end: attract mode, a game, and out to the results card](media/arch-front-end.gif)
 
@@ -140,6 +157,7 @@ between-stage card, with the hit count and the end-of-stage award.
 Six directories under `src/`, in two groups: the half that computes what happens,
 and the half that shows it. The arrows below all point one way, and that is the
 single most important fact about this codebase.
+<!-- check:count src.layers 6 -->
 
 ```mermaid
 flowchart TB
@@ -206,6 +224,7 @@ both Vitest projects run on the **Node** environment with no DOM at all:
 longer ends in the same state. Attract mode is the same mechanism pointed at the
 screen — it is the real game replaying a real input log, so the demo cannot drift
 from the game.
+<!-- check:count vitest.projects 2 -->
 
 One honest limit on that, worth stating because it is easy to overclaim:
 **determinism holds for a given machine, not across machines.** `Math.sin`,
@@ -454,7 +473,11 @@ the whole test harness.
 
 Milestone 2 is complete, so nothing below is missing from the game you can play
 today — it is the content the pack does not yet author, and the modules the plan
-names and nobody has written:
+calls for that nobody has written. **Every absence here is checked**: the marker
+at the end of each item fails the build on the day the file lands, because a
+stale absence list is the failure mode this section is most prone to — a document
+describing as deliberately absent something that shipped two merges ago.
+[`docs/ROADMAP.md`](ROADMAP.md) is where each of these is scheduled.
 
 - **Normal stages past 8.** The pack authors the normal stages through 8 and then
   plateaus on the last of them, because the arcade's seventeen-entry index list
@@ -462,19 +485,27 @@ names and nobody has written:
   assert something that is not there. The challenge half does _not_ plateau — all
   eight of its scripts cycle — so the two halves of one sequence deliberately
   repeat on different periods. Difficulty keeps ramping past 8 either way: the
-  rank table is a separate ramp with its own 26 rows.
+  rank table is a separate ramp with its own 26 rows across all four ranks.
+  <!-- check:count classic.sequence.normal 6 classic.sequence.challenge 8 rules.ranks 4 rules.difficultyRows 26 -->
 - **The other three difficulty ranks' stage sequences.** The pack ships one
   pack-wide sequence. Reference section 5 gives all four ranks' index lists, and
   they need ten of the thirteen combat scripts through stage 8 alone;
   `packs/classic/stages/README.md` records why they cannot land until the
   remaining scripts do.
-- **The ability registry.** `src/sim/abilities/` is a placeholder README. The one
-  ability the game needs is implemented directly in `src/sim/capture.ts`, which
-  matches on the `captureBeam` id a path's `trigger` segment names ([§4.4](#44-where-a-second-game-plugs-in));
-  splitting the registry out, and the six other ids `src/content/schema.ts`
-  already reserves, is Milestone 3.
-- **`render/crt.ts`, `audio/music.ts`, `ui/menus.ts`** and the validator's
+- **The ability registry.** `src/sim/abilities/` is a placeholder README and holds
+  no code. The one ability the game needs is implemented directly in
+  `src/sim/capture.ts`, which matches on the `captureBeam` id a path's `trigger`
+  segment names ([§4.4](#44-where-a-second-game-plugs-in)); splitting the registry
+  out, and the six other ids `src/content/schema.ts` already reserves, is
+  Milestone 3.
+  <!-- check:count sim.abilities.modules 0 schema.abilityIds 7 -->
+- **The optional CRT filter, music, the settings menu** and the validator's
   playability checks are named in the design plan and are not written yet.
+  <!-- check:absent src/render/crt.ts src/audio/music.ts src/ui/menus.ts -->
+- **No stage is a boss stage.** `boss` is one of the three stage kinds the schema
+  admits, and no pack document uses it — what a boss stage would be has never
+  been specified ([`docs/IDEAS.md`](IDEAS.md)).
+  <!-- check:count classic.stages.boss 0 schema.stageKinds 3 -->
 
 One arcade question is also still open rather than decided: whether a challenge
 stage's second wave keeps four boss-class objects. It changes what a perfect
@@ -482,19 +513,29 @@ challenge stage pays, the pack is built to one of the two readings, and both are
 written down in `packs/classic/stages/README.md` and
 `docs/reference/arcade-reference.md` section 11. Nothing in `src/` turns on the
 answer — it is one line per challenge document — so it is recorded here rather
-than resolved.
+than resolved, as it is in [`docs/ROADMAP.md`](ROADMAP.md#open-questions-this-roadmap-does-not-answer).
 
-Two places where the tree departs from [`docs/DESIGN.md`](DESIGN.md) section 9's
-listing, both of which this document follows the code on:
+### Two places where the tree departs from the plan
 
-- The plan lists `sim/capture.ts`, `sim/challenge.ts`, `sim/scoring.ts` and
-  `sim/stages.ts`. `capture.ts` and `challenge.ts` exist; the other two do not.
-  Scoring is in `sim/enemies.ts` and `sim/world.ts`; stage resolution is
-  `content/stages.ts`, on the content side of the boundary, because resolving a
-  stage number to its documents is content work rather than simulation work.
-- The plan puts `schema.ts, loader.ts, registry.ts` in `src/content/`, where
-  there are now also `rules.ts`, `stages.ts`, `errors.ts`, and the two pack
-  readers `fs.ts` and `bundle.ts`.
+[`docs/DESIGN.md`](DESIGN.md#9-architecture-split-so-crewmates-dont-collide)
+section 9 fixes the six directories under `src/` and what belongs in each; it
+names no modules, deliberately, and this document is the listing. Two of its
+divisions of labour did not survive contact with the code, and the code is what
+this document follows:
+
+- **There is no scoring module and no stage module in the simulation.** Scoring
+  lives in `src/sim/enemies.ts` and `src/sim/world.ts`, because a score is a
+  property of the thing destroyed and the run it happened in rather than a stage
+  in a pipeline. Stage resolution is `src/content/stages.ts`, on the content side
+  of the boundary, because turning a stage number into documents is content work:
+  the simulation is handed a resolved `StageContent` and never learns a pack
+  exists.
+  <!-- check:absent src/sim/scoring.ts src/sim/stages.ts -->
+- **`src/content/` grew past the three modules the plan sketched.** Alongside
+  `schema.ts`, `loader.ts` and `registry.ts` there are `rules.ts`, `stages.ts`,
+  `errors.ts`, and the two pack readers `fs.ts` and `bundle.ts` — one for Node,
+  one for the browser, held to each other by a test
+  ([§4.1](#41-the-content-pipeline)).
 
 Neither is a change of plan; the plan remains the source of truth for scope and
 milestones.
@@ -503,11 +544,13 @@ milestones.
 
 ## Where to read next
 
-| You want                           | Read                                                                  |
-| ---------------------------------- | --------------------------------------------------------------------- |
-| Scope, milestones, the spec        | [`docs/DESIGN.md`](DESIGN.md)                                         |
-| Why an arcade number is what it is | [`docs/reference/arcade-reference.md`](reference/arcade-reference.md) |
-| What a pack may contain            | `src/content/schema.ts` — the schemas are the documentation           |
-| A directory's own rules            | The `README.md` in each of `src/*/`, `packs/` and `packs/classic/`    |
-| How the clips were captured        | [`docs/media/README.md`](media/README.md)                             |
-| The sharp edges                    | [`AGENTS.md`](../AGENTS.md)                                           |
+| You want                             | Read                                                                  |
+| ------------------------------------ | --------------------------------------------------------------------- |
+| Why the project exists, and the spec | [`docs/DESIGN.md`](DESIGN.md) — intent, never state                   |
+| What is next, and in what order      | [`docs/ROADMAP.md`](ROADMAP.md)                                       |
+| Directions nobody has committed to   | [`docs/IDEAS.md`](IDEAS.md)                                           |
+| Why an arcade number is what it is   | [`docs/reference/arcade-reference.md`](reference/arcade-reference.md) |
+| What a pack may contain              | `src/content/schema.ts` — the schemas are the documentation           |
+| A directory's own rules              | The `README.md` in each of `src/*/`, `packs/` and `packs/classic/`    |
+| How the clips were captured          | [`docs/media/README.md`](media/README.md)                             |
+| The sharp edges, and the doc rules   | [`AGENTS.md`](../AGENTS.md)                                           |

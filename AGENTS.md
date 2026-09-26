@@ -2,32 +2,94 @@
 
 This file is the project's committed home for project-intrinsic agent knowledge: build, test, release, architecture, and sharp-edge notes that should travel with the code.
 
-## The authoritative plan
+## The documentation is four layers, and only one of them may claim anything
 
-`docs/DESIGN.md` is the design and build plan, and it is the source of truth for
-scope, architecture and milestones. It started as a verbatim copy of the
-captain's plan; it is now a living document and is edited when a verified
-finding changes the spec. Prettier still ignores it (`.prettierignore`) so its
-hand-authored tables and line breaks survive, which means edits keep the diff
-small and stay in the surrounding style. Do not reformat it wholesale.
+Documents here are separated by **how fast they change** and by **whether a
+machine can check them**. Every one of the following was written true and became
+false: a README claiming "no gameplay yet" two milestones after gameplay existed,
+a plan listing three source files nobody wrote, an architecture document falsified
+in four statements by the very next merge, a pack README describing shipped
+content as deliberately absent. Nobody lied in any of those cases. The code moved
+and the prose did not — so the fix is structural.
 
-`docs/reference/arcade-reference.md` is the verification record behind section 4:
-the source, ROM routine and confidence note for every arcade value the plan
-states, plus the items still unresolved. The two are a pair — change a number in
-section 4 and the reference changes with it, or they drift apart silently. It
-names the original game and its enemy types so sources stay checkable; that
-licence does not extend to `docs/DESIGN.md`, which uses the project's own naming
-per section 2 of the plan. Unlike the plan it _is_ Prettier-formatted, and
-its claim tables are wide: changing one cell re-pads that whole table, so expect
-a diff larger than the edit and run `npm run format` before `npm run lint`.
+| Layer     | File                                 | Contract                                                                   |
+| --------- | ------------------------------------ | -------------------------------------------------------------------------- |
+| Vision    | `docs/DESIGN.md`                     | Why, the pillars, the ground rules, the arcade spec. **Intent tense only** |
+| **State** | `docs/ARCHITECTURE.md`               | What exists, as built. **Every factual claim machine-checked**             |
+| Roadmap   | `docs/ROADMAP.md`                    | What is next and in what order. Future tense; describes nothing that is    |
+| Ideas     | `docs/IDEAS.md`                      | Speculative, fenced, never mistakable for state or commitment              |
+| Reference | `docs/reference/arcade-reference.md` | Evidence about the **arcade original**, not about this code                |
 
-`docs/ARCHITECTURE.md` is the reader-facing counterpart, and the one document
-here that describes the code **as built** rather than as planned: what the thing
-is, how to run it, the layers and their one-way arrows, and where a new pack or a
-sibling game plugs in. Its diagrams are Mermaid so GitHub renders them with no
-build step. It is where the plan and the tree are reconciled in public, so when a
-layer moves, a milestone lands or a divergence from the plan is closed, say so
-there — and never document an intention there as if it were the implementation.
+A document declares its layer with `<!-- doc:layer state -->` at the top. A
+document that declares nothing — every `README.md` in `src/*/`, `packs/` and the
+root — is treated as **state**, which is the strict default: all of its claims are
+checked. `tests/unit/docs-accuracy.test.ts` requires exactly one vision, one
+roadmap and one ideas document, so the split cannot be undone by a rename.
+
+**The editorial rule: only present-tense statements about this repository are
+testable.** That is why vision and roadmap documents are exempt by construction
+rather than by permission — they make no such statements. It is enforced where it
+can be: `check:count` is refused outside a state or reference document, because a
+count is a claim about what the code currently is.
+
+Three consequences when you write in any of them:
+
+- **Put a claim in the layer whose contract allows it.** A file listing, a count,
+  a "this is not written yet" — all state, all in `docs/ARCHITECTURE.md`. The plan
+  names no modules on purpose: a directory tree inside it is exactly how it came
+  to list `sim/scoring.ts` and `sim/stages.ts` for two milestones.
+- **`docs/DESIGN.md` is the captain's, and Prettier ignores it**
+  (`.prettierignore`) so its hand-authored tables and line breaks survive. Keep
+  edits small and in the surrounding style; do not reformat it wholesale.
+- **The reference and the plan's section 4 are a pair.** Change a number in one
+  and the other changes with it, or they drift apart silently. The reference names
+  the original game and its enemy types so sources stay checkable; that licence
+  does not extend to any other document. Unlike the plan it _is_
+  Prettier-formatted, and its claim tables are wide — changing one cell re-pads
+  the whole table, so run `npm run format` before `npm run lint`.
+
+### Markers: how a claim becomes checkable
+
+Most checks cost nothing to write. A path-like token in backticks, a Markdown link
+or image target, a `#heading` anchor, an `npm run …` command and a quoted
+`engines.node` range are harvested from the text as written, in **every** document
+whatever its layer — a dangling reference is never right, and the layers exempt
+tense, not references.
+
+Anything that needs interpretation carries an HTML comment, invisible in rendered
+Markdown:
+
+```
+<!-- doc:layer state -->                        the layer this document is
+<!-- check:count flow.phases 6 -->              a stated count; name/number pairs
+<!-- check:absent src/render/crt.ts -->         not written yet, and must stay so
+<!-- check:path packs/classic/rules.json -->    a path named outside backticks
+<!-- check:script sprite-sheet -->              a script in package.json
+<!-- check:foreign src/mame/namco/galaga.cpp --> a path in somebody else's repo
+<!-- check:engines ^22.13.0 || >=24.0.0 -->     the declared Node range
+```
+
+Four things worth knowing:
+
+- **A marker goes on its own line at the _end_ of the paragraph it annotates, with
+  a blank line after it** — or inline at the end of a line of text. On its own line
+  in the _middle_ of a paragraph it splits the paragraph in two when rendered.
+- **A count must be derived.** `counters` in `tests/unit/helpers/docs.ts` computes
+  each one from the code or the shipped pack. Adding a counter that returns a
+  literal moves the hand-maintained number into a file nobody reads.
+- **`check:absent` is the self-cleaning one.** It fails on the day the file lands,
+  which is what stops a "not here yet" list going stale — the failure mode a
+  `packs/classic/README.md` already hit once.
+- **A marker inside a fenced code block is inert**, which is why the block above
+  documents the vocabulary without asserting it.
+
+### When your change falsifies somebody else's document
+
+Say so in your pull request body: name the document, the statement and why it is
+now false. Do **not** quietly fix it during a rebase. Two corrections landed that
+way and were reviewable because of it; a silent edit inside an unrelated diff is
+how a document acquires a claim nobody checked. If the accuracy suite catches it
+for you, that is the system working — fix it and still say what moved.
 
 ## The one rule that shapes the codebase
 
@@ -322,10 +384,11 @@ and font through the real pipeline into `docs/media/`, which is the contact shee
   ripped sprites, traced art, ROM data and the original's names. Enemy roles are
   `drone`, `wing` and `warden` everywhere outside
   `docs/reference/arcade-reference.md`.
-- `tests/unit/sim-boundary.test.ts` briefly writes `src/sim/__boundary_probe__.ts`
+- `tests/unit/sim-boundary.test.ts` briefly writes a `__boundary_probe__.ts` into `src/sim/`
   and removes it again. The path is gitignored in case a run dies mid-test.
 - The game boots into **attract mode**, not into play: `src/ui/flow.ts` is the
-  one state machine (attract, playing, game over, results, high-score entry) and
+  one state machine — attract, playing, the between-stage challenge card, game
+  over, results and high-score entry <!-- check:count flow.phases 6 --> — and
   `src/main.ts` only calls `flow.step(frame)` and draws the phase. Anything
   driving the browser has to push start first — that is what `startGame()` in
   `tests/e2e/smoke.spec.ts` is for — and every phase timer counts **simulation
