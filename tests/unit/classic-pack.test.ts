@@ -59,11 +59,13 @@ describe('the pack itself', () => {
   it('loads with its rules', () => {
     expect(pack.id).toBe('classic');
     expect(rules.id).toBe('classic');
-    // The three formation roles plus the three transform types, and one authored
-    // stage. `tests/unit/classic-content.test.ts` checks what is in them; here it
-    // is only that they are there.
+    // The three formation roles plus the three transform types, and the five entry
+    // scripts the normal stages through 8 play — five rather than six because
+    // stage 8 replays stage 4's script row.
+    // `tests/unit/classic-content.test.ts` checks what is in them; here it is only
+    // that they are there.
     expect(pack.aliens.size).toBe(6);
-    expect(pack.stages.size).toBe(1);
+    expect(pack.stages.size).toBe(5);
   });
 
   it('holds exactly the content its landed tasks put there, and loads all of it', () => {
@@ -166,9 +168,11 @@ describe('the pack itself', () => {
     // last three from stage 24, the challenge scripts cycle all eight — so the
     // periods are stated per table and never derived from one another.
     expect(pack.manifest.stageSequence.challenge.repeatLast).toBe(8);
-    // The normal half holds stage 1 alone so far, and a plateau cannot cycle more
-    // rows than a table has; it returns to 3 with stages 2–8.
-    expect(pack.manifest.stageSequence.normal.rows).toHaveLength(1);
+    // The normal half holds the six normal stages through 8, which is the first six
+    // of the reference's seventeen. Cycling the last three is a property of the
+    // whole table, so `repeatLast` stays 1 until rows 7–17 land rather than
+    // asserting a plateau three rows early.
+    expect(pack.manifest.stageSequence.normal.rows).toHaveLength(6);
     expect(pack.manifest.stageSequence.normal.repeatLast).toBe(1);
   });
 });

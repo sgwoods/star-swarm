@@ -207,13 +207,23 @@ export const GOLDENS: readonly GoldenSpec[] = [
   // Four divers rising to six, launch counters of 8 where stage 1 has 0, the
   // alternative bombing-vector table that row's `reloadBombVectors` swaps in, and
   // enough bombs in the air to reach the eight-slot cap.
+  //
+  // The sweep period is 110 rather than 90 because the stages task changed what
+  // plays as stage 20: the normal sequence used to hold one row, so every stage
+  // past 1 replayed stage 1's choreography, and now the plateau rests on
+  // `stage-4`. Against that entry the 90-frame sweeper died 120 frames after the
+  // transform fired, which cost this golden the one thing only it covers — the
+  // trio leaving the screen instead of rejoining. 110 keeps the fighter alive
+  // through it (game over at 2,452 against 1,634), departs three of them and
+  // lands 178 bombs against 113. The number is the test pilot's, not the game's;
+  // the difficulty row is untouched.
   {
     name: 'stage-dives',
     seed: 'golden-stage-dives',
     inputSeed: 'pilot-dive',
     steps: 5_400,
     stage: 20,
-    sweepPeriod: 90,
+    sweepPeriod: 110,
     rules: fiveShipCabinet(),
   },
 ];

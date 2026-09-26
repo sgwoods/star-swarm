@@ -471,41 +471,93 @@ function enemyFingerprint(enemy: Enemy): readonly (string | number)[] {
 }
 
 /**
+ * Decimal places a fingerprinted number is compared to.
+ *
+ * The exact-float comparison this replaces was specified far tighter than
+ * anything the game can show. Two bounds fix the useful range:
+ *
+ * - **Below**, the noise floor. `Math.sin`, `Math.cos` and `Math.atan2` are
+ *   engine-defined (see the note at the top of `./paths.ts`) and can land one ULP
+ *   apart on different CPU architectures. The largest ULP among the numbers the
+ *   shipped goldens actually record is 5.7e-14, at a y near the bottom of the
+ *   playfield. A golden recorded on one machine has already failed on another by
+ *   exactly that much, in one enemy's frozen x, with every other value identical.
+ * - **Above**, the observation floor. Positions are drawn to whole pixels, so the
+ *   finest difference anyone could ever see is one crossing a half-pixel boundary:
+ *   0.5.
+ *
+ * Six places sits between them with room either way — 1e-6 is 1.8e7 times the
+ * noise and 5e5 times finer than the half pixel — and the bias towards the loose
+ * end is deliberate, because no behaviour exists between 1e-14 and 1e-6 and a CI
+ * failure that reproduces on no developer's machine costs more than it catches.
+ *
+ * This narrows what a golden detects and is **not** a claim that the simulation is
+ * bit-identical across machines. It is not; this only stops that mattering to the
+ * test suite. Rounding is also discontinuous, so two values straddling a grid line
+ * still differ — measured at roughly 1e-5 odds across a whole fingerprint, against
+ * the near-certainty this replaces. `tests/unit/world.test.ts` pins both halves:
+ * that a one-ULP nudge is absorbed, and that a thousandth of a pixel is not.
+ */
+const FINGERPRINT_DP = 6;
+const FINGERPRINT_GRID = 10 ** FINGERPRINT_DP;
+
+/**
+ * Round one fingerprinted number, leaving integers exactly as they are.
+ *
+ * The integer guard is not an optimisation: `rng.getState()` is four uint32s and
+ * `AGENTS.md` calls the RNG stream part of the on-disk contract, so the safest
+ * thing is for no integer to go near the arithmetic at all.
+ */
+function quantise(value: number): number {
+  if (Number.isInteger(value) || !Number.isFinite(value)) return value;
+  return Math.round(value * FINGERPRINT_GRID) / FINGERPRINT_GRID;
+}
+
+/**
  * A single comparable value for the whole simulation state.
  *
  * Used by the golden replay tests: two runs that agree on this agree on
  * everything the simulation carries, including the RNG's position, which is what
  * catches a change that only shows up several thousand draws later.
+ *
+ * Every number is quantised on the way out — see {@link FINGERPRINT_DP}. It is
+ * done with a `JSON.stringify` replacer rather than field by field on purpose:
+ * the replacer sees every number in the structure, so a float added here later
+ * cannot quietly reintroduce the cross-machine failure, and nothing the
+ * simulation holds is touched, only the copy being serialised.
  */
 export function fingerprintWorld(world: World): string {
-  return JSON.stringify({
-    step: world.step,
-    stage: world.stage,
-    score: world.score,
-    status: world.status,
-    player: world.player,
-    lives: world.lives,
-    shots: world.shots.map(({ slot, active, x, y }) => [slot, active, x, y]),
-    bullets: world.enemyBullets.map(({ slot, active, x, y, vx, vy }) => [
-      slot,
-      active,
-      x,
-      y,
-      vx,
-      vy,
-    ]),
-    dive: diveFingerprint(world.dive),
-    formation: world.formation && [
-      world.formation.frame,
-      world.formation.motion,
-      world.formation.swayOffset,
-      world.formation.swayDirection,
-      world.formation.breatheStep,
-      world.formation.breatheDirection,
-      world.formation.entryComplete,
-    ],
-    fleet: [world.fleet.frame, world.fleet.entryComplete],
-    enemies: world.fleet.enemies.map(enemyFingerprint),
-    rng: world.rng.getState(),
-  });
+  return JSON.stringify(
+    {
+      step: world.step,
+      stage: world.stage,
+      score: world.score,
+      status: world.status,
+      player: world.player,
+      lives: world.lives,
+      shots: world.shots.map(({ slot, active, x, y }) => [slot, active, x, y]),
+      bullets: world.enemyBullets.map(({ slot, active, x, y, vx, vy }) => [
+        slot,
+        active,
+        x,
+        y,
+        vx,
+        vy,
+      ]),
+      dive: diveFingerprint(world.dive),
+      formation: world.formation && [
+        world.formation.frame,
+        world.formation.motion,
+        world.formation.swayOffset,
+        world.formation.swayDirection,
+        world.formation.breatheStep,
+        world.formation.breatheDirection,
+        world.formation.entryComplete,
+      ],
+      fleet: [world.fleet.frame, world.fleet.entryComplete],
+      enemies: world.fleet.enemies.map(enemyFingerprint),
+      rng: world.rng.getState(),
+    },
+    (_key, value: unknown) => (typeof value === 'number' ? quantise(value) : value),
+  );
 }
