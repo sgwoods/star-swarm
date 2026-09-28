@@ -507,6 +507,33 @@ describing as deliberately absent something that shipped two merges ago.
   admits, and no pack document uses it — what a boss stage would be has never
   been specified ([`docs/IDEAS.md`](IDEAS.md)).
   <!-- check:count classic.stages.boss 0 schema.stageKinds 3 -->
+- **A captor never launches with escorts, so 800 and 1,600 are unreachable.** The
+  escort bonus itself is paid: a captor carries the latched value its stage start
+  installs and `enemyScore` in `src/sim/enemies.ts` adds it on the doubled branch,
+  so a captor destroyed mid-dive is worth 400 and one shot at home is worth 150.
+  What is missing is the _launch_: `src/sim/dive.ts` sends one enemy of a role down
+  per round robin and has no notion of a boss leading a wingman, so the pack's
+  `scoring.escortBonus.byEscortCount` entries for one and two escorts are data
+  nothing can select. The scout report's acceptance tests **S7 and S9** are
+  therefore not satisfiable today, and the latch that makes them interesting —
+  killing the escorts first must not reduce the captor's value — cannot be
+  observed either.
+- **The starfield scrolls at its own rate, not the reference's.** The per-stage
+  _speed byte_ is the pack's verified formula and the simulation reports it
+  (`starfieldSpeedByte`, `stage-started`), but the byte-to-pixels conversion in
+  `src/render/starfield.ts` is `SPEED_TIERS`, which is ours and is half the
+  reference's closed value of `byte / 64` — 0.5 to 1.5 px/frame against 1.00 to
+  2.00. Three behaviours in the same routine are also absent: the one-unit-per-frame
+  ramp between stages, the 3 px/frame reverse while a tractor beam is pulling the
+  ship in, and the star-bank twinkle. Acceptance tests **M6, M7 and M8**. Closing
+  them doubles the visible scroll rate, which is a change to how the game feels
+  rather than a defect, so it is the captain's call and not a quiet fix.
+- **There is no pulsing-formation sound.** `formation-settled` is raised on the
+  frame the sway passes back through zero and the breathe begins there, which is
+  asserted in `tests/unit/formation.test.ts`; the arcade starts its pulsing
+  formation tune on that same frame, and `packs/classic/pack.json` binds no sound
+  to the event. The second half of acceptance test **M2** is therefore about
+  something the pack does not ship yet.
 
 Two arcade questions are also still open rather than decided, and the game is
 built to one reading of each. Both are written down in

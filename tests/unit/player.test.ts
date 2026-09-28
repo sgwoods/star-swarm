@@ -43,6 +43,18 @@ describe('the alternating 1/2 pixel cadence', () => {
     ]);
   });
 
+  it('M9 — ten frames from rest is 15 px, stepping 1, 2, 1, 2 …', () => {
+    // The scout report's acceptance test M9, stated with its exact total: five
+    // 1-px steps and five 2-px ones. Worth pinning as a number as well as a
+    // pattern, because it is the one form of the claim that catches a cadence
+    // starting on the 2-px half — that would also alternate, and would also
+    // average 1.5, and would be 20 px here.
+    const start = createPlayer(rules).x;
+    const steps = positions(10, RIGHT, start).map((x, i, all) => x - (all[i - 1] ?? start));
+    expect(steps).toEqual([1, 2, 1, 2, 1, 2, 1, 2, 1, 2]);
+    expect(steps.reduce((sum, step) => sum + step, 0)).toBe(15);
+  });
+
   it('starts every new movement with a 1-pixel step', () => {
     const player = createPlayer(rules);
     const start = player.x;
