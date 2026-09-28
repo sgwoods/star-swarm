@@ -442,7 +442,13 @@ one serialisation — a page compares itself against that file, so a second
 serialiser is a phantom "new build" notice. Never add a hand-maintained version
 number; this project's recorded failure mode is exactly that.
 
-Two consequences when working here:
+That serialisation is published, not just served: `.github/workflows/ci.yml`
+packages the `dist/` the `check` job built and a `deploy` job puts it on GitHub
+Pages, so a push to `main` that passes the checks is a release and one that fails
+is not. `docs/ARCHITECTURE.md` §2 is the account of it; there is no second build
+path and nothing to run by hand.
+
+Three consequences when working here:
 
 - **A dev server's stamp is the moment `npm run dev` started**, because the
   identity is derived when Vite reads its config. Everything else about editing
@@ -453,6 +459,14 @@ Two consequences when working here:
   imports the served file's name from it, and an import chain reaching a canvas
   would drag browser code into the Node config. Drawing lives in
   `src/ui/build-stamp.ts`.
+- **Two lines carry the hosted build, and both look like tidying.**
+  `base: './'` in `vite.config.ts` is what makes the bundle work under a project
+  Pages subpath, and the `?t=` stamp in `buildIdentityUrl` is the _only_ reason
+  the poll is uncached — GitHub Pages will not set a response header on one file,
+  so the freshness is bought by asking for a URL no cache has seen. Changing the
+  base to `/` breaks every asset on the hosted site; dropping the cache-buster
+  leaves a detector that reports `same` forever. Neither failure shows up locally,
+  because the dev server sends `no-store` itself.
 
 ## Sharp edges
 
