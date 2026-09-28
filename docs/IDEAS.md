@@ -56,10 +56,6 @@ ideas rather than roadmap items only because nobody has asked for them.
 
 ## Reach
 
-- **Publishing a playable build** — GitHub Pages, from the existing `vite build`
-  output. The interesting part is not the deployment; it is deciding whether a
-  public build changes what "original art and audio by rule" has to be able to
-  prove.
 - **An in-game Forge box** that calls the Claude API directly from the running
   game, behind the same validator gate as `/forge`. Deferred in the plan past
   Milestone 4 because it needs API-key handling, and that is still the blocker

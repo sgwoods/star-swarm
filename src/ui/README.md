@@ -1,9 +1,10 @@
 # `src/ui/`
 
 `flow.ts` (the game-state machine), `attract.ts`, `hud.ts`, `results.ts`,
-`highscores.ts`, `panel.ts` (the plate every card sits on) and `lab/` (the `/lab`
-preview harness). `menus.ts`, which `docs/DESIGN.md` section 9 also lists, is not
-written yet — see the bottom of this file.
+`highscores.ts`, `panel.ts` (the plate every card sits on), `build-info.ts` and
+`build-stamp.ts` (which build is this, and is a newer one being served), and
+`lab/` (the `/lab` preview harness). `menus.ts`, which `docs/DESIGN.md` section 9
+also lists, is not written yet — see the bottom of this file.
 
 Like `src/render/`, this layer is a **subscriber** — it reads simulation state
 and events and draws; it never writes back, and `src/sim/` never imports it.
@@ -43,6 +44,23 @@ The front-end shell around it landed with Milestone 2:
   layout. The rows it shows are the original's: the hit count, and the
   end-of-stage award under a label that changes with the branch — "SPECIAL BONUS"
   when the perfect bonus _replaced_ the per-hit one, "BONUS" when it did not.
+- **The build stamp is two modules for one reason**, the same one
+  `src/audio/synth.ts` splits on: `build-info.ts` is pure and imports nothing at
+  all — the identity type, the parser, the comparison and the step-driven poller
+  — and `build-stamp.ts` is the drawing. That is what lets `vite.config.ts`
+  import the one constant both sides need (the name of the served file) without
+  pulling a canvas into a Node process, and what lets the poller be tested with
+  no browser. The identity itself is never written down: it is substituted into
+  the bundle by the plugin in `vite.config.ts` from `scripts/build-identity.ts`,
+  and a bundle nobody substituted into says `unknown` rather than inventing a
+  release.
+- **The stamp draws in the top HUD band and the notice never moves anything.**
+  The two corner rows fit the gaps `hud.ts` leaves right of `HIGH SCORE` and
+  right of the high-score value — nine cells and eleven — so a longer commit
+  would run through the score rather than wrap. When a newer build is served the
+  commit row and the attract line _alternate_ with the notice rather than being
+  replaced by it, which is why nothing on screen shifts and why the notice cannot
+  interrupt a game.
 - **The badge denominations are pack data.** `pack.json`'s `stageBadges` pairs
   each value with the sprite that draws it, and `badgesForStage` decomposes a
   stage number greedily over whatever it is handed — sorting first, because
