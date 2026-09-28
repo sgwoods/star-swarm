@@ -170,11 +170,12 @@ itself, for game code and for pack data alike. Two things do not follow that rul
 
 For a **hosted** build there is no dev server and no reload: publishing is
 `npm run build` and then serving `dist/`, which already contains `build.json`
-alongside `index.html`. An open tab notices the new build within a minute of
-simulation time and says so; nothing else has to be pushed to it. Two things the
-host has to get right — `build.json` must be served uncached, or the poll reads
-the old answer forever, and it must sit beside `index.html`, because the page asks
-for it relative to its own document so that a deployment under a subpath works.
+alongside `index.html`. An open tab polls that file every minute of simulation
+time and says so when it changes; nothing else has to be pushed to it. Two things
+the host has to get right — `build.json` must sit beside `index.html`, because the
+page asks for it relative to its own document so that a deployment under a subpath
+works, and the poll is only as fresh as the host lets it be, which on a CDN is the
+host's own cache lifetime and not the polling interval.
 
 That host is GitHub Pages, and the publisher is the workflow that already runs
 the checks. [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) packages the
@@ -192,18 +193,29 @@ Both host requirements above are met, and neither is met by a setting:
   is why `vite.config.ts` sets `base: './'`: every asset reference and the
   identity poll alike are relative to the document, so the same bundle works at a
   domain root and under `/star-swarm/` without being rebuilt for either.
-- **Uncached** — not by a response header, because GitHub Pages does not let you
-  set one on a single file. By the request instead: `src/ui/build-info.ts` fetches
-  with `cache: 'no-store'` and a `?t=` stamp that differs on every poll, so no
-  cache between the page and the file has ever seen that URL. A host cannot serve
-  a stale answer to a question it has not been asked. This is the mechanism the
-  build-identity work already shipped; publishing on Pages is what makes it load
-  bearing.
+- **As fresh as the host allows, which here is not the request's to decide.**
+  `src/ui/build-info.ts` fetches with `cache: 'no-store'` and a `?t=` stamp that
+  differs on every poll. On an ordinary static host that is enough, and it is why
+  the dev server and the Playwright run see every change at once. **On GitHub
+  Pages it buys nothing, and this document does not pretend otherwise.** Pages
+  serves every file through Fastly with `cache-control: max-age=600`, will not let
+  you set a header on one file, and its edge keys on the path alone: a request
+  carrying a unique `?t=` comes back `x-cache: HIT` with the same `age` as a plain
+  one, and `Cache-Control: no-cache`, `no-store` and `Pragma: no-cache` are all
+  ignored the same way. Measured against the live site, `age` climbs to 592 and
+  resets to 0 at the instant `expires` names — so the edge holds a copy for its
+  full 600 seconds and nothing the page sends shortens it.
 
 So the update path for a hosted build is the merge, and nothing else: a merge to
 `main` rebuilds, republishes, and a tab that was already open says **NEW BUILD**
-within a minute of simulation time. Refreshing is still the player's to press —
-it costs the run in progress, which is why nothing refreshes for them.
+once the poll can see the change. How long that takes is the host's to answer and
+not the page's: the poll comes round every minute of simulation time, and on Pages
+it reads whatever the edge is holding. What is measured is the steady state — the
+edge serves one copy for 600 seconds and returns to origin only when that expires.
+What is **not** measured, and what GitHub does not document, is whether publishing
+a deployment purges that copy early; if it does the notice is prompt, and if it
+does not it is up to those ten minutes late. Refreshing is still the player's to
+press — it costs the run in progress, which is why nothing refreshes for them.
 
 Where the site is depends on how the repository has Pages configured, so this
 document does not write the address down: the deploy job publishes its URL as the

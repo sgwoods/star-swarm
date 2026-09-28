@@ -348,7 +348,12 @@ describe('where the poll goes', () => {
     );
   });
 
-  it('carries a cache-buster, so a host that ignores no-store still cannot lie', () => {
+  // What this does and does not prove: every poll asks for a URL no cache has
+  // seen, which settles it on a host whose caches key on the whole URL. It says
+  // nothing about a CDN that keys on the path alone — GitHub Pages is one, and
+  // `docs/ARCHITECTURE.md` §2 carries the measurement. No unit test can stand in
+  // for that; only the live site can.
+  it('varies with every poll, so a whole-URL cache has never seen it', () => {
     const first = buildIdentityUrl('https://example.test/', 1);
     const second = buildIdentityUrl('https://example.test/', 2);
     expect(first).not.toBe(second);
