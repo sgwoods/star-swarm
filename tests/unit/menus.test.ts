@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import type { Persona } from '../../src/content/personas.js';
+
 import type { DifficultyPreset } from '../../src/content/variants.js';
 import { LOGICAL_HEIGHT } from '../../src/render/canvas.js';
 import { GLYPH_CHARS } from '../../src/render/text.js';
@@ -49,6 +51,9 @@ function variantOf(id: string, overrides: Partial<MenuVariant> = {}): MenuVarian
     packs: [id],
     presets,
     defaultPreset: first,
+    // No personas by default: the AUTOPLAY row is absent unless a variant ships
+    // some, which is the shipped rule and the one most rows here are written for.
+    personas: [],
     ...overrides,
   };
 }
@@ -287,6 +292,94 @@ describe('the settings menu', () => {
     expect(settings().difficulty).toBe('expert');
     // Read again without touching the menu: the row reflects the write.
     expect(menu.rows[0]?.value).toBe('EXPERT');
+  });
+});
+
+describe('the AUTOPLAY row', () => {
+  const persona = (id: string, over: Record<string, unknown> = {}): Persona => ({
+    id,
+    label: id.toUpperCase(),
+    reactionSteps: 4,
+    aimTolerance: 4,
+    threatHorizon: 200,
+    dodgeMargin: 16,
+    shotDiscipline: 0.5,
+    panic: 0.1,
+    engage: 0.5,
+    rescue: false,
+    ...over,
+  });
+
+  const watchable = (ids: readonly string[], over: Record<string, unknown> = {}) =>
+    variantOf('classic', { personas: ids.map((id) => persona(id, over)) });
+
+  it('is absent on a game that ships no personas', () => {
+    // The `GAME` row's rule: a row whose only value could be OFF is a row nobody
+    // needs, so a variant with no personas has no autoplay row at all.
+    const { menu } = menuOver([variantOf('classic')]);
+    expect(menu.rows.map((row) => row.id)).not.toContain('autoplay');
+  });
+
+  it('appears once a game ships one, reading OFF', () => {
+    const { menu } = menuOver([watchable(['beginner'])]);
+    const row = menu.rows.find((entry) => entry.id === 'autoplay');
+    expect(row?.value).toBe('OFF');
+    expect(row?.editable).toBe(true);
+  });
+
+  it('sits with DIFFICULTY rather than with the presentation rows', () => {
+    // Both are the same kind of thing — how the run is framed, not how it looks —
+    // so they are neighbours, and a reader scanning the card finds them together.
+    const { menu } = menuOver([watchable(['beginner'])]);
+    const ids = menu.rows.map((row) => row.id);
+    expect(ids.indexOf('autoplay')).toBe(ids.indexOf('difficulty') + 1);
+  });
+
+  it('shows the chosen persona’s own label and description', () => {
+    const { menu } = menuOver([watchable(['astronaut'], { description: 'SUPER EXPERT' })], {
+      autoplay: 'astronaut',
+    });
+    const row = menu.rows.find((entry) => entry.id === 'autoplay');
+    expect(row?.value).toBe('ASTRONAUT');
+    expect(row?.note).toBe('SUPER EXPERT');
+  });
+
+  it('reads OFF for a persona this game does not offer', () => {
+    // A settings document outlives the build it was written against.
+    const { menu } = menuOver([watchable(['beginner'])], { autoplay: 'astronaut' });
+    expect(menu.rows.find((entry) => entry.id === 'autoplay')?.value).toBe('OFF');
+  });
+
+  it('cycles off, then every persona, and wraps', () => {
+    const { menu, settings } = menuOver([watchable(['a', 'b'])]);
+    const at = menu.rows.findIndex((row) => row.id === 'autoplay');
+    for (let i = 0; i < at; i += 1) menu.next();
+    expect(menu.row.id).toBe('autoplay');
+
+    menu.adjust(1);
+    expect(settings().autoplay).toBe('a');
+    menu.adjust(1);
+    expect(settings().autoplay).toBe('b');
+    // Off is a place in the cycle rather than a special case, so right from the last
+    // persona lands on it and left from off lands on the last.
+    menu.adjust(1);
+    expect(settings().autoplay).toBeUndefined();
+    menu.adjust(-1);
+    expect(settings().autoplay).toBe('b');
+  });
+
+  it('follows the GAME row to whichever game is in force', () => {
+    // Rows are derived on every read, so switching game switches the personas on
+    // offer — and a persona the new game does not have reads as off.
+    const { menu, settings } = menuOver([watchable(['a']), variantOf('remix')], {
+      autoplay: 'a',
+    });
+    expect(menu.rows.find((row) => row.id === 'autoplay')?.value).toBe('A');
+    const game = menu.rows.findIndex((row) => row.id === 'game');
+    for (let i = 0; i < game; i += 1) menu.next();
+    menu.adjust(1);
+    expect(settings().variant).toBe('remix');
+    expect(menu.rows.map((row) => row.id)).not.toContain('autoplay');
   });
 });
 

@@ -31,6 +31,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
+import { personaSchema } from '../../../src/content/personas.js';
 import { ABILITY_TYPES, STAGE_KINDS } from '../../../src/content/schema.js';
 import {
   REVERSE_PIXELS_PER_FRAME,
@@ -39,6 +40,7 @@ import {
   STAR_BANKS,
   TWINKLE_FRAMES,
 } from '../../../src/render/starfield.js';
+import { SETTINGS_ROW_IDS } from '../../../src/ui/menus.js';
 import { CONTROL_SCHEMES } from '../../../src/ui/settings.js';
 import { classicFormation, classicPack, classicRules } from '../../helpers/rules.js';
 import { shippedVariants } from '../../helpers/variants.js';
@@ -550,6 +552,18 @@ function quotedIn(source: string, declaration: RegExp, what: string): number {
  * pack. A counter that returns a literal proves nothing — it only moves the
  * hand-maintained number into a file nobody reads.
  */
+/**
+ * The three persona fields that are *not* axes: what it is called and how it reads
+ * on a menu row. Everything else in the schema is something a watcher can see the
+ * effect of, which is what `autoplay.axes` counts.
+ */
+const PERSONA_LABELLING: ReadonlySet<string> = new Set(['id', 'label', 'description']);
+
+/** Every autoplay persona the shipped games declare, through the real loader. */
+function shippedPersonas(): readonly { readonly id: string }[] {
+  return shippedVariants().flatMap((variant) => variant.personas);
+}
+
 export function counters(root = REPO_ROOT): ReadonlyMap<string, () => number> {
   const read = (path: string): string => readFileSync(join(root, path), 'utf8');
   const stagesOfKind = (kind: string): number =>
@@ -614,6 +628,24 @@ export function counters(root = REPO_ROOT): ReadonlyMap<string, () => number> {
       () => shippedVariants().filter((variant) => variant.demonstration).length,
     ],
     ['ui.controlSchemes', () => CONTROL_SCHEMES.length],
+    ['ui.settingsRows', () => SETTINGS_ROW_IDS.length],
+
+    /**
+     * Autoplay: the personas the shipped game offers, and the axes one declares.
+     *
+     * Both derived from the real thing rather than counted by hand. The personas
+     * come from the loaded variant, so a document that does not load cannot inflate
+     * the number — the same reason `variants.count` reads the loader. The axes come
+     * from the schema minus the three fields that are not axes at all (`id`, `label`
+     * and the optional `description`), because "eight axes" is the claim the design
+     * makes and a ninth field that nobody could see the effect of would quietly
+     * make it false.
+     */
+    ['autoplay.personas', () => shippedPersonas().length],
+    [
+      'autoplay.axes',
+      () => Object.keys(personaSchema.shape).filter((key) => !PERSONA_LABELLING.has(key)).length,
+    ],
 
     /* The shipped Classic pack, through the real loader. */
     ['classic.aliens', () => classicPack().aliens.size],

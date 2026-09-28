@@ -5,9 +5,10 @@
  * lineage rather than the only one, and the captain's standing direction is that
  * variants are chosen at start-up. The registry above layers packs *within* one
  * game; that is not the same thing. A variant is the thing above it: a display
- * name, the packs it is made of, the rules in force, and the difficulty presets
- * a player may pick from. The Classic game is `variants/classic.json` and is the
- * first entry in that list rather than a case the others work around.
+ * name, the packs it is made of, the rules in force, the difficulty presets a
+ * player may pick from, and the autoplay personas the cabinet may play itself as
+ * (`./personas.ts`). The Classic game is `variants/classic.json` and is the first
+ * entry in that list rather than a case the others work around.
  *
  * Three properties this module exists to keep:
  *
@@ -18,8 +19,9 @@
  * - **A variant is validated the way a pack is**, in the same two passes and with
  *   the same {@link ContentError} shape: the schema first, then the references —
  *   every pack it names must be loaded, every preset's rank must be a rank the
- *   resolved rules declare. A variant that fails either never resolves, and the
- *   message names the file and the field.
+ *   resolved rules declare, and every autoplay persona must have its own id and be
+ *   the one a `defaultPersona` names. A variant that fails any of them never
+ *   resolves, and the message names the file and the field.
  * - **A variant selects; it never overrides.** There is deliberately no
  *   mechanism here for patching a rules field. Rules are a whole document from a
  *   pack, because a variant that could nudge individual numbers is a difficulty
@@ -33,6 +35,7 @@ import { z } from 'zod';
 import type { ContentError } from './errors.js';
 import { ContentValidationError, fromZodError } from './errors.js';
 import type { LoadedPack } from './loader.js';
+import { defaultPersonaOf, type Persona, variantAutoplaySchema } from './personas.js';
 import { type ContentRegistry, createRegistry } from './registry.js';
 import { idSchema, type Rules } from './schema.js';
 import { createStageSource, type StageSource } from './stages.js';
@@ -102,6 +105,14 @@ export const variantSchema = z.strictObject({
    */
   demonstration: z.boolean().default(false),
   difficulty: variantDifficultySchema.default({ presets: [] }),
+  /**
+   * The autoplay personas this game offers — how well the cabinet plays itself.
+   *
+   * Beside `difficulty` rather than in a pack because it is the same kind of
+   * thing: a property of the framing of a run rather than content in the game
+   * world (`./personas.ts`). Omitted means this game offers no autoplay.
+   */
+  autoplay: variantAutoplaySchema.default({ personas: [] }),
 });
 
 export type Variant = z.infer<typeof variantSchema>;
@@ -151,6 +162,14 @@ export interface ResolvedVariant {
   readonly presets: readonly DifficultyPreset[];
   /** The preset a player who has chosen nothing gets. */
   readonly defaultPreset: DifficultyPreset;
+  /**
+   * The autoplay personas offered, in menu order. **Empty is the normal case**:
+   * a variant that declares none offers no autoplay and the settings row is
+   * absent, exactly as the `GAME` row is absent on a one-variant cabinet.
+   */
+  readonly personas: readonly Persona[];
+  /** Which persona the `AUTOPLAY` row lands on first, if the document named one. */
+  readonly defaultPersona: Persona | undefined;
   /**
    * What plays as each stage at a given rank.
    *
@@ -369,6 +388,40 @@ export function loadVariants(
       });
       bad = true;
     }
+
+    // Autoplay personas. Nothing outside the block is referenced — a persona
+    // describes a player, not the game — so the reference pass here is the ids
+    // holding together: one persona per id, and a `defaultPersona` that names one
+    // of them. Both are the failures an author actually makes.
+    const personas = variant.autoplay.personas;
+    const personaIds = new Set<string>();
+    personas.forEach((persona, index) => {
+      if (personaIds.has(persona.id)) {
+        errors.push({
+          pack: VARIANTS_GROUP,
+          file,
+          field: `autoplay.personas[${String(index)}].id`,
+          message: `duplicate persona id "${persona.id}"`,
+        });
+        bad = true;
+      }
+      personaIds.add(persona.id);
+    });
+
+    const declaredDefaultPersona = variant.autoplay.defaultPersona;
+    const defaultPersona = defaultPersonaOf(personas, declaredDefaultPersona);
+    if (declaredDefaultPersona !== undefined && defaultPersona === undefined) {
+      errors.push({
+        pack: VARIANTS_GROUP,
+        file,
+        field: 'autoplay.defaultPersona',
+        message:
+          `"${declaredDefaultPersona}" names no persona in this variant ` +
+          `(${personas.map((persona) => persona.id).join(', ') || 'none are declared'})`,
+      });
+      bad = true;
+    }
+
     if (bad || defaultPreset === undefined) continue;
 
     resolved.push({
@@ -383,6 +436,8 @@ export function loadVariants(
       rules,
       presets,
       defaultPreset,
+      personas,
+      defaultPersona,
       stagesFor: (rank) => createStageSource(registry, rank === undefined ? {} : { rank }),
     });
   }

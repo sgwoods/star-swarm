@@ -19,7 +19,7 @@
 import { LOGICAL_HEIGHT, LOGICAL_WIDTH } from '../render/canvas.js';
 import type { SpriteSheet } from '../render/sprites.js';
 import { drawSprite } from '../render/sprites.js';
-import { drawText } from '../render/text.js';
+import { CELL, drawText } from '../render/text.js';
 
 /**
  * One badge denomination and the sprite that draws it.
@@ -116,6 +116,44 @@ export function drawHud(ctx: CanvasRenderingContext2D, state: HudState): void {
   }
 
   drawStageBadges(ctx, state, LOGICAL_WIDTH - 2, LOGICAL_HEIGHT - 12);
+}
+
+/**
+ * Row the autoplay marker sits on, in logical pixels.
+ *
+ * Above the fighter and below the card band, which is the same strip
+ * `src/ui/build-stamp.ts` puts the attract build line on and for the same reason:
+ * it is the part of the playfield nothing of the game's own occupies for long.
+ */
+export const AUTOPLAY_LINE_Y = 238;
+
+const AUTOPLAY_COLOUR = '#7d8aa8';
+
+/** What the marker says before the persona's own label. */
+const PREFIX = 'AUTO  ';
+
+/**
+ * Say who is flying.
+ *
+ * A watcher has to be able to tell a persona from a person without opening the
+ * menu — and, when a clip of two of them is cut side by side, to tell which is
+ * which. Steady rather than blinking, because a marker that is absent half the
+ * time is a marker that is absent in half the frames of a recording.
+ */
+export function autoplayLine(label: string): string {
+  // A persona's label comes from a document this code has never seen, and
+  // `drawText` clips nothing — it keeps drawing off the plate. The playfield is 224
+  // pixels at a fixed 8 per character, so the line gets 26 of them and the label
+  // gets what is left after the prefix.
+  const cells = Math.floor(LOGICAL_WIDTH / CELL) - PREFIX.length;
+  return `${PREFIX}${label.slice(0, Math.max(0, cells))}`;
+}
+
+export function drawAutoplayLine(ctx: CanvasRenderingContext2D, label: string): void {
+  drawText(ctx, autoplayLine(label), LOGICAL_WIDTH / 2, AUTOPLAY_LINE_Y, {
+    colour: AUTOPLAY_COLOUR,
+    align: 'center',
+  });
 }
 
 /**

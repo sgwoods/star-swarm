@@ -107,6 +107,21 @@ The clips are screen recordings of the dev build.
   card only draws the line naming the place a score would have taken when it would
   have taken one, and reaching that against the shipped defaults is half a minute
   of play the clip does not otherwise need.
+- `m3-autoplay.gif` — the cabinet playing itself, two personas side by side and
+  thirty unedited seconds of each: **beginner on the left, astronaut on the
+  right**, both labelled on screen by the game's own `AUTO <PERSONA>` line. Two
+  separate live runs recorded the same way and laid beside each other, not one run
+  in two panels — the personas are independent players on independent seeds, and
+  nothing about the runs is arranged. What the pairing is for is the difference
+  being visible rather than only scoreable: the beginner dithers, bolts for a wall
+  and loses fighters with most of the formation still up, while the astronaut picks
+  divers out of the air on the way down, clears its formation, and — because
+  `rescue` is the one axis it has that the expert does not — walks deliberately into
+  a tractor beam to go after the dual fighter. Each persona was chosen through the
+  real settings menu with real keypresses; from the moment play starts the controls
+  are untouched. At `fps=8` and `max_colors=24` rather than the usual 10 and 64:
+  the frame is two playfields wide and two starfields defeat a GIF's inter-frame
+  compression, so the usual settings came out at 6 MB.
 - `arch-lab.gif` — the `/lab` previewer: an entry path playing, then scrubbed
   frame by frame with the readout following, then the same path mirrored, then a
   dive path flown from the slot marker.

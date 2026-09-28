@@ -20,6 +20,7 @@
  * | ------------ | ------------------------------------------------------------ |
  * | `variant`    | which game `src/ui/flow.ts` runs                              |
  * | `difficulty` | a preset id → a rank → the rules layer's own tables           |
+ * | `autoplay`   | a persona id → the pilot `src/ui/flow.ts` hands the controls to |
  * | `volume`     | `Synth.setVolume` (`src/audio/synth.ts`)                      |
  * | `muted`      | `Synth.setMuted`                                              |
  * | `controls`   | the keyboard map handed to `createKeyboardInput`              |
@@ -66,6 +67,19 @@ export interface Settings {
    * default, which is `presetOf`.
    */
   readonly difficulty: string | undefined;
+  /**
+   * The autoplay **persona id** the cabinet plays itself as, or `undefined` for
+   * "a human is flying".
+   *
+   * An id rather than a resolved persona, and `undefined` rather than a
+   * `'off'` sentinel, for the same reason `variant` and `difficulty` are: a
+   * settings document outlives the packs and variants it was written against, and
+   * an id the active variant does not offer must read as **off** rather than as
+   * the first persona. `personaOf` in `src/content/personas.ts` is that fallback,
+   * and it is deliberately the strict one — silently watching the cabinet play
+   * itself as somebody else is worse than not watching.
+   */
+  readonly autoplay: string | undefined;
   /** Master volume, 0…1. */
   readonly volume: number;
   readonly muted: boolean;
@@ -86,6 +100,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = Object.freeze({
   variant: undefined,
   difficulty: undefined,
+  autoplay: undefined,
   volume: 0.7,
   muted: false,
   crt: false,
@@ -149,6 +164,7 @@ export function parseSettings(text: string | undefined): Settings | undefined {
   return {
     variant: stringOr(stored.variant, undefined),
     difficulty: stringOr(stored.difficulty, undefined),
+    autoplay: stringOr(stored.autoplay, undefined),
     volume:
       typeof stored.volume === 'number' ? quantiseVolume(stored.volume) : DEFAULT_SETTINGS.volume,
     muted: typeof stored.muted === 'boolean' ? stored.muted : DEFAULT_SETTINGS.muted,

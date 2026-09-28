@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { Persona } from '../../src/content/personas.js';
 import type { Rules } from '../../src/content/schema.js';
 import type { StageSource } from '../../src/content/stages.js';
 import type { DifficultyPreset } from '../../src/content/variants.js';
@@ -12,6 +13,7 @@ import {
   DEFAULT_TIMINGS,
   type FlowVariant,
   type GameFlow,
+  type GamePhase,
 } from '../../src/ui/flow.js';
 import { createHighScoreBoard, type HighScoreEntry } from '../../src/ui/highscores.js';
 import { EMPTY_STATS, resultRows } from '../../src/ui/results.js';
@@ -470,6 +472,7 @@ function flowVariant(
     readonly demonstration?: boolean;
     /** Records the rank each `stagesFor` call was made with. */
     readonly ranks?: string[];
+    readonly personas?: readonly Persona[];
   } = {},
 ): FlowVariant {
   const presets =
@@ -486,6 +489,7 @@ function flowVariant(
     rules,
     presets,
     defaultPreset: presets.find((preset) => preset.rank === rules.difficulty.defaultRank) ?? first,
+    personas: options.personas ?? [],
     stagesFor: (rank) => {
       options.ranks?.push(rank ?? '(none)');
       return stages;
@@ -1248,5 +1252,321 @@ describe('both keys are ignored where there is no game to hold', () => {
         return flow;
       }),
     ).toEqual(['high-score-entry', 'high-score-entry']);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Autoplay                                                                    */
+/* -------------------------------------------------------------------------- */
+
+/** A persona good enough to fly for a few hundred steps without dying at once. */
+function watcher(id = 'watcher'): Persona {
+  return {
+    id,
+    label: id.toUpperCase(),
+    reactionSteps: 2,
+    aimTolerance: 4,
+    threatHorizon: 240,
+    dodgeMargin: 16,
+    shotDiscipline: 0.8,
+    panic: 0,
+    engage: 0.5,
+    rescue: false,
+  };
+}
+
+/**
+ * A one-variant flow that offers personas, with a settings store a test can read
+ * back — because "a human taking the controls always wins" is a *write* to the
+ * settings, and the way to check it happened is to look there.
+ */
+function watchableFlow(
+  autoplay: string | undefined,
+  personas: readonly Persona[] = [watcher()],
+): { readonly flow: GameFlow; readonly settings: SettingsStore } {
+  const settings = createSettingsStore({ storage: createMemoryStorage() });
+  if (autoplay !== undefined) settings.update({ autoplay });
+  const rules = quickRunRules();
+  const flow = createGameFlow({
+    variants: [flowVariant('watchable', rules, { personas })],
+    seed: 'watch',
+    settings,
+    highScores: createHighScoreBoard({ storage: createMemoryStorage(), defaults: [] }),
+    demo: createAttractDemo({ rules: classicRules(), stages: classicStages(), seed: 'watch:demo' }),
+  });
+  return { flow, settings };
+}
+
+describe('watching the cabinet play itself', () => {
+  it('is off unless a persona has been chosen, and reports who is flying', () => {
+    expect(watchableFlow(undefined).flow.autoplay).toBeUndefined();
+    expect(watchableFlow('watcher').flow.autoplay?.id).toBe('watcher');
+  });
+
+  it('reads as off for a persona this game does not offer', () => {
+    // A settings document outlives the build it was written against, so an id
+    // nobody offers has to hand the controls back rather than half-arm anything.
+    expect(watchableFlow('gone').flow.autoplay).toBeUndefined();
+  });
+
+  it('starts a game out of attract without anybody pressing start', () => {
+    // Attract has no timer to move it on, so this is the one screen autoplay has to
+    // push a button on. With a single variant the flow boots straight into attract,
+    // so the very first step is enough.
+    const { flow } = watchableFlow('watcher');
+    expect(flow.phase).toBe('attract');
+    flow.step(EMPTY_FRAME);
+    expect(flow.phase).toBe('playing');
+  });
+
+  it('leaves a cabinet with autoplay off sitting in attract, as before', () => {
+    const { flow } = watchableFlow(undefined);
+    runPhase(flow, EMPTY_FRAME, 200);
+    expect(flow.phase).toBe('attract');
+  });
+
+  it('flies the fighter: it moves and it shoots', () => {
+    const { flow } = watchableFlow('watcher');
+    flow.step(EMPTY_FRAME);
+    const startedAt = flow.world.player.x;
+    let moved = false;
+    for (let i = 0; i < 600 && flow.phase === 'playing'; i += 1) {
+      flow.step(EMPTY_FRAME);
+      if (flow.world.player.x !== startedAt) moved = true;
+    }
+    expect(moved).toBe(true);
+    expect(flow.stats.shotsFired).toBeGreaterThan(0);
+  });
+
+  it('plays the same game twice from the same seed and persona', () => {
+    // The property the whole suite rests on, at the level a watcher meets it: two
+    // flows, same seed, same persona, nobody touching the controls.
+    const run = (): string => {
+      const { flow } = watchableFlow('watcher');
+      for (let i = 0; i < 900; i += 1) flow.step(EMPTY_FRAME);
+      return `${String(flow.stats.score)}/${String(flow.world.player.x)}/${flow.phase}`;
+    };
+    expect(run()).toBe(run());
+  });
+
+  it('hands the controls over the instant a human touches them, for good', () => {
+    const { flow, settings } = watchableFlow('watcher');
+    flow.step(EMPTY_FRAME);
+    expect(flow.phase).toBe('playing');
+    for (let i = 0; i < 120; i += 1) flow.step(EMPTY_FRAME);
+
+    flow.step(LEFT);
+    expect(flow.autoplay).toBeUndefined();
+    // Cleared in the settings, not merely suspended: nothing takes the stick back
+    // without being asked again, so a watcher who grabs it is never fighting a bot.
+    expect(settings.value.autoplay).toBeUndefined();
+
+    // And the fighter now does exactly what the human says, including nothing.
+    const still = flow.world.player.x;
+    for (let i = 0; i < 60; i += 1) flow.step(EMPTY_FRAME);
+    expect(flow.world.player.x).toBe(still);
+  });
+
+  it.each([
+    ['left', LEFT],
+    ['right', RIGHT],
+    ['fire', FIRE],
+  ])('treats %s in a live game as taking the controls', (_name, frame) => {
+    const { flow } = watchableFlow('watcher');
+    flow.step(EMPTY_FRAME);
+    expect(flow.phase).toBe('playing');
+    flow.step(frame);
+    expect(flow.autoplay).toBeUndefined();
+  });
+
+  it.each([
+    ['menu', MENU],
+    ['pause', PAUSE],
+    ['exit', EXIT],
+  ])('does not treat %s as taking the controls', (_name, frame) => {
+    // None of the three flies a fighter: they hold a run, leave one, or open the
+    // screen a watcher changes persona on. Reading any of them as a takeover would
+    // make looking at a persona the thing that stops watching it.
+    const { flow } = watchableFlow('watcher');
+    flow.step(EMPTY_FRAME);
+    expect(flow.phase).toBe('playing');
+    flow.step(frame);
+    expect(flow.autoplay?.id).toBe('watcher');
+  });
+
+  it('treats start in attract as a human wanting the game, and takes the hint', () => {
+    // The one press outside `playing` that counts: in attract, `start` means "my
+    // game now" and nothing else, so it hands the cabinet over before the game it
+    // starts is a watched one.
+    const { flow, settings } = watchableFlow('watcher');
+    expect(flow.phase).toBe('attract');
+    flow.step(START);
+    expect(settings.value.autoplay).toBeUndefined();
+    expect(flow.phase).toBe('playing');
+    expect(flow.autoplay).toBeUndefined();
+  });
+
+  it('does not treat the menu button as taking the controls', () => {
+    // The way to stop watching, or to change persona, must not itself be something
+    // autoplay reads as a takeover — otherwise the only way to reach the row that
+    // turns it off would be to turn it off.
+    const { flow } = watchableFlow('watcher');
+    flow.step(EMPTY_FRAME);
+    expect(flow.phase).toBe('playing');
+    flow.step(MENU);
+    expect(flow.autoplay?.id).toBe('watcher');
+  });
+
+  it('leaves the menus alone: their buttons are the menu’s', () => {
+    // On the settings screen `fire` moves the cursor and left and right change a
+    // row. Reading either as a takeover would disarm autoplay while somebody was
+    // choosing a persona with it — so the cursor is walked *past* the autoplay row
+    // and a different row is changed, and autoplay has to survive both.
+    const { flow, settings } = watchableFlow('watcher');
+    press(flow, MENU);
+    expect(flow.phase).toBe('settings');
+
+    const menu = flow.settingsMenu;
+    expect(menu).toBeDefined();
+    for (let i = 0; i < 12 && menu?.row.id !== 'volume'; i += 1) press(flow, FIRE);
+    expect(flow.settingsMenu?.row.id).toBe('volume');
+
+    const before = settings.value.volume;
+    press(flow, RIGHT);
+    expect(settings.value.volume).not.toBe(before);
+    expect(flow.autoplay?.id).toBe('watcher');
+    // And the world behind the card is not being flown while the card is up.
+    expect(flow.phase).toBe('settings');
+  });
+
+  it('turns itself off from its own row, without a takeover', () => {
+    // The other way to stop watching, and the one the menu is for: walk to the
+    // `AUTOPLAY` row and change it. This is a setting changing, not a human
+    // grabbing the stick, and the difference matters because the row is how a
+    // watcher switches persona too.
+    const { flow, settings } = watchableFlow('watcher');
+    press(flow, MENU);
+    const menu = flow.settingsMenu;
+    for (let i = 0; i < 12 && menu?.row.id !== 'autoplay'; i += 1) press(flow, FIRE);
+    expect(flow.settingsMenu?.row.id).toBe('autoplay');
+
+    press(flow, RIGHT);
+    expect(settings.value.autoplay).toBeUndefined();
+    expect(flow.autoplay).toBeUndefined();
+
+    // And back on again, from the same row.
+    press(flow, RIGHT);
+    expect(flow.autoplay?.id).toBe('watcher');
+  });
+
+  it('starts the next game itself once a run is over', () => {
+    const { flow } = watchableFlow('watcher');
+    flow.step(EMPTY_FRAME);
+    expect(flow.phase).toBe('playing');
+    bombThePlayer(flow);
+    flow.step(EMPTY_FRAME);
+    expect(flow.phase).toBe('game-over');
+    // Every waiting screen runs its own timer out — a watcher wants to see the
+    // score — and then attract hands straight back to the persona.
+    let steps = 0;
+    while (flow.phase !== 'playing' && steps < 3_000) {
+      flow.step(EMPTY_FRAME);
+      steps += 1;
+    }
+    expect(flow.phase).toBe('playing');
+    expect(flow.autoplay?.id).toBe('watcher');
+  });
+
+  it('gives each game its own pilot, so one run cannot lean into the next', () => {
+    // Two games in one session from one persona must not be the same game: the
+    // pilot's seed carries the game index, and a pilot carried over would make the
+    // second run a function of how the first one went.
+    const { flow } = watchableFlow('watcher');
+    const settle = (until: (phase: GamePhase) => boolean): void => {
+      // Bounded, always: a flow that stops moving between phases is exactly the bug
+      // a bare `while` here would hang the suite on rather than report.
+      for (let i = 0; i < 4_000 && !until(flow.phase); i += 1) flow.step(EMPTY_FRAME);
+      expect(until(flow.phase)).toBe(true);
+    };
+    const play = (): number => {
+      settle((phase) => phase === 'playing');
+      for (let i = 0; i < 400 && flow.phase === 'playing'; i += 1) flow.step(EMPTY_FRAME);
+      const score = flow.stats.score;
+      bombThePlayer(flow);
+      flow.step(EMPTY_FRAME);
+      settle((phase) => phase === 'attract' || phase === 'playing');
+      return score;
+    };
+    const first = play();
+    const second = play();
+    expect(first).toBeGreaterThan(0);
+    expect(second).not.toBe(first);
+  });
+
+  it('pauses a watched run without handing the controls back', () => {
+    // The captain's pause is exactly what a watcher wants mid-run: stop, look at
+    // what the persona has got itself into, carry on. So `pause` is deliberately
+    // **not** a takeover — it stops the world rather than flying the fighter, and a
+    // persona that lost the stick to it would make the one control for looking at a
+    // persona the control that ends the demonstration.
+    const { flow } = watchableFlow('watcher');
+    flow.step(EMPTY_FRAME);
+    expect(flow.phase).toBe('playing');
+    for (let i = 0; i < 120; i += 1) flow.step(EMPTY_FRAME);
+
+    press(flow, PAUSE);
+    expect(flow.phase).toBe('paused');
+    expect(flow.autoplay?.id).toBe('watcher');
+
+    // Nothing moves while the card is up — not the fighter the pilot was flying.
+    const held = flow.world.player.x;
+    const step = flow.world.step;
+    for (let i = 0; i < 90; i += 1) flow.step(EMPTY_FRAME);
+    expect(flow.world.player.x).toBe(held);
+    expect(flow.world.step).toBe(step);
+
+    // And the persona picks the run back up where it left off.
+    press(flow, PAUSE);
+    expect(flow.phase).toBe('playing');
+    expect(flow.autoplay?.id).toBe('watcher');
+    for (let i = 0; i < 120; i += 1) flow.step(EMPTY_FRAME);
+    expect(flow.world.step).toBeGreaterThan(step);
+  });
+
+  it('lets a watcher throw a run away and keeps watching the next one', () => {
+    // `exit` is not a takeover either: it discards *this run*, not the setting. A
+    // watcher who wanted to stop watching takes the controls, which is one key.
+    const { flow } = watchableFlow('watcher');
+    flow.step(EMPTY_FRAME);
+    for (let i = 0; i < 120; i += 1) flow.step(EMPTY_FRAME);
+
+    press(flow, EXIT);
+    expect(flow.phase).toBe('exit-confirm');
+    expect(flow.autoplay?.id).toBe('watcher');
+
+    // The card is the human's: the pilot contributes nothing to it, so the cursor
+    // stays where it opened until a person moves it.
+    const opened = flow.exitConfirm?.choice;
+    for (let i = 0; i < 60; i += 1) flow.step(EMPTY_FRAME);
+    expect(flow.exitConfirm?.choice).toBe(opened);
+
+    press(flow, RIGHT);
+    press(flow, FIRE);
+    // Home is attract, and autoplay is still armed, so the next run starts itself.
+    expect(flow.autoplay?.id).toBe('watcher');
+    for (let i = 0; i < 10 && flow.phase !== 'playing'; i += 1) flow.step(EMPTY_FRAME);
+    expect(flow.phase).toBe('playing');
+  });
+
+  it('never presses a button the pilot is not allowed to press', () => {
+    // The pilot drives `playing`; `start` on the screens is the flow's own. So a
+    // persona can neither open the settings screen nor choose a game, which is what
+    // keeps "watching" from being "driving the front end".
+    const { flow } = watchableFlow('watcher');
+    for (let i = 0; i < 1_500; i += 1) {
+      flow.step(EMPTY_FRAME);
+      expect(flow.phase).not.toBe('settings');
+      expect(flow.phase).not.toBe('variant-select');
+    }
   });
 });
