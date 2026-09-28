@@ -69,7 +69,7 @@ Markdown:
 <!-- check:engines ^22.13.0 || >=24.0.0 -->     the declared Node range
 ```
 
-Four things worth knowing:
+Five things worth knowing:
 
 - **A marker goes on its own line at the _end_ of the paragraph it annotates, with
   a blank line after it** — or inline at the end of a line of text. On its own line
@@ -82,6 +82,10 @@ Four things worth knowing:
   `packs/classic/README.md` already hit once.
 - **A marker inside a fenced code block is inert**, which is why the block above
   documents the vocabulary without asserting it.
+- **There is no `check:absent` for a command.** A path may be declared absent;
+  an `npm run …` in backticks may not, and is checked against `package.json` in
+  every layer. A plan naming a command nobody has written yet puts it in a
+  fence, where nothing is harvested at all.
 
 ### When your change falsifies somebody else's document
 
