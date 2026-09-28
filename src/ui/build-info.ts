@@ -245,10 +245,11 @@ export function createUpdateWatcher(options: UpdateWatcherOptions): UpdateWatche
  * nothing has seen. On a CDN that keys on the path alone it buys nothing, and
  * GitHub Pages is one — a request carrying a unique `t` comes back from the edge
  * as a hit, with the same age as a plain one, and the request's own
- * `Cache-Control` is ignored too. There is no page-side answer to that: freshness
- * there is bounded by the host's edge lifetime, which `docs/ARCHITECTURE.md` §2
- * records with the measurements. Keep both — they are what makes the dev server
- * and any ordinary static host immediate — but do not read them as a guarantee.
+ * `Cache-Control` is ignored too. What keeps the hosted poll honest there is not
+ * the request at all: publishing a deployment purges the edge, so the next poll
+ * meets the new build whatever it asked for. `docs/ARCHITECTURE.md` §2 has the
+ * measurements. Keep both — they are what makes the dev server and any ordinary
+ * static host immediate — but do not read them as a guarantee on every host.
  */
 export function buildIdentityUrl(base: string, cacheBust: number): string {
   const url = new URL(BUILD_IDENTITY_FILE, base);

@@ -466,14 +466,15 @@ Three consequences when working here:
 - **`base: './'` in `vite.config.ts` is what makes the bundle work under a
   project Pages subpath**, and it looks like tidying. Changing it to `/` breaks
   every asset on the hosted site, and the failure does not show up locally.
-- **The poll is not as fresh as its interval, and on GitHub Pages the page cannot
-  make it so.** `cache: 'no-store'` and the `?t=` stamp in `buildIdentityUrl`
-  work on an ordinary host and are why the dev server sees every change at once,
-  but Pages' CDN keys on the path alone and ignores both — measured, with the
-  numbers, in `docs/ARCHITECTURE.md` §2. Detection there is bounded by the host's
-  600-second edge lifetime, so do not "fix" a late notice by shortening the
-  interval, and do not restore the claim that the cache-buster is what keeps the
-  poll fresh.
+- **The poll is fresh on GitHub Pages, but not for the reason the page thinks.**
+  `cache: 'no-store'` and the `?t=` stamp in `buildIdentityUrl` do it on an
+  ordinary host, and are why the dev server sees every change at once; Pages'
+  CDN keys on the path alone and ignores both. What makes the hosted notice
+  prompt is that **publishing purges the edge** — measured across a real deploy,
+  with the numbers, in `docs/ARCHITECTURE.md` §2. So do not restore the claim
+  that the cache-buster is what keeps the hosted poll fresh, and do not read the
+  600-second edge lifetime as a bound on the notice: it is what the edge does
+  between deployments, and a deployment ends it.
 
 ## Sharp edges
 

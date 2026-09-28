@@ -175,8 +175,8 @@ alongside `index.html`. An open tab polls that file every minute of simulation
 time and says so when it changes; nothing else has to be pushed to it. Two things
 the host has to get right — `build.json` must sit beside `index.html`, because the
 page asks for it relative to its own document so that a deployment under a subpath
-works, and the poll is only as fresh as the host lets it be, which on a CDN is the
-host's own cache lifetime and not the polling interval.
+works, and a host that caches must stop doing so when a new build is published,
+because the poll cannot make it.
 
 That host is GitHub Pages, and the publisher is the workflow that already runs
 the checks. [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) packages the
@@ -194,29 +194,32 @@ Both host requirements above are met, and neither is met by a setting:
   is why `vite.config.ts` sets `base: './'`: every asset reference and the
   identity poll alike are relative to the document, so the same bundle works at a
   domain root and under `/star-swarm/` without being rebuilt for either.
-- **As fresh as the host allows, which here is not the request's to decide.**
+- **Fresh because publishing makes it fresh, not because the request asks.**
   `src/ui/build-info.ts` fetches with `cache: 'no-store'` and a `?t=` stamp that
-  differs on every poll. On an ordinary static host that is enough, and it is why
-  the dev server and the Playwright run see every change at once. **On GitHub
-  Pages it buys nothing, and this document does not pretend otherwise.** Pages
-  serves every file through Fastly with `cache-control: max-age=600`, will not let
-  you set a header on one file, and its edge keys on the path alone: a request
-  carrying a unique `?t=` comes back `x-cache: HIT` with the same `age` as a plain
-  one, and `Cache-Control: no-cache`, `no-store` and `Pragma: no-cache` are all
-  ignored the same way. Measured against the live site, `age` climbs to 592 and
-  resets to 0 at the instant `expires` names — so the edge holds a copy for its
-  full 600 seconds and nothing the page sends shortens it.
+  differs on every poll. On an ordinary static host that is what does it, and it
+  is why the dev server and the Playwright run see every change at once. **On
+  GitHub Pages neither buys anything**: Pages serves every file through Fastly
+  with `cache-control: max-age=600`, will not let you set a header on one file,
+  and its edge keys on the path alone, so a request carrying a unique `?t=` comes
+  back `x-cache: HIT` with the same `age` as a plain one, and
+  `Cache-Control: no-cache`, `no-store` and `Pragma: no-cache` are ignored the
+  same way. The 600 seconds is a real lifetime — left alone, `age` climbs to 592
+  and resets at the instant `expires` names. **What keeps the poll honest here is
+  the deployment: publishing discards the edge copy.** Measured across a real
+  deploy, the edge served the old build at `age` 299 — half its lifetime still to
+  run — and six seconds later served the new one at `age` 0, `x-cache: MISS`, in
+  the same sample that the origin changed. An expiry would have come at 600; this
+  was a purge.
 
 So the update path for a hosted build is the merge, and nothing else: a merge to
 `main` rebuilds, republishes, and a tab that was already open says **NEW BUILD**
-once the poll can see the change. How long that takes is the host's to answer and
-not the page's: the poll comes round every minute of simulation time, and on Pages
-it reads whatever the edge is holding. What is measured is the steady state — the
-edge serves one copy for 600 seconds and returns to origin only when that expires.
-What is **not** measured, and what GitHub does not document, is whether publishing
-a deployment purges that copy early; if it does the notice is prompt, and if it
-does not it is up to those ten minutes late. Refreshing is still the player's to
-press — it costs the run in progress, which is why nothing refreshes for them.
+within a minute of simulation time. The minute is the poll's own interval and
+nothing else waits behind it — the edge is already serving the new build by the
+time the next poll goes out, because the deployment purged it. The ten-minute
+lifetime above is what the edge does when nothing is published; it does not stand
+between a merge and a player, and it is worth knowing only so that nobody
+mistakes it for a bound on the notice. Refreshing is still the player's to press —
+it costs the run in progress, which is why nothing refreshes for them.
 
 Where the site is depends on how the repository has Pages configured, so this
 document does not write the address down: the deploy job publishes its URL as the
