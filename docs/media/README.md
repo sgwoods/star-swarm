@@ -51,6 +51,18 @@ The clips are screen recordings of the dev build.
   flow and the real screens and drops the bombs the simulation could not yet
   drop. Enemy fire has landed since, so this one can now be recaptured from live
   play.
+- `starfield-rate.gif` — the backdrop before and after it was made to match the
+  reference: two 224x288 fields side by side over one timeline, stage 1, then
+  stage 16, then a tractor beam, then the beam retracting. The **right** panel is
+  the shipped `src/render/starfield.ts` driven exactly as `src/main.ts` drives it,
+  including real `stage-started`, `capture-started` and `capture-failed` event
+  values, so it is the game's own field; the left is `main`'s, and both panels are
+  handed the same star positions and colours so the only difference on screen is
+  the motion. Recorded from a throwaway harness rather than from play because the
+  subject is the backdrop and a playfield would be in front of it. The rate
+  doubles, the right-hand field moves in whole pixels, and only the right-hand one
+  reverses under the beam. At `fps=20` rather than the usual 10: the dithering is
+  a per-frame stutter and ten frames a second throws it away.
 - `arch-gameplay.gif` — the clip `docs/ARCHITECTURE.md` opens with: one
   untouched run of stage 1 from the first frame through the entry waves, the
   sway, the hand-over to the breathe, and then auto-fire and a sweep against the

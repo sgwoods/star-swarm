@@ -127,24 +127,15 @@ for (const gesture of ['keydown', 'pointerdown'] as const) {
   window.addEventListener(gesture, unlockAudio, { once: true, passive: true });
 }
 
-/** Render, UI and audio subscribe to the sim; they never call back into it. */
+/**
+ * Render, UI and audio subscribe to the sim; they never call back into it.
+ *
+ * Both subscribers own their own mapping from event to behaviour, so this file
+ * names neither a sound nor a scroll rate.
+ */
 function applyEvents(events: readonly SimEvent[]): void {
   sfx.handle(events);
-  for (const event of events) {
-    switch (event.type) {
-      case 'stage-started':
-        starfield.setSpeedByte(event.starfieldSpeed);
-        // A new stage — including the first of a new game or a restarted attract
-        // demo — is what brings the stars back after a game over.
-        starfield.paused = false;
-        break;
-      case 'game-over':
-        starfield.paused = true;
-        break;
-      default:
-        break;
-    }
-  }
+  starfield.handle(events);
 }
 
 const loop = createLoop({

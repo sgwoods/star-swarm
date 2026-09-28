@@ -32,6 +32,13 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
 import { ABILITY_TYPES, STAGE_KINDS } from '../../../src/content/schema.js';
+import {
+  REVERSE_PIXELS_PER_FRAME,
+  SPEED_BYTE_UNIT,
+  STAGE_SPEEDS,
+  STAR_BANKS,
+  TWINKLE_FRAMES,
+} from '../../../src/render/starfield.js';
 import { classicFormation, classicPack, classicRules } from '../../helpers/rules.js';
 
 /* -------------------------------------------------------------------------- */
@@ -650,6 +657,23 @@ export function counters(root = REPO_ROOT): ReadonlyMap<string, () => number> {
      * the words — so rewording an item cannot move the number.
      */
     ['reference.openQuestions', () => numberedItemsUnder(read(REFERENCE), 'Unresolved items')],
+
+    /**
+     * The starfield's arcade numbers, read off the module that holds them.
+     *
+     * The conversion from the pack's speed byte to pixels is presentation, so
+     * unlike every other verified arcade value these live in `src/render/` rather
+     * than in `rules.json` — which means the `provenance` block cannot mark them
+     * and these counters are what hold the state document to the code. Imported
+     * rather than pattern-matched: `SPEED_BYTE_UNIT` and `TWINKLE_FRAMES` are
+     * themselves derived from the accumulator's width and the selector bit, and a
+     * regex would read the expression instead of the number.
+     */
+    ['starfield.speedByteUnit', () => SPEED_BYTE_UNIT],
+    ['starfield.stageSpeeds', () => STAGE_SPEEDS.length],
+    ['starfield.reversePixels', () => REVERSE_PIXELS_PER_FRAME],
+    ['starfield.banks', () => STAR_BANKS],
+    ['starfield.twinkleFrames', () => TWINKLE_FRAMES],
 
     /* The rules layer. */
     ['rules.ranks', () => Object.keys(classicRules().difficulty.ranks).length],

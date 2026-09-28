@@ -6,13 +6,13 @@ imports from here — `eslint.config.js` and `tests/unit/sim-boundary.test.ts`
 enforce that, which is what makes the headless tests and replays possible
 (`docs/DESIGN.md` sections 5 and 9).
 
-| File           | What it is                                                          |
-| -------------- | ------------------------------------------------------------------- |
-| `canvas.ts`    | The display: a 224×288 backbuffer presented at a whole-number scale |
-| `sprites.ts`   | Pack sprite data → cached bitmaps, and the helpers that draw them   |
-| `text.ts`      | The original 8×8 pixel font, and one cached strip per ink colour    |
-| `starfield.ts` | The scrolling background, at the stage's scroll speed               |
-| `scene.ts`     | Composes one frame out of the above                                 |
+| File           | What it is                                                           |
+| -------------- | -------------------------------------------------------------------- |
+| `canvas.ts`    | The display: a 224×288 backbuffer presented at a whole-number scale  |
+| `sprites.ts`   | Pack sprite data → cached bitmaps, and the helpers that draw them    |
+| `text.ts`      | The original 8×8 pixel font, and one cached strip per ink colour     |
+| `starfield.ts` | The scrolling background: the ROM's accumulator, reverse and twinkle |
+| `scene.ts`     | Composes one frame out of the above                                  |
 
 `crt.ts`, the optional scanline filter, is still to come.
 <!-- check:absent src/render/crt.ts --> `scene.ts` draws from
