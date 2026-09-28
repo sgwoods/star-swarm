@@ -165,18 +165,24 @@ export function parseSettings(text: string | undefined): Settings | undefined {
  *
  * Derived from {@link DEFAULT_BINDINGS} by filtering rather than by three
  * hand-written tables, so a key added to the default map appears in whichever
- * schemes claim it and cannot be forgotten in one of them. The menu keys are in
- * every scheme: a scheme that could not reopen the menu would be a setting a
- * player could not undo.
+ * schemes claim it and cannot be forgotten in one of them.
+ *
+ * **A scheme narrows the three keys a player plays with, and nothing else.** The
+ * filter is stated that way round — everything but `left`, `right` and `fire`
+ * survives every scheme — so that an action appended to
+ * {@link DEFAULT_BINDINGS} is in every scheme by default rather than in none of
+ * them. A scheme that could not reopen the menu, pause, or leave the game would
+ * be a setting a player could not undo.
  */
 export function bindingsFor(scheme: ControlScheme): Readonly<Record<string, Action>> {
   if (scheme === 'both') return DEFAULT_BINDINGS;
   const arrows = new Set(['ArrowLeft', 'ArrowRight', 'Space']);
   const wasd = new Set(['KeyA', 'KeyD', 'KeyZ']);
   const keep = scheme === 'arrows' ? arrows : wasd;
+  const played = new Set<Action>(['left', 'right', 'fire']);
   const out: Record<string, Action> = {};
   for (const [code, action] of Object.entries(DEFAULT_BINDINGS)) {
-    if (action === 'start' || action === 'menu' || keep.has(code)) out[code] = action;
+    if (!played.has(action) || keep.has(code)) out[code] = action;
   }
   return Object.freeze(out);
 }

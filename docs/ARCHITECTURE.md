@@ -79,9 +79,10 @@ npm run dev            # http://localhost:5173
 Then press **Enter** (or **1**) to start a game, **←/→** or **A/D** to move, and
 **Space** or **Z** to fire. Fire is an auto-repeat button, as it is on the
 cabinet: hold it down, and a shot leaves whenever the two-shot cap frees a slot.
-**Esc** (or **M**) opens the settings menu from attract mode. The game boots into
-the start-up selector — two games ship — and then into _attract mode_, so nothing
-responds to the arrows until you have pressed start.
+**Esc** (or **M**) opens the settings menu from attract mode. **P** pauses a game
+and **X** leaves one, after asking. The game boots into the start-up selector —
+two games ship — and then into _attract mode_, so nothing responds to the arrows
+until you have pressed start.
 
 ### Supported Node versions
 
@@ -219,24 +220,59 @@ exactly centred, the breathe taking over — and then the fighter opening up on 
 
 ![The game: entry waves, formation and the fighter shooting](media/arch-gameplay.gif)
 
-The front end around that is one state machine with eight phases — the start-up
-variant selector, attract, the settings menu, playing, the between-stage challenge
-card, game over, results and high-score entry. The cabinet boots into the selector
-when there is more than one game to choose and into attract when there is not;
-behind the cards the demo is the _real_ simulation replaying a recorded input log;
-start begins a game; three fighters lost ends it into the game-over banner, the
-hit-ratio results card, and then either the high-score table or straight back to
-attract.
-<!-- check:count flow.phases 8 -->
+The front end around that is one state machine with ten phases — the start-up
+variant selector, attract, the settings menu, playing, paused, the exit
+confirmation, the between-stage challenge card, game over, results and high-score
+entry. The cabinet boots into the selector when there is more than one game to
+choose and into attract when there is not; behind the cards the demo is the _real_
+simulation replaying a recorded input log; start begins a game; three fighters
+lost ends it into the game-over banner, the hit-ratio results card, and then
+either the high-score table or straight back to attract.
+<!-- check:count flow.phases 10 -->
 
 ![The front end: attract mode, a game, and out to the results card](media/arch-front-end.gif)
 
-`challenge-results` is the only phase that returns to `playing`: a challenge stage
-has ended, the next stage is already on the field, and the world simply stops being
-stepped while the card is up. It is a phase rather than a flag precisely so that
-"playing" never sometimes means "not stepping the world" — `src/ui/flow.ts` says so
-at the top of the file, and the two menu phases are phases for the same reason:
-"attract, but not responding to start" is the shape that file exists to refuse.
+`challenge-results` is one of the two phases that return to `playing`: a challenge
+stage has ended, the next stage is already on the field, and the world simply stops
+being stepped while the card is up. It is a phase rather than a flag precisely so
+that "playing" never sometimes means "not stepping the world" — `src/ui/flow.ts`
+says so at the top of the file, and the two menu phases are phases for the same
+reason: "attract, but not responding to start" is the shape that file exists to
+refuse.
+
+### Pause, and the way out
+
+`paused` is the other phase that returns to `playing`, and it is the same
+argument a third time: a `paused` boolean beside `phase` would be "playing, but
+not stepping the world".
+
+**Pausing is a flow concern and the simulation never hears about it.** Nothing in
+`src/sim/` has a notion of being paused; the flow simply stops calling `stepWorld`.
+The frame carrying the press is stepped **before** the phase changes, and the
+frame carrying the resume is the flow's — the way the start frame in attract is —
+so the simulation sees exactly the frames it would have seen had nobody paused. A
+resumed run therefore continues **bit for bit**, which `tests/unit/flow.test.ts`
+asserts by fingerprinting a paused run against an unpaused run of the very same
+frames rather than against a remembered number. A game over raised on the frame
+the key was pressed wins: there is nothing left to hold.
+
+**`exit` pauses first and then asks.** Pressing it stops the game on that frame
+and raises the confirmation over a world that is no longer moving, so the question
+is never answered under fire. Cancelling lands in `paused` — where an ordinary
+pause lands — so there is one way to resume and not two. The cursor opens on
+`RESUME`, the exit key is also the cancel, and only `fire` commits, so no single
+stray press can end a run.
+
+![Pause, resume, and the exit confirmation answered both ways](media/m3-pause-exit.gif)
+
+**Confirming discards the run.** The score does not reach the high-score table:
+the table records games played out, and a run abandoned halfway is not one. The
+other half of that decision is that nothing is discarded _silently_ — the card
+names the score, and when the table would have taken it, the place it would have
+taken. **Home is attract** in both cabinets: the selector is a boot-time screen
+and is never entered at all when one variant is installed, so it cannot be what
+leaving a game means; attract is already where a finished game ends up, and the
+way back to the list is the settings screen's `GAME` row.
 
 ### The backdrop
 

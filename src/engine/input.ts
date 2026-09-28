@@ -12,9 +12,12 @@
  * Every action the game understands.
  *
  * The first four are the cabinet's and are the whole of what `src/sim/` reads.
- * `menu` is the fifth and is the front end's alone — a cabinet has a service
- * button behind the coin door, and this is ours: it is what opens the settings
- * screen (`src/ui/menus.ts`) from attract mode. No simulation code looks at it.
+ * The rest are the front end's alone and no simulation code looks at any of them:
+ * `menu` is the service button behind the coin door, and opens the settings
+ * screen (`src/ui/menus.ts`); `pause` holds the game; `exit` asks whether to
+ * abandon the run. A cabinet has neither of the last two — they are ours, and
+ * they are front-end state rather than simulation state for exactly that reason
+ * (`src/ui/flow.ts`).
  *
  * **The list is append-only.** {@link ACTION_BIT} assigns `1 << index`, and a
  * recorded replay log on disk is a list of those masks, so appending leaves every
@@ -22,7 +25,7 @@
  * Inserting or reordering would silently reinterpret every log in
  * `tests/sim/golden/`.
  */
-export const ACTIONS = ['left', 'right', 'fire', 'start', 'menu'] as const;
+export const ACTIONS = ['left', 'right', 'fire', 'start', 'menu', 'pause', 'exit'] as const;
 
 export type Action = (typeof ACTIONS)[number];
 
@@ -63,6 +66,8 @@ export const DEFAULT_BINDINGS: Readonly<Record<string, Action>> = Object.freeze(
   Digit1: 'start',
   Escape: 'menu',
   KeyM: 'menu',
+  KeyP: 'pause',
+  KeyX: 'exit',
 });
 
 /** Build a frame from action names. */

@@ -12,8 +12,9 @@ npm install
 npm run dev            # http://localhost:5173
 ```
 
-Press **Enter** to start, **←/→** to move, **Space** to fire. The game boots into
-attract mode, so press start before the arrows do anything.
+Press **Enter** to start, **←/→** to move, **Space** to fire. **P** pauses, and
+**X** leaves the game after asking. The game boots into attract mode, so press
+start before the arrows do anything.
 
 The top-right corner of the screen says which build you are looking at — the
 commit, whether the tree was modified, and the date — and a page that is open

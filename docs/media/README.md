@@ -95,6 +95,18 @@ The clips are screen recordings of the dev build.
   down, and then the `GAME` row moved across to the demonstration variant and a
   game started on it. One unedited take from live play; nothing is scripted but
   the key presses.
+- `m3-pause-exit.gif` — the pause and the way out, one unedited take from live
+  play: a game running, **P** holding it dead still — card up, stars stopped,
+  nothing on the field moving — **P** letting it go again from exactly where it
+  stopped, then **X** stopping the game _first_ and asking over a playfield that
+  is already still, the fire button taking the default (`RESUME`, which is where
+  the cursor opens) back to the pause, and finally the cursor moved across to
+  `EXIT` and committed, landing home in attract with the score gone and the
+  high-score table untouched. The browser's stored table was seeded to a modest
+  one before the page loaded, and nothing else about the run is arranged: the exit
+  card only draws the line naming the place a score would have taken when it would
+  have taken one, and reaching that against the shipped defaults is half a minute
+  of play the clip does not otherwise need.
 - `arch-lab.gif` — the `/lab` previewer: an entry path playing, then scrubbed
   frame by frame with the readout following, then the same path mirrored, then a
   dive path flown from the slot marker.

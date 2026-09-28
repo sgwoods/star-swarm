@@ -512,14 +512,24 @@ Three consequences when working here:
   document to it instead.
 - The game boots into the **start-up selector** when more than one variant ships
   and into **attract mode** otherwise, never into play: `src/ui/flow.ts` is the
-  one state machine — variant-select, attract, settings, playing, the between-stage
-  challenge card, game over, results and high-score entry
-  <!-- check:count flow.phases 8 --> — and `src/main.ts` only calls
-  `flow.step(frame)` and draws the phase. Anything driving the browser has to get
-  past the selector and push start — that is what `startGame()` in
+  one state machine — variant-select, attract, settings, playing, paused, the exit
+  confirmation, the between-stage challenge card, game over, results and
+  high-score entry <!-- check:count flow.phases 10 --> — and `src/main.ts` only
+  calls `flow.step(frame)` and draws the phase. Anything driving the browser has
+  to get past the selector and push start — that is what `startGame()` in
   `tests/e2e/smoke.spec.ts` is for — and every phase timer counts **simulation
   steps**, never the wall clock. The attract demo is the real simulation played
   through `src/engine/replay.ts`, so it cannot drift from the game.
+- **Pausing is a phase, not a flag, and the simulation never hears about it.**
+  `paused` is a phase the world is simply not stepped in, and the frame that
+  carried the press was stepped before the phase changed — so the sim sees exactly
+  the frames it would have seen unpaused and a resumed run continues bit for bit
+  (`tests/unit/flow.test.ts` asserts it against an unpaused run of the same
+  frames). Nothing in `src/sim/` may gain a notion of being paused; a `paused`
+  boolean beside `phase` is "playing, but not stepping the world", which is the
+  shape `src/ui/flow.ts` exists to refuse. Leaving a game goes through the pause
+  first and discards the run — the score never reaches the high-score table, and
+  the card says so.
 - Headings are degrees, **clockwise positive, with 0 pointing down the screen**
   (`src/content/schema.ts`), so on a y-down playfield a heading θ is the vector
   `(−sin θ, cos θ)` and 90° points _left_. `src/sim/paths.ts` restates it as a

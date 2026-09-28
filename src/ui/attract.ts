@@ -186,7 +186,8 @@ const HINT_COLOUR = '#7d8aa8';
  * formation is genuinely in the way.
  */
 const CARD_WIDTH = 200;
-const TITLE_CARD_HEIGHT = 64;
+/** Four hint rows at a 12-pixel pitch, plus the title and air at both ends. */
+const TITLE_CARD_HEIGHT = 76;
 const SCORES_CARD_WIDTH = 176;
 const SCORES_CARD_HEIGHT = 70;
 /** Row the "push start" prompt sits on, clear of the card and of the ship. */
@@ -223,6 +224,13 @@ export function drawAttract(ctx: CanvasRenderingContext2D, options: AttractOptio
     drawText(ctx, 'ENTER  START', centre, CARD_TOP + 30, { colour: HINT_COLOUR, align: 'center' });
     drawText(ctx, 'ARROWS  MOVE', centre, CARD_TOP + 42, { colour: HINT_COLOUR, align: 'center' });
     drawText(ctx, 'SPACE  FIRE', centre, CARD_TOP + 54, { colour: HINT_COLOUR, align: 'center' });
+    // The fourth row is the one a cabinet has no key for. A control nobody can
+    // find is half-shipped, and the pause card can only name itself once you
+    // have already pressed the key that raises it.
+    drawText(ctx, 'P  PAUSE   X  EXIT', centre, CARD_TOP + 66, {
+      colour: HINT_COLOUR,
+      align: 'center',
+    });
   } else {
     drawCentredPanel(ctx, centre, CARD_TOP, SCORES_CARD_WIDTH, SCORES_CARD_HEIGHT);
     drawHighScoreTable(ctx, highScores, { x: centre, y: CARD_TOP + 8 });

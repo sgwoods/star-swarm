@@ -65,9 +65,10 @@ class FakeTarget implements EventTarget {
 describe('action set', () => {
   it('covers the four cabinet actions, then the front end\u2019s own', () => {
     // The first four are the cabinet's and are the whole of what `src/sim/` reads.
-    // `menu` is the front end's service button: it opens the settings screen and
-    // no simulation code looks at it.
-    expect([...ACTIONS]).toEqual(['left', 'right', 'fire', 'start', 'menu']);
+    // The rest are the front end's and no simulation code looks at any of them:
+    // the service button that opens the settings screen, the pause, and the exit
+    // that asks before a run is thrown away.
+    expect([...ACTIONS]).toEqual(['left', 'right', 'fire', 'start', 'menu', 'pause', 'exit']);
   });
 
   it('assigns each action a distinct single bit', () => {
@@ -81,13 +82,39 @@ describe('action set', () => {
   it('keeps the bit assignment stable, because replay logs depend on it', () => {
     // The four original bits are pinned to the values every recorded log in
     // `tests/sim/golden/` was written against. The list is **append-only** for
-    // exactly this reason: a fifth action takes the next free bit and changes
+    // exactly this reason: a sixth action takes the next free bit and changes
     // nothing, where inserting or reordering would reinterpret every log on disk.
     expect(ACTION_BIT.left).toBe(1);
     expect(ACTION_BIT.right).toBe(2);
     expect(ACTION_BIT.fire).toBe(4);
     expect(ACTION_BIT.start).toBe(8);
-    expect(ACTION_BIT).toEqual({ left: 1, right: 2, fire: 4, start: 8, menu: 16 });
+    expect(ACTION_BIT.menu).toBe(16);
+    expect(ACTION_BIT).toEqual({
+      left: 1,
+      right: 2,
+      fire: 4,
+      start: 8,
+      menu: 16,
+      pause: 32,
+      exit: 64,
+    });
+  });
+
+  it('reads a log written before pause and exit existed as holding neither', () => {
+    // This is the whole of what append-only buys, stated as the thing that would
+    // break: every mask in `tests/sim/golden/` was written when the set stopped
+    // at `menu`, so every one of them has bits 32 and 64 clear. A log recorded
+    // then must still mean what it meant, and must never read as a paused frame.
+    for (const recorded of [0, 1, 2, 4, 8, 16, 5, 31]) {
+      expect(isDown(recorded, 'pause')).toBe(false);
+      expect(isDown(recorded, 'exit')).toBe(false);
+      // And the actions it *does* name are unchanged.
+      expect(actionsOf(recorded)).toEqual(
+        (['left', 'right', 'fire', 'start', 'menu'] as const).filter(
+          (action) => (recorded & ACTION_BIT[action]) !== 0,
+        ),
+      );
+    }
   });
 });
 
