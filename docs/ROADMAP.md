@@ -44,13 +44,10 @@ re-publishing makes an already-open tab say so.
 
 ## Next: Milestone 3 — configurable
 
-- **Ship: rules layer + settings menu + difficulty presets.** The rules layer
-  itself landed early — the simulation already takes every number from a pack — so
-  what is left is the player-facing half: `src/ui/menus.ts`, volume, controls, the
-  CRT toggle, and the difficulty preset that selects a rank.
-  <!-- check:absent src/ui/menus.ts -->
 - **Ship: pack manager + stage-sequence editor.** The game menu will list
-  installed packs and let a sequence be edited or played directly.
+  installed packs and let a sequence be edited or played directly. The settings
+  document already carries a per-variant pack-list override and the menu already
+  shows the active list; what is left is writing to it.
 - **Ship: ability registry + the first four new abilities** (`splitOnHit`,
   `shield`, `teleport`, `spawnMinions`). `src/sim/abilities/` will hold one file
   per ability, and the capture beam will move into it from `src/sim/capture.ts`
@@ -67,7 +64,12 @@ Also in this milestone, because they are the same kind of work:
   seventeen-entry index lists; they need ten of the thirteen combat scripts
   through stage 8 alone, so the ranks cannot be authored before the scripts are.
 - **Ship: `render/crt.ts`**, the optional scanline and curvature filter, off by
-  default. <!-- check:absent src/render/crt.ts -->
+  default. The player setting that turns it on is already stored and reported;
+  this will be the filter that reads it. <!-- check:absent src/render/crt.ts -->
+- **Ship: a second game**, rather than a variant of this one — the Galaxian-lineage
+  mode the captain's standing direction asks for. It will be another pack plus
+  another `rules.json` and a variant document naming them, and the question it will
+  answer is whether that is really all it takes.
 
 _Exit check:_ a player can change the rules from inside the game, a forged pack
 fails validation for being unplayable rather than merely malformed, and a pack

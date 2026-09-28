@@ -12,10 +12,11 @@ import { minimalRules } from '../helpers/rules.js';
  * to actually reject things. These tests run the real script against throwaway
  * pack trees and check its exit code and its report.
  *
- * The script delegates its schema and reference passes to `loadPack`, so what is
- * exercised here is the end-to-end gate — layout, parsing, schemas, references
- * and the per-file report — rather than the loader in isolation
- * (`content-loader.test.ts` covers that).
+ * The script delegates its schema and reference passes to `loadPack` and its
+ * variant pass to `loadVariants`, so what is exercised here is the end-to-end
+ * gate — layout, parsing, schemas, references, variants and the per-file report —
+ * rather than the loaders in isolation (`content-loader.test.ts` and
+ * `variants.test.ts` cover those).
  */
 
 const REPO_ROOT = resolve(import.meta.dirname, '..', '..');
@@ -351,5 +352,113 @@ describe('the report', () => {
       'good/aliens/drone.json:',
     );
     expect(result.output).toContain('1 problem(s)');
+  });
+});
+
+/** Write `variants/<name>.json` beside a packs root, where the script looks for it. */
+function writeVariant(packsRoot: string, name: string, contents: unknown): void {
+  const dir = join(packsRoot, '..', 'variants');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, `${name}.json`),
+    typeof contents === 'string' ? contents : JSON.stringify(contents),
+    'utf8',
+  );
+}
+
+describe('the variant pass', () => {
+  /**
+   * The good pack plus a `rules.json`, because a variant needs rules to run on —
+   * `createWorld` requires them, so a pack list that ships none is a real failure
+   * and has its own test below.
+   */
+  const withRules = (): Record<string, unknown> =>
+    goodExcept({ 'rules.json': minimalRules('good-rules') });
+
+  it('passes, and says so, on a variant naming an installed pack', () => {
+    const root = makePacksRoot();
+    writePack(root, 'good', withRules());
+    writeVariant(root, 'shipped', { id: 'shipped', name: 'Shipped', packs: ['good'] });
+    const result = validate(root);
+    expect(result.code).toBe(0);
+    expect(result.output).toContain('variants/shipped.json: OK');
+    expect(result.output).toContain('1 pack(s): good');
+  });
+
+  it('says so when there are no variants, rather than failing', () => {
+    // A tree with no games is not a *malformed* tree. It is `src/main.ts` that
+    // refuses to boot on one, and it says which directory is empty.
+    const root = makePacksRoot();
+    writePack(root, 'good', GOOD);
+    const result = validate(root);
+    expect(result.code).toBe(0);
+    expect(result.output).toContain('variants: none declared');
+  });
+
+  it('fails on a variant naming a pack that is not installed', () => {
+    const root = makePacksRoot();
+    writePack(root, 'good', GOOD);
+    writeVariant(root, 'broken', { id: 'broken', name: 'Broken', packs: ['ghost'] });
+    const result = validate(root);
+    expect(result.code).toBe(1);
+    expect(result.output).toContain('variants/broken.json:');
+    expect(result.output).toContain('packs[0]');
+    expect(result.output).toContain('"ghost"');
+  });
+
+  it('fails on a misspelt field rather than ignoring it', () => {
+    const root = makePacksRoot();
+    writePack(root, 'good', withRules());
+    writeVariant(root, 'typo', {
+      id: 'typo',
+      name: 'Typo',
+      packs: ['good'],
+      demonstartion: true,
+    });
+    expect(validate(root).code).toBe(1);
+  });
+
+  it('fails on a variant whose packs ship no rules at all', () => {
+    const root = makePacksRoot();
+    writePack(root, 'good', GOOD);
+    writeVariant(root, 'ruleless', { id: 'ruleless', name: 'Ruleless', packs: ['good'] });
+    const result = validate(root);
+    expect(result.code).toBe(1);
+    expect(result.output).toContain('rules.json');
+  });
+
+  it('fails on a preset naming a rank the rules do not declare', () => {
+    const root = makePacksRoot();
+    writePack(root, 'good', withRules());
+    writeVariant(root, 'ranked', {
+      id: 'ranked',
+      name: 'Ranked',
+      packs: ['good'],
+      difficulty: { presets: [{ id: 'silly', label: 'SILLY', rank: 'Z' }] },
+    });
+    const result = validate(root);
+    expect(result.code).toBe(1);
+    expect(result.output).toContain('difficulty.presets[0].rank');
+  });
+
+  it('fails on JSON that will not parse, naming the document', () => {
+    const root = makePacksRoot();
+    writePack(root, 'good', withRules());
+    writeVariant(root, 'mangled', '{ "id": ');
+    const result = validate(root);
+    expect(result.code).toBe(1);
+    expect(result.output).toContain('variants/mangled.json:');
+    expect(result.output).toContain('invalid JSON');
+  });
+
+  it('reports a variant against the packs that loaded, not the packs that did not', () => {
+    // A variant naming a pack that failed its own schemas must not be reported as
+    // naming a pack that does not exist: that sends the author to the wrong file.
+    const root = makePacksRoot();
+    writePack(root, 'good', goodExcept({ 'sounds/pop.json': { id: 'pop', wave: 'gargle' } }));
+    writeVariant(root, 'fine', { id: 'fine', name: 'Fine', packs: ['good'] });
+    const result = validate(root);
+    expect(result.code).toBe(1);
+    expect(result.output).toContain('good/sounds/pop.json:');
   });
 });

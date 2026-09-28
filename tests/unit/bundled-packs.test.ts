@@ -2,10 +2,11 @@ import { basename, resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { bundledPackSources } from '../../src/content/bundle.js';
-import { listPackDirs, readPackSource } from '../../src/content/fs.js';
+import { bundledPackSources, bundledVariantSources } from '../../src/content/bundle.js';
+import { listPackDirs, readPackSource, readVariantSources } from '../../src/content/fs.js';
 import { loadPack } from '../../src/content/loader.js';
-import type { PackSource } from '../../src/content/loader.js';
+import type { LoadedPack, PackSource } from '../../src/content/loader.js';
+import { loadVariants } from '../../src/content/variants.js';
 
 /**
  * The bundler and the filesystem must see the same packs.
@@ -26,9 +27,14 @@ import type { PackSource } from '../../src/content/loader.js';
  * So this compares the two readers directly rather than checking for today's
  * file types: a document that exists on disk and is missing from the bundle
  * fails here whatever kind it is, including kinds that do not exist yet.
+ *
+ * `variants/` is read the same two ways for the same reason, and is held to the
+ * same standard at the bottom of this file. A variant that is on disk but not in
+ * the bundle is a game the validator passes and the browser cannot offer.
  */
 
 const PACKS_ROOT = resolve(import.meta.dirname, '..', '..', 'packs');
+const VARIANTS_ROOT = resolve(import.meta.dirname, '..', '..', 'variants');
 
 /** Pack-relative paths of every content document, in a stable order. */
 function documentFiles(source: PackSource): string[] {
@@ -101,5 +107,46 @@ describe('the bundled packs and the packs on disk', () => {
       );
     }
     expect(result.pack.id).toBe(name);
+  });
+});
+
+describe('the bundled variants and the variants on disk', () => {
+  const onDiskVariants = readVariantSources(VARIANTS_ROOT);
+  const bundledVariants = bundledVariantSources();
+
+  it('finds variants at all, so nothing below passes vacuously', () => {
+    expect(onDiskVariants.errors).toEqual([]);
+    expect(onDiskVariants.sources.length).toBeGreaterThan(0);
+  });
+
+  it('are the same set of documents', () => {
+    expect(bundledVariants.map((source) => source.file).sort()).toEqual(
+      onDiskVariants.sources.map((source) => source.file).sort(),
+    );
+  });
+
+  it('are the same documents, not just the same names', () => {
+    const byFile = new Map(bundledVariants.map((source) => [source.file, source.value]));
+    for (const source of onDiskVariants.sources) {
+      expect(byFile.get(source.file)).toEqual(source.value);
+    }
+  });
+
+  it('load from the bundle against the bundled packs, not only from disk', () => {
+    // The end of the story: `src/main.ts` runs exactly this pairing before its
+    // first frame, so a failure here is a page that will not boot.
+    const packs = new Map<string, LoadedPack>();
+    for (const [name, source] of bundled) {
+      const result = loadPack(source);
+      if (!result.ok) throw new Error(`bundled pack "${name}" failed to load`);
+      packs.set(name, result.pack);
+    }
+    const result = loadVariants(bundledVariants, packs);
+    if (!result.ok) {
+      throw new Error(
+        `bundled variants failed to load:\n${JSON.stringify(result.errors, null, 2)}`,
+      );
+    }
+    expect(result.variants.length).toBe(bundledVariants.length);
   });
 });

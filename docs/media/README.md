@@ -88,6 +88,13 @@ The clips are screen recordings of the dev build.
   `dist/`, serving it from a static server under a subpath, opening it, building
   again and letting the page's own poll find the difference — which is the hosted
   update path end to end rather than a mock of it.
+- `m3-variants.gif` — the start-up selector and the settings menu: the two games
+  this build offers with the cursor moving between them, Star Swarm chosen into
+  attract, the settings card opened with **Esc**, the difficulty preset taken up
+  through the ranks (the note under the list changing with it), the volume taken
+  down, and then the `GAME` row moved across to the demonstration variant and a
+  game started on it. One unedited take from live play; nothing is scripted but
+  the key presses.
 - `arch-lab.gif` — the `/lab` previewer: an entry path playing, then scrubbed
   frame by frame with the readout following, then the same path mirrored, then a
   dive path flown from the slot marker.

@@ -39,7 +39,9 @@ import {
   STAR_BANKS,
   TWINKLE_FRAMES,
 } from '../../../src/render/starfield.js';
+import { CONTROL_SCHEMES } from '../../../src/ui/settings.js';
 import { classicFormation, classicPack, classicRules } from '../../helpers/rules.js';
+import { shippedVariants } from '../../helpers/variants.js';
 
 /* -------------------------------------------------------------------------- */
 /* What a document may declare                                                 */
@@ -598,6 +600,20 @@ export function counters(root = REPO_ROOT): ReadonlyMap<string, () => number> {
     /* What the schema reserves, as against what a pack uses. */
     ['schema.abilityIds', () => ABILITY_TYPES.length],
     ['schema.stageKinds', () => STAGE_KINDS.length],
+
+    /**
+     * The games this build offers, through the real readers and the real loader.
+     *
+     * Derived rather than counted by hand for the usual reason, and derived from
+     * the *loaded* variants rather than from the file count so that a document
+     * which does not load cannot inflate the number a document states.
+     */
+    ['variants.count', () => shippedVariants().length],
+    [
+      'variants.demonstrations',
+      () => shippedVariants().filter((variant) => variant.demonstration).length,
+    ],
+    ['ui.controlSchemes', () => CONTROL_SCHEMES.length],
 
     /* The shipped Classic pack, through the real loader. */
     ['classic.aliens', () => classicPack().aliens.size],

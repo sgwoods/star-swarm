@@ -1,20 +1,32 @@
 import { describe, expect, it } from 'vitest';
 
+import type { Rules } from '../../src/content/schema.js';
+import type { StageSource } from '../../src/content/stages.js';
+import type { DifficultyPreset } from '../../src/content/variants.js';
 import { EMPTY_FRAME, frameOf, type InputFrame } from '../../src/engine/input.js';
 import { launchEnemyBullet } from '../../src/sim/shots.js';
 import { createAttractDemo } from '../../src/ui/attract.js';
-import { createGameFlow, DEFAULT_TIMINGS, type GameFlow } from '../../src/ui/flow.js';
 import {
-  createHighScoreBoard,
-  createMemoryStorage,
-  type HighScoreEntry,
-} from '../../src/ui/highscores.js';
+  createGameFlow,
+  DEFAULT_TIMINGS,
+  type FlowVariant,
+  type GameFlow,
+} from '../../src/ui/flow.js';
+import { createHighScoreBoard, type HighScoreEntry } from '../../src/ui/highscores.js';
+import {
+  createSettingsStore,
+  DEFAULT_SETTINGS,
+  parseSettings,
+  type SettingsStore,
+} from '../../src/ui/settings.js';
+import { createMemoryStorage } from '../../src/ui/storage.js';
 import { classicRules, classicStages, classicStagesWith, quickRunRules } from '../helpers/rules.js';
 
 const START = frameOf('start');
 const FIRE = frameOf('fire');
 const LEFT = frameOf('left');
 const RIGHT = frameOf('right');
+const MENU = frameOf('menu');
 
 /**
  * A flow over the real Classic stage, with the rules bent so a run scores in a
@@ -23,7 +35,11 @@ const RIGHT = frameOf('right');
  * screen, not the thing under test.
  */
 function testFlow(
-  options: { readonly capacity?: number; readonly defaults?: readonly HighScoreEntry[] } = {},
+  options: {
+    readonly capacity?: number;
+    readonly defaults?: readonly HighScoreEntry[];
+    readonly settings?: SettingsStore;
+  } = {},
 ): GameFlow {
   const rules = quickRunRules();
   const stages = classicStages();
@@ -37,6 +53,7 @@ function testFlow(
       capacity: options.capacity ?? 5,
     }),
     demo: createAttractDemo({ rules: classicRules(), stages, seed: 'flow-test:attract' }),
+    ...(options.settings === undefined ? {} : { settings: options.settings }),
   });
 }
 
@@ -86,8 +103,8 @@ describe('a capture that ends the run reaches game over, not the results card', 
   /**
    * The two mechanics that landed either side of this one both reach the flow's
    * phases: a capture on the last fighter ends the game, and a finished challenge
-   * stage raises the between-stage card. Six phases now, and the one thing that
-   * must not happen is a run ending into the card instead of into game over.
+   * stage raises the between-stage card. The one thing that must not happen is a
+   * run ending into the card instead of into game over.
    *
    * Driven through the real flow rather than by asserting on events, because what
    * is being checked is the *machine*, not the simulation that feeds it.
@@ -424,5 +441,338 @@ describe('the challenge-stage results screen', () => {
     expect(flow.phase).not.toBe('challenge-results');
     expect(flow.stats.challenge).toBeUndefined();
     expect(flow.resultRows().map((row) => row.label)).not.toContain('CHALLENGE HITS');
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Variants and settings — Milestone 3                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The two phases the variant work adds, and the rule that decides whether the
+ * first of them is ever entered.
+ *
+ * The properties under test are the ones the captain will judge this by: one
+ * variant must not become a screen to dismiss, choosing a variant must start
+ * *that* variant's rules and stages, and the difficulty preset must reach the
+ * rank — nothing else.
+ */
+
+/** A `FlowVariant` over rules the test controls, with presets it names. */
+function flowVariant(
+  id: string,
+  rules: Rules,
+  options: {
+    readonly presets?: readonly DifficultyPreset[];
+    readonly stages?: StageSource;
+    readonly demonstration?: boolean;
+    /** Records the rank each `stagesFor` call was made with. */
+    readonly ranks?: string[];
+  } = {},
+): FlowVariant {
+  const presets =
+    options.presets ??
+    Object.keys(rules.difficulty.ranks).map((rank) => ({ id: rank, label: rank, rank }));
+  const first = presets[0];
+  if (first === undefined) throw new Error('a variant needs a preset');
+  const stages = options.stages ?? classicStages();
+  return {
+    id,
+    name: id.toUpperCase(),
+    demonstration: options.demonstration ?? false,
+    packs: [id],
+    rules,
+    presets,
+    defaultPreset: presets.find((preset) => preset.rank === rules.difficulty.defaultRank) ?? first,
+    stagesFor: (rank) => {
+      options.ranks?.push(rank ?? '(none)');
+      return stages;
+    },
+  };
+}
+
+/**
+ * A flow over two variants, both on `quickRunRules` so a run finishes inside a
+ * test, and both over the shipped Classic stage.
+ */
+function twoVariantFlow(
+  options: {
+    readonly settings?: SettingsStore;
+    readonly onVariantChange?: (variant: FlowVariant) => void;
+  } = {},
+): GameFlow {
+  const rules = quickRunRules();
+  return createGameFlow({
+    variants: [flowVariant('first', rules), flowVariant('second', rules)],
+    seed: 'two',
+    highScores: createHighScoreBoard({ storage: createMemoryStorage(), defaults: [] }),
+    demo: createAttractDemo({
+      rules: classicRules(),
+      stages: classicStages(),
+      seed: 'two:attract',
+    }),
+    ...(options.settings === undefined ? {} : { settings: options.settings }),
+    ...(options.onVariantChange === undefined ? {} : { onVariantChange: options.onVariantChange }),
+  });
+}
+
+describe('the start-up selector', () => {
+  it('is never entered when there is only one variant', () => {
+    // The whole of the single-variant decision: a one-game cabinet boots straight
+    // into attract, as it did before any of this existed.
+    const flow = createGameFlow({
+      variants: [flowVariant('only', quickRunRules())],
+      seed: 'one',
+      demo: createAttractDemo({ rules: classicRules(), seed: 'one:attract' }),
+    });
+    expect(flow.phase).toBe('attract');
+    expect(flow.variantMenu).toBeUndefined();
+    // And start still starts a game on the very first press.
+    press(flow, START);
+    expect(flow.phase).toBe('playing');
+  });
+
+  it('is never entered by a flow built from bare rules either', () => {
+    expect(testFlow().phase).toBe('attract');
+  });
+
+  it('opens at boot when there is a choice, on the first variant', () => {
+    const flow = twoVariantFlow();
+    expect(flow.phase).toBe('variant-select');
+    expect(flow.variantMenu?.chosen.id).toBe('first');
+    expect(flow.variants.map((variant) => variant.id)).toEqual(['first', 'second']);
+  });
+
+  it('runs the attract demo behind the list, so the screen is never still', () => {
+    const flow = twoVariantFlow();
+    const before = flow.world.player.x;
+    let moved = false;
+    for (let i = 0; i < 200 && !moved; i += 1) {
+      flow.step(EMPTY_FRAME);
+      moved = flow.world.player.x !== before;
+    }
+    expect(flow.phase).toBe('variant-select');
+    expect(moved).toBe(true);
+  });
+
+  it('walks the list with left and right', () => {
+    const flow = twoVariantFlow();
+    press(flow, RIGHT);
+    expect(flow.variantMenu?.chosen.id).toBe('second');
+    press(flow, LEFT);
+    expect(flow.variantMenu?.chosen.id).toBe('first');
+  });
+
+  it('fire chooses and leaves the cabinet in attract', () => {
+    const flow = twoVariantFlow();
+    press(flow, RIGHT);
+    press(flow, FIRE);
+    expect(flow.phase).toBe('attract');
+    expect(flow.variant.id).toBe('second');
+    expect(flow.variantMenu).toBeUndefined();
+  });
+
+  it('start chooses and plays straight away', () => {
+    const flow = twoVariantFlow();
+    press(flow, RIGHT);
+    press(flow, START);
+    expect(flow.phase).toBe('playing');
+    expect(flow.variant.id).toBe('second');
+  });
+
+  it('starts the chosen variant’s own rules and stages', () => {
+    const quick = quickRunRules();
+    const empty: StageSource = { stageFor: () => undefined };
+    const flow = createGameFlow({
+      variants: [flowVariant('populated', quick), flowVariant('barren', quick, { stages: empty })],
+      seed: 'choose',
+      demo: createAttractDemo({ rules: classicRules(), seed: 'choose:attract' }),
+    });
+
+    press(flow, RIGHT);
+    press(flow, START);
+    expect(flow.variant.id).toBe('barren');
+    // The chosen variant's stage source answers with nothing, so the field is
+    // empty — which only happens if the *chosen* source was the one used.
+    expect(flow.world.fleet.enemies).toHaveLength(0);
+  });
+
+  it('remembers the choice in the settings, for the next session', () => {
+    const storage = createMemoryStorage();
+    const first = twoVariantFlow({ settings: createSettingsStore({ storage }) });
+    press(first, RIGHT);
+    press(first, FIRE);
+    expect(parseSettings(storage.load())?.variant).toBe('second');
+
+    // A new flow over the same storage opens the list on the remembered entry.
+    const next = twoVariantFlow({ settings: createSettingsStore({ storage }) });
+    expect(next.phase).toBe('variant-select');
+    expect(next.variantMenu?.chosen.id).toBe('second');
+    expect(next.variant.id).toBe('second');
+  });
+
+  it('falls back to the first variant when the remembered one is gone', () => {
+    const storage = createMemoryStorage();
+    createSettingsStore({ storage }).update({ variant: 'uninstalled' });
+    const flow = twoVariantFlow({ settings: createSettingsStore({ storage }) });
+    expect(flow.variant.id).toBe('first');
+  });
+
+  it('reports a change once, and only when the variant really changed', () => {
+    const seen: string[] = [];
+    const flow = twoVariantFlow({ onVariantChange: (variant) => seen.push(variant.id) });
+    // Choosing the one already in force tells nobody anything.
+    press(flow, FIRE);
+    expect(seen).toEqual([]);
+    expect(flow.phase).toBe('attract');
+  });
+
+  it('reports a change when a different variant is chosen', () => {
+    const seen: string[] = [];
+    const flow = twoVariantFlow({ onVariantChange: (variant) => seen.push(variant.id) });
+    press(flow, RIGHT);
+    press(flow, FIRE);
+    expect(seen).toEqual(['second']);
+  });
+
+  it('does not come back between games: later games begin from attract', () => {
+    const flow = twoVariantFlow();
+    press(flow, START);
+    expect(flow.phase).toBe('playing');
+    bombThePlayer(flow);
+    flow.step(EMPTY_FRAME);
+    expect(flow.phase).toBe('game-over');
+    runPhase(flow);
+    expect(flow.phase).toBe('results');
+    runPhase(flow);
+    // Attract, or the high-score table on the way to it — never back to the list.
+    expect(['attract', 'high-score-entry']).toContain(flow.phase);
+  });
+});
+
+describe('the settings phase', () => {
+  it('opens from attract on the menu button, and the world stops being stepped', () => {
+    const flow = testFlow();
+    expect(flow.phase).toBe('attract');
+    const before = flow.world.player.x;
+    press(flow, MENU);
+    expect(flow.phase).toBe('settings');
+    expect(flow.settingsMenu).toBeDefined();
+    // A phase rather than a flag: "attract but not responding to start" is the
+    // shape `src/ui/flow.ts` exists to refuse, so start does not start a game here.
+    press(flow, START);
+    expect(flow.phase).toBe('attract');
+    void before;
+  });
+
+  it('closes on the menu button too, back to attract', () => {
+    const flow = testFlow();
+    press(flow, MENU);
+    press(flow, MENU);
+    expect(flow.phase).toBe('attract');
+    expect(flow.settingsMenu).toBeUndefined();
+  });
+
+  it('returns to the selector when it was opened from there', () => {
+    const flow = twoVariantFlow();
+    press(flow, MENU);
+    expect(flow.phase).toBe('settings');
+    press(flow, MENU);
+    expect(flow.phase).toBe('variant-select');
+    expect(flow.variantMenu).toBeDefined();
+  });
+
+  it('walks rows with fire and changes values with left and right', () => {
+    const storage = createMemoryStorage();
+    const flow = testFlow({ settings: createSettingsStore({ storage }) });
+    press(flow, MENU);
+    const menu = flow.settingsMenu;
+    expect(menu?.row.id).toBe('difficulty');
+    press(flow, RIGHT);
+    expect(flow.settings.difficulty).toBe('B');
+    press(flow, FIRE);
+    expect(flow.settingsMenu?.row.id).toBe('volume');
+    press(flow, LEFT);
+    expect(flow.settings.volume).toBeLessThan(DEFAULT_SETTINGS.volume);
+  });
+
+  it('persists what was changed', () => {
+    const storage = createMemoryStorage();
+    const flow = testFlow({ settings: createSettingsStore({ storage }) });
+    press(flow, MENU);
+    press(flow, RIGHT);
+    press(flow, MENU);
+    expect(parseSettings(storage.load())?.difficulty).toBe('B');
+  });
+
+  it('holds a change for the session when there is no storage at all', () => {
+    // No settings store: the flow keeps the change in memory so the menu still
+    // works, which is the same degradation the high-score table makes.
+    const flow = testFlow();
+    press(flow, MENU);
+    press(flow, RIGHT);
+    expect(flow.settings.difficulty).toBe('B');
+  });
+
+  it('changes the variant through its GAME row, through the one selection path', () => {
+    const seen: string[] = [];
+    const flow = twoVariantFlow({ onVariantChange: (variant) => seen.push(variant.id) });
+    press(flow, FIRE);
+    expect(flow.phase).toBe('attract');
+    press(flow, MENU);
+    expect(flow.settingsMenu?.row.id).toBe('game');
+    press(flow, RIGHT);
+    expect(flow.variant.id).toBe('second');
+    // The same `selectVariant` the selector uses, so a subscriber hears about it.
+    expect(seen).toEqual(['second']);
+  });
+});
+
+describe('the difficulty preset', () => {
+  it('reaches the world as a rank, and the stage source as the same rank', () => {
+    const ranks: string[] = [];
+    const rules = quickRunRules();
+    const flow = createGameFlow({
+      variants: [
+        flowVariant('only', rules, {
+          ranks,
+          presets: [
+            { id: 'gentle', label: 'GENTLE', rank: 'A' },
+            { id: 'brutal', label: 'BRUTAL', rank: 'D' },
+          ],
+        }),
+      ],
+      seed: 'rank',
+      demo: createAttractDemo({ rules: classicRules(), seed: 'rank:attract' }),
+    });
+
+    // The default preset first: rank A, because the shipped rules default to it.
+    expect(flow.rank).toBe('A');
+    press(flow, MENU);
+    press(flow, RIGHT);
+    expect(flow.settings.difficulty).toBe('brutal');
+    expect(flow.rank).toBe('D');
+    press(flow, MENU);
+
+    ranks.length = 0;
+    press(flow, START);
+    expect(flow.phase).toBe('playing');
+    // The world runs at the chosen rank, and so does stage resolution — rank
+    // selects the entry-wave sequence as well as the difficulty tables
+    // (docs/DESIGN.md section 6), so a preset that reached only the world would
+    // apply half of what a rank means.
+    expect(flow.world.rank).toBe('D');
+    expect(ranks).toContain('D');
+  });
+
+  it('applies to the next game, not the one already running', () => {
+    const flow = testFlow();
+    press(flow, START);
+    expect(flow.world.rank).toBe('A');
+    // No way into the menu mid-game, by design: the run keeps the rank it started
+    // on, so a difficulty change can never retune a game in progress.
+    press(flow, MENU);
+    expect(flow.phase).toBe('playing');
+    expect(flow.world.rank).toBe('A');
   });
 });

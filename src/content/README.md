@@ -10,7 +10,8 @@ model and section 6 the rules layer.
 | `loader.ts`   | Pure: documents in, a validated pack or a list of errors out                                                |
 | `fs.ts`       | **Node only.** Reads a pack directory into the shape `loader.ts` takes                                      |
 | `bundle.ts`   | **Vite only.** The same walk over the same tree, through `import.meta.glob`                                 |
-| `registry.ts` | Layers loaded packs into one lookup; a later pack wins                                                      |
+| `registry.ts` | Layers loaded packs into one lookup; a later pack wins, manifest and rules included                         |
+| `variants.ts` | A **variant**: one game, as a `variants/<id>.json` document — its packs and its difficulty presets          |
 | `rules.ts`    | Reads the rules layer: rank tables, stage sequences, cadence, plateaus, and everything the simulation steps |
 | `stages.ts`   | A stage _number_ to the resolved `StageContent` the simulation is handed                                    |
 | `errors.ts`   | `ContentError`, and the per-file report both the loader and the validator print                             |
@@ -42,6 +43,17 @@ Vite-only transform into plain Node — so `src/main.ts` imports `bundle.ts`
 directly, and `tests/unit/bundled-packs.test.ts` holds the two sides to each
 other.
 
-`npm run validate-packs` runs the same two passes the game does — it calls
-`loadPack` rather than reimplementing it. Section 8's playability checks are
-Milestone 3 and are not here.
+**A variant is a game; a pack is content for one.** `variants.ts` is the layer
+above the registry: `packs/` says what content exists, a variant says which _game_
+a player can start. It validates in the same two passes with the same
+`ContentError` shape — schema, then references against the packs that loaded — and
+it **selects rather than overrides**: rules are a whole document from a pack,
+because a variant that could patch single numbers would be the difficulty
+multiplier section 6 rules out. `docs/ARCHITECTURE.md` §4.5 has the whole of it,
+including the one limit on an overlay pack: `loadPack` resolves references within a
+pack, so an overlay may replace a self-contained document and may not add one that
+names the base pack's content.
+
+`npm run validate-packs` runs the same passes the game does — it calls `loadPack`
+and `loadVariants` rather than reimplementing either. Section 8's playability
+checks are Milestone 3 and are not here.

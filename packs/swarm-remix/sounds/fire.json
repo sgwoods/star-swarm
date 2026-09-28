@@ -1,0 +1,7 @@
+{
+  "id": "fire",
+  "wave": "triangle",
+  "freq": [1760, 440],
+  "envelope": [0.001, 0.02, 0.05],
+  "volume": 0.28
+}

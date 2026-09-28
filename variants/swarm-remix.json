@@ -1,0 +1,8 @@
+{
+  "id": "swarm-remix",
+  "name": "SWARM REMIX",
+  "description": "A NEW DIVE AND A NEW GUN",
+  "packs": ["classic", "swarm-remix"],
+  "order": 90,
+  "demonstration": true
+}

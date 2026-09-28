@@ -1,25 +1,28 @@
 import { expect, test } from '@playwright/test';
 
+import { booted, reachAttract, startGame } from './harness.js';
+
 /**
  * The front-end shell in a real browser (docs/DESIGN.md section 4, "Game flow").
  *
  * The state machine's transitions are proved headlessly in
  * `tests/unit/flow.test.ts`; what only a browser can show is that the cabinet
- * boots into attract mode, that the demo runs the simulation there without
- * anybody touching a key, and that a real keypress starts a game.
+ * reaches attract mode, that the demo runs the simulation there without anybody
+ * touching a key, and that a real keypress starts a game.
+ *
+ * The page boots into the start-up selector while more than one variant ships, so
+ * `reachAttract` in `./harness.ts` is how a test that wants attract gets there —
+ * the selector itself is `./variants.spec.ts`.
  *
  * Deliberately shallow for the same reason `smoke.spec.ts` is: behaviour belongs
  * in Vitest, wiring belongs here.
  */
 
-test('the cabinet boots into attract mode and runs the demo', async ({ page }) => {
+test('the cabinet reaches attract mode and runs the demo', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
 
-  await page.goto('/');
-  await page.waitForFunction(() => (window.starSwarm?.step ?? 0) > 0);
-
-  expect(await page.evaluate(() => window.starSwarm?.phase)).toBe('attract');
+  await reachAttract(page);
 
   // Nobody is playing, and the ship is still flying: the demo is the real
   // simulation being driven by a recorded input log.
@@ -33,11 +36,7 @@ test('the cabinet boots into attract mode and runs the demo', async ({ page }) =
 });
 
 test('start begins a game from zero, and the arrows reach that ship', async ({ page }) => {
-  await page.goto('/');
-  await page.waitForFunction(() => (window.starSwarm?.step ?? 0) > 0);
-
-  await page.keyboard.press('Enter');
-  await page.waitForFunction(() => window.starSwarm?.phase === 'playing');
+  await startGame(page);
 
   expect(await page.evaluate(() => window.starSwarm?.score)).toBe(0);
   expect(await page.evaluate(() => window.starSwarm?.shotsFired)).toBe(0);
@@ -51,10 +50,7 @@ test('start begins a game from zero, and the arrows reach that ship', async ({ p
 });
 
 test('the shots the results screen counts are the ones the player fired', async ({ page }) => {
-  await page.goto('/');
-  await page.waitForFunction(() => (window.starSwarm?.step ?? 0) > 0);
-  await page.keyboard.press('Enter');
-  await page.waitForFunction(() => window.starSwarm?.phase === 'playing');
+  await startGame(page);
 
   await page.keyboard.down('Space');
   await page.waitForTimeout(800);
@@ -71,8 +67,7 @@ test('the shots the results screen counts are the ones the player fired', async 
 });
 
 test('the high-score table survives a reload', async ({ page }) => {
-  await page.goto('/');
-  await page.waitForFunction(() => (window.starSwarm?.step ?? 0) > 0);
+  await booted(page);
 
   const best = await page.evaluate(() => window.starSwarm?.highScore ?? 0);
   expect(best).toBeGreaterThan(0);
@@ -108,10 +103,7 @@ test('draws the stage badges the pack declares', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
 
-  await page.goto('/');
-  await page.waitForFunction(() => (window.starSwarm?.step ?? 0) > 0);
-  await page.keyboard.press('Enter');
-  await page.waitForFunction(() => window.starSwarm?.phase === 'playing');
+  await startGame(page);
 
   // Stage 1 shows a single 1-point badge; the denominations are the pack's.
   expect(await page.evaluate(() => window.starSwarm?.badges)).toEqual([1]);

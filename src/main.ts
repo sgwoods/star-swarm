@@ -13,15 +13,21 @@
  * `flow.step(frame)` call, which is why there are no phase flags here.
  */
 
-import { createSfx, createSynth } from './audio/index.js';
-import { bundledPackSource } from './content/bundle.js';
-import { createRegistry, createStageSource, loadPackOrThrow } from './content/index.js';
+import { createSfx, createSynth, type Sfx } from './audio/index.js';
+import { bundledPackSources, bundledVariantSources } from './content/bundle.js';
+import type { ContentError, LoadedPack } from './content/index.js';
+import {
+  ContentValidationError,
+  loadPack,
+  loadVariants,
+  type ResolvedVariant,
+} from './content/index.js';
 import { createKeyboardInput, type InputFrame } from './engine/input.js';
 import { createLoop, STEP_HZ } from './engine/loop.js';
 import { createRng } from './engine/rng.js';
 import { createDisplay, LOGICAL_HEIGHT, LOGICAL_WIDTH } from './render/canvas.js';
 import { drawScene } from './render/scene.js';
-import { createSpriteSheet } from './render/sprites.js';
+import { createSpriteSheet, type SpriteSheet } from './render/sprites.js';
 import { createStarfield } from './render/starfield.js';
 import { beamCaptor, capturedFighter } from './sim/capture.js';
 import { aliveEnemies } from './sim/enemies.js';
@@ -34,44 +40,76 @@ import {
   fetchServedIdentity,
 } from './ui/build-info.js';
 import { drawBuildLine, drawBuildStamp } from './ui/build-stamp.js';
-import { createGameFlow, type GamePhase } from './ui/flow.js';
-import { createHighScoreBoard, createWebStorage, drawInitialsEntry } from './ui/highscores.js';
+import { createGameFlow, type FlowVariant, type GamePhase } from './ui/flow.js';
+import {
+  createHighScoreBoard,
+  drawInitialsEntry,
+  HIGH_SCORE_STORAGE_KEY,
+} from './ui/highscores.js';
 import { badgesForStage, drawHud } from './ui/hud.js';
+import { drawSettings, drawVariantSelect, SELECT_CARD_TOP, SETTINGS_CARD_TOP } from './ui/menus.js';
 import { CARD_TOP } from './ui/panel.js';
 import { drawChallengeResults, drawGameOver, drawResults } from './ui/results.js';
+import {
+  bindingsFor,
+  createSettingsStore,
+  SETTINGS_STORAGE_KEY,
+  type Settings,
+} from './ui/settings.js';
+import { createWebStorage } from './ui/storage.js';
 
-const container = document.getElementById('app');
-if (container === null) throw new Error('Missing #app container');
+const app = document.getElementById('app');
+if (app === null) throw new Error('Missing #app container');
+const container: HTMLElement = app;
 
 const display = createDisplay({ container });
-const input = createKeyboardInput();
-input.attach(window);
 
-// The rules and the content the simulation runs on come from a pack, through the
-// same loader the pack-validation gate runs, so the game and the gate cannot
-// disagree. The pack is bundled rather than fetched, and it is `loadPack` that
-// turns the JSON into values the sim will accept — nothing hands the simulation
-// raw data.
+// The games this build offers come from `variants/`, and the content each one runs
+// on comes from the packs it names — both bundled rather than fetched, and both
+// through the same loaders the validation gate runs, so the game and the gate
+// cannot disagree. Nothing here names a variant, a pack or a rank: adding a game
+// is adding a document.
 //
-// `bundledPackSource` globs the whole pack directory rather than naming the files
-// this once listed: a manifest that references a sound, a path or a sprite has to
-// be loaded *with* them, or the loader's reference pass rejects it and the game
-// will not boot. See `src/content/bundle.ts`.
-const classicSource = bundledPackSource('classic');
-if (classicSource === undefined) throw new Error('the classic pack is not bundled');
-const pack = loadPackOrThrow(classicSource);
-const rules = pack.rules;
-if (rules === undefined) throw new Error('the bundled classic pack has no rules.json');
-const registry = createRegistry([pack]);
+// Both readers glob their whole directory rather than naming the files somebody
+// remembered: a manifest that references a sound, a path or a sprite has to be
+// loaded *with* them, or the reference pass rejects it and the game will not boot.
+// See `src/content/bundle.ts`.
+const packs = new Map<string, LoadedPack>();
+const packErrors: ContentError[] = [];
+for (const [name, source] of bundledPackSources()) {
+  const result = loadPack(source);
+  if (result.ok) packs.set(name, result.pack);
+  else packErrors.push(...result.errors);
+}
+if (packErrors.length > 0) throw new ContentValidationError(packErrors);
+
+const loaded = loadVariants(bundledVariantSources(), packs);
+if (!loaded.ok) throw new ContentValidationError(loaded.errors);
+const variants = loaded.variants;
+const firstVariant = variants[0];
+if (firstVariant === undefined) {
+  throw new Error('no variants are bundled: variants/ holds no document, so there is no game');
+}
+const byId = new Map(variants.map((entry) => [entry.id, entry]));
+
+/** The variant in force. Replaced when the flow reports the player chose another. */
+let variant: ResolvedVariant = firstVariant;
 
 // Seeded from a constant so a session is reproducible and a recorded replay
 // means something. The flow derives each game's seed, and the attract demo's,
 // from this one.
 const SEED = 'star-swarm-m2';
 
-// The high-score table survives the tab if the browser lets it, and quietly
-// becomes a session-only table if it does not (`src/ui/highscores.ts`).
-const highScores = createHighScoreBoard({ storage: createWebStorage() });
+// The high-score table and the player's settings survive the tab if the browser
+// lets them, and quietly become session-only if it does not. One storage
+// implementation, two keys (`src/ui/storage.ts`): blocked site data must never
+// take the game down, so both degrade to defaults rather than throwing.
+const highScores = createHighScoreBoard({
+  storage: createWebStorage({ key: HIGH_SCORE_STORAGE_KEY }),
+});
+const settings = createSettingsStore({
+  storage: createWebStorage({ key: SETTINGS_STORAGE_KEY }),
+});
 
 /**
  * Is a newer build being served? Polled once a minute of *simulation* time, so a
@@ -87,22 +125,15 @@ const updates = createUpdateWatcher({
   everySteps: 60 * STEP_HZ,
 });
 
-// The flow builds every world the game runs — the attract demo's and each
-// game's — so the rules and the stage source go to it rather than to a world
-// this file keeps.
-const flow = createGameFlow({
-  rules,
-  stages: createStageSource(registry),
-  seed: SEED,
-  highScores,
-});
-
-// Everything derived from pack data is built once, here, and never per frame:
-// the sheet rasterises every sprite frame up front (`src/render/README.md`).
-const sprites = createSpriteSheet({
-  sprites: registry.sprites.values(),
-  palette: registry.manifest.palette,
-});
+/**
+ * The keyboard, on whichever scheme the player chose.
+ *
+ * Rebuilt rather than remapped when the setting changes: `createKeyboardInput`
+ * closes over its bindings, and an input device that could be re-bound mid-flight
+ * is a device that can be holding a key nothing will ever release.
+ */
+let input = createKeyboardInput({ bindings: bindingsFor(settings.value.controls) });
+let detachInput = input.attach(window);
 
 // The starfield gets its own generator: it is presentation, and pulling draws
 // from the simulation's stream would make what the sim computes depend on how
@@ -114,12 +145,80 @@ const starfield = createStarfield(createRng(`${SEED}:stars`));
 // Web Audio is wrapped, so a browser that blocks audio leaves the game running in
 // silence. Which sound each event plays is the pack's `sounds` map, not a name in
 // this file.
-const synth = createSynth();
-const sfx = createSfx({
-  player: synth,
-  sounds: registry.sounds,
-  bindings: registry.manifest.sounds,
+const synth = createSynth({
+  volume: settings.value.volume,
+  muted: settings.value.muted,
 });
+
+/**
+ * Everything derived from pack data, built when a variant comes into force and
+ * never per frame: the sheet rasterises every sprite frame up front
+ * (`src/render/README.md`), and the effect map is the variant's own `sounds`.
+ *
+ * These are `let` rather than `const` because a variant is chosen at run time. A
+ * variant change is the *only* thing that rebuilds them — nothing here is per
+ * frame, which is the contract `src/render/README.md` states.
+ */
+let sprites: SpriteSheet = createSpriteSheet({
+  sprites: variant.registry.sprites.values(),
+  palette: variant.registry.manifest.palette,
+});
+let sfx: Sfx = createSfx({
+  player: synth,
+  sounds: variant.registry.sounds,
+  bindings: variant.registry.manifest.sounds,
+});
+
+/**
+ * Take on the variant the flow says is now in force.
+ *
+ * The flow rebuilds the rules, the stage source and the attract demo itself; this
+ * is the other half — the things a variant decides that live on this side of the
+ * boundary. Called from `onVariantChange` and nowhere else, so there is one place
+ * a variant's presentation is assembled.
+ */
+function applyVariant(chosen: FlowVariant): void {
+  variant = byId.get(chosen.id) ?? variant;
+  sprites = createSpriteSheet({
+    sprites: variant.registry.sprites.values(),
+    palette: variant.registry.manifest.palette,
+  });
+  sfx = createSfx({
+    player: synth,
+    sounds: variant.registry.sounds,
+    bindings: variant.registry.manifest.sounds,
+  });
+}
+
+/** Apply the settings that live outside the flow: audio, controls, the CRT flag. */
+function applySettings(value: Settings): void {
+  synth.setVolume(value.volume);
+  synth.setMuted(value.muted);
+  if (value.controls !== controls) {
+    controls = value.controls;
+    detachInput();
+    input = createKeyboardInput({ bindings: bindingsFor(controls) });
+    detachInput = input.attach(window);
+  }
+  // The option is stored and reported; `src/render/crt.ts` is not written yet, so
+  // this is where the filter will read it from and nothing reads it today.
+  container.dataset.crt = value.crt ? 'on' : 'off';
+}
+
+let controls = settings.value.controls;
+
+// The flow builds every world the game runs — the attract demo's and each game's —
+// so the variants go to it rather than to a world this file keeps. It owns which
+// game is in force; this file hears about a change and rebuilds what it owns.
+const flow = createGameFlow({
+  variants,
+  seed: SEED,
+  highScores,
+  settings,
+  onVariantChange: applyVariant,
+});
+
+applySettings(settings.value);
 
 function unlockAudio(): void {
   synth.unlock();
@@ -144,6 +243,10 @@ const loop = createLoop({
     // Exactly one input sample per simulation step (docs/DESIGN.md pillar 4).
     const frame: InputFrame = input.sample();
     applyEvents(flow.step(frame).events);
+    // The menu writes settings; this is where they reach the things outside the
+    // flow. Cheap and idempotent, so it runs every step rather than needing a
+    // change notification the menu would have to remember to send.
+    applySettings(flow.settings);
     // Outside the simulation on purpose: the poll is a host concern counted in
     // simulation steps, and nothing it learns reaches the world.
     updates.step();
@@ -165,7 +268,7 @@ const loop = createLoop({
       lives: world.lives.reserve,
       stage: world.stage,
       // The badge denominations and their art are the pack's, not the HUD's.
-      badges: registry.manifest.stageBadges,
+      badges: variant.registry.manifest.stageBadges,
       sheet: sprites,
     });
     // The top HUD band, never the playfield. Every phase, so "what is running?"
@@ -208,6 +311,31 @@ const loop = createLoop({
             steps: flow.phaseSteps,
             x: LOGICAL_WIDTH / 2,
             y: CARD_TOP,
+          });
+        }
+        break;
+      }
+      case 'variant-select': {
+        const menu = flow.variantMenu;
+        if (menu !== undefined) {
+          drawVariantSelect(ctx, {
+            menu,
+            steps: flow.phaseSteps,
+            x: LOGICAL_WIDTH / 2,
+            y: SELECT_CARD_TOP,
+          });
+        }
+        break;
+      }
+      case 'settings': {
+        const menu = flow.settingsMenu;
+        if (menu !== undefined) {
+          drawSettings(ctx, {
+            menu,
+            steps: flow.phaseSteps,
+            x: LOGICAL_WIDTH / 2,
+            y: SETTINGS_CARD_TOP,
+            persistent: settings.persistent,
           });
         }
         break;
@@ -261,6 +389,23 @@ declare global {
       readonly perfectStages: number;
       /** The badge denominations on screen, which come from the pack. */
       readonly badges: readonly number[];
+      /** The variant in force, the list on offer, and the rank the preset chose. */
+      readonly variant: string;
+      readonly variantName: string;
+      readonly variants: readonly string[];
+      readonly rank: string;
+      readonly difficulty: string;
+      /** The player's settings, as the menu has them. */
+      readonly settings: Settings;
+      readonly settingsPersistent: boolean;
+      /** The settings rows on screen, as `label=value`. Empty off that phase. */
+      readonly settingsRows: readonly string[];
+      /** The id of the settings row under the cursor. Empty off that phase. */
+      readonly settingsMenuRow: string;
+      /** The note drawn under the list — the live row's. Empty off that phase. */
+      readonly settingsMenuNote: string;
+      /** The variant under the selector's cursor. Empty off that phase. */
+      readonly selecting: string;
       /** Which motion the formation is running: sway, breathe or still. */
       readonly formationMotion: string;
       readonly shotsFired: number;
@@ -348,9 +493,42 @@ window.starSwarm = {
     return flow.stats.perfectStages;
   },
   get badges(): readonly number[] {
-    return badgesForStage(flow.world.stage, registry.manifest.stageBadges).map(
+    return badgesForStage(flow.world.stage, variant.registry.manifest.stageBadges).map(
       (badge) => badge.value,
     );
+  },
+  get variant(): string {
+    return flow.variant.id;
+  },
+  get variantName(): string {
+    return flow.variant.name;
+  },
+  get variants(): readonly string[] {
+    return flow.variants.map((entry) => entry.id);
+  },
+  get rank(): string {
+    return flow.rank;
+  },
+  get difficulty(): string {
+    return flow.settings.difficulty ?? flow.variant.defaultPreset.id;
+  },
+  get settings(): Settings {
+    return flow.settings;
+  },
+  get settingsPersistent(): boolean {
+    return settings.persistent;
+  },
+  get settingsRows(): readonly string[] {
+    return (flow.settingsMenu?.rows ?? []).map((row) => `${row.label}=${row.value}`);
+  },
+  get settingsMenuRow(): string {
+    return flow.settingsMenu?.row.id ?? '';
+  },
+  get settingsMenuNote(): string {
+    return flow.settingsMenu?.row.note ?? '';
+  },
+  get selecting(): string {
+    return flow.variantMenu?.chosen.id ?? '';
   },
   get formationMotion(): string {
     return flow.world.formation?.motion ?? 'none';

@@ -1,0 +1,36 @@
+{
+  "id": "classic",
+  "name": "STAR SWARM",
+  "description": "THE 1981 ARCADE GAME",
+  "packs": ["classic"],
+  "order": 10,
+  "difficulty": {
+    "presets": [
+      {
+        "id": "arcade",
+        "label": "ARCADE",
+        "rank": "A",
+        "description": "FACTORY SETTING"
+      },
+      {
+        "id": "brisk",
+        "label": "BRISK",
+        "rank": "B",
+        "description": "DIVES COME SOONER"
+      },
+      {
+        "id": "hard",
+        "label": "HARD",
+        "rank": "C",
+        "description": "MORE IN THE AIR AT ONCE"
+      },
+      {
+        "id": "expert",
+        "label": "EXPERT",
+        "rank": "D",
+        "description": "THE HARDEST ROM SETTING"
+      }
+    ],
+    "defaultPreset": "arcade"
+  }
+}

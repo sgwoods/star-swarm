@@ -8,8 +8,21 @@
  * knowing the difference.
  */
 
-/** Every action the simulation understands. Milestone 0 needs these four. */
-export const ACTIONS = ['left', 'right', 'fire', 'start'] as const;
+/**
+ * Every action the game understands.
+ *
+ * The first four are the cabinet's and are the whole of what `src/sim/` reads.
+ * `menu` is the fifth and is the front end's alone — a cabinet has a service
+ * button behind the coin door, and this is ours: it is what opens the settings
+ * screen (`src/ui/menus.ts`) from attract mode. No simulation code looks at it.
+ *
+ * **The list is append-only.** {@link ACTION_BIT} assigns `1 << index`, and a
+ * recorded replay log on disk is a list of those masks, so appending leaves every
+ * existing bit — and therefore every golden replay — exactly where it was.
+ * Inserting or reordering would silently reinterpret every log in
+ * `tests/sim/golden/`.
+ */
+export const ACTIONS = ['left', 'right', 'fire', 'start', 'menu'] as const;
 
 export type Action = (typeof ACTIONS)[number];
 
@@ -31,7 +44,13 @@ export const ACTION_BIT: Readonly<Record<Action, number>> = Object.freeze(
   >,
 );
 
-/** Default keyboard map, keyed by `KeyboardEvent.code` so it is layout-stable. */
+/**
+ * Default keyboard map, keyed by `KeyboardEvent.code` so it is layout-stable.
+ *
+ * This is the `both` control scheme; `bindingsFor` in `src/ui/settings.ts`
+ * narrows it to arrows-only or WASD-only by filtering this table rather than
+ * restating it.
+ */
 export const DEFAULT_BINDINGS: Readonly<Record<string, Action>> = Object.freeze({
   ArrowLeft: 'left',
   KeyA: 'left',
@@ -42,6 +61,8 @@ export const DEFAULT_BINDINGS: Readonly<Record<string, Action>> = Object.freeze(
   Enter: 'start',
   NumpadEnter: 'start',
   Digit1: 'start',
+  Escape: 'menu',
+  KeyM: 'menu',
 });
 
 /** Build a frame from action names. */

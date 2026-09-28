@@ -41,6 +41,14 @@ documents under [`packs/classic/`](../packs/classic/). The code that runs them
 holds no numbers of its own. A second game in the same arcade lineage is another
 directory under `packs/`, not a fork.
 
+**And the build offers more than one game, chosen at start-up.** A **variant** is
+one game on the platform, declared as a document under
+[`variants/`](../variants/): a display name, the packs it layers, and the
+difficulty presets a player may pick from. Star Swarm is `variants/classic.json`
+and is the first entry in that list rather than a case the others work around.
+Two variants ship, one of them marked as a demonstration.
+<!-- check:count variants.count 2 variants.demonstrations 1 -->
+
 That split is the whole architecture, and it is enforced rather than trusted —
 see [§3](#3-the-layers).
 
@@ -51,8 +59,10 @@ the high-score table are all in; the normal stages through 8 and eight challenge
 stages are authored as pack data; and the capture mechanic — tractor beam,
 captured fighter, rogue, rescue and dual fighter — is in. A bomb, a tractor beam
 and flying into an enemy all take a fighter, which is every way the arcade has of
-doing it. [§5](#5-what-is-not-here-yet) is what is left, and none of it belongs to
-Milestone 2.
+doing it. Milestone 3 has begun: the variant concept, the start-up selector and
+the player-settings menu are in ([§4.5](#45-variants-the-games-this-build-offers)
+and [§6](#6-settings-and-the-difficulty-preset)).
+[§5](#5-what-is-not-here-yet) is what is left.
 <!-- check:count classic.sequence.normal 6 classic.stages.challenge 8 -->
 
 ---
@@ -69,8 +79,9 @@ npm run dev            # http://localhost:5173
 Then press **Enter** (or **1**) to start a game, **←/→** or **A/D** to move, and
 **Space** or **Z** to fire. Fire is an auto-repeat button, as it is on the
 cabinet: hold it down, and a shot leaves whenever the two-shot cap frees a slot.
-The game boots into _attract mode_, so nothing responds to the arrows until you
-have pressed start.
+**Esc** (or **M**) opens the settings menu from attract mode. The game boots into
+the start-up selector — two games ship — and then into _attract mode_, so nothing
+responds to the arrows until you have pressed start.
 
 ### Supported Node versions
 
@@ -173,21 +184,24 @@ exactly centred, the breathe taking over — and then the fighter opening up on 
 
 ![The game: entry waves, formation and the fighter shooting](media/arch-gameplay.gif)
 
-The front end around that is one state machine with six phases — attract,
-playing, the between-stage challenge card, game over, results and high-score
-entry. The cabinet boots into attract mode, where the demo behind the cards is
-the _real_ simulation replaying a recorded input log; start begins a game; three
-fighters lost ends it into the game-over banner, the hit-ratio results card, and
-then either the high-score table or straight back to attract.
-<!-- check:count flow.phases 6 -->
+The front end around that is one state machine with eight phases — the start-up
+variant selector, attract, the settings menu, playing, the between-stage challenge
+card, game over, results and high-score entry. The cabinet boots into the selector
+when there is more than one game to choose and into attract when there is not;
+behind the cards the demo is the _real_ simulation replaying a recorded input log;
+start begins a game; three fighters lost ends it into the game-over banner, the
+hit-ratio results card, and then either the high-score table or straight back to
+attract.
+<!-- check:count flow.phases 8 -->
 
 ![The front end: attract mode, a game, and out to the results card](media/arch-front-end.gif)
 
-`challenge-results` is the sixth phase and the only one that returns to
-`playing`: a challenge stage has ended, the next stage is already on the field,
-and the world simply stops being stepped while the card is up. It is a phase
-rather than a flag precisely so that "playing" never sometimes means "not
-stepping the world" — `src/ui/flow.ts` says so at the top of the file.
+`challenge-results` is the only phase that returns to `playing`: a challenge stage
+has ended, the next stage is already on the field, and the world simply stops being
+stepped while the card is up. It is a phase rather than a flag precisely so that
+"playing" never sometimes means "not stepping the world" — `src/ui/flow.ts` says so
+at the top of the file, and the two menu phases are phases for the same reason:
+"attract, but not responding to start" is the shape that file exists to refuse.
 
 ### The backdrop
 
@@ -580,6 +594,80 @@ sounds. It reuses the loader, the registry, the path interpreter, the formation
 machinery, the attack director, the renderer, the synth, the front-end flow and
 the whole test harness.
 
+### 4.5 Variants: the games this build offers
+
+A **variant** is one game on the platform. `packs/` says what content exists;
+`variants/` says which _game_ a player can start, and the two are different
+questions — the registry layers packs within one game, which is not the same as
+offering several. A variant document is a display name, the packs it layers, and
+the difficulty presets it offers:
+
+```json
+{
+  "id": "swarm-remix",
+  "name": "SWARM REMIX",
+  "packs": ["classic", "swarm-remix"],
+  "demonstration": true
+}
+```
+
+`src/content/variants.ts` holds the schema and the two-pass load, beside the pack
+schemas it belongs with. Adding a game is adding a document: nothing under `src/`
+names a variant, a pack or a rank.
+
+**A variant is validated exactly as a pack is.** The schema first — strict
+objects, so a misspelt field is a failure rather than a field that silently does
+nothing — then the references: every pack it names must be installed, the packs it
+layers must supply a `rules.json` between them, and every difficulty preset must
+name a rank those rules declare. A failure carries the document and the field
+(`variants/swarm-remix.json` · `difficulty.presets[0].rank`), errors or variants
+come back but never both, and `npm run validate-packs` runs the same
+`loadVariants` the browser does.
+
+**Both directories are read the same two ways.** `content/fs.ts` walks them with
+`node:fs` for the validator and the tests, `content/bundle.ts` globs them for the
+browser, and `tests/unit/bundled-packs.test.ts` holds the two readers to each
+other for variants as well as packs — a variant on disk but not in the bundle is a
+game the gate passes and the browser cannot offer.
+
+**"Later wins" reaches the manifest and the rules, which is what makes an overlay
+pack possible.** `src/content/registry.ts` composes the layered packs' manifests
+field by field rather than taking the last one whole: `roles`, `formations` and
+`sounds` merge per key, the palette is a **union** (it is a permission list that
+`src/render/sprites.ts` checks membership in and never indexes), and
+`stageBadges` and each half of `stageSequence` are replaced by the last pack that
+states a non-empty one. Rules are the whole document from the last pack that ships
+one. A single-pack registry gets its own manifest back unchanged, so this is a
+generalisation of the rule the registry always documented rather than a second
+rule beside it — and it is what lets `packs/swarm-remix/`'s `pack.json` be four
+lines.
+
+`packs/swarm-remix/` is the demonstration, and it exists to prove the claim rather
+than to be a game: it states three documents — a different drone dive, a different
+fire sound and a differently coloured player shot — and inherits the roles, the
+forty-slot formation, the stage sequence, the badges, the palette and all 2,200
+lines of `rules.json` from the pack it is layered over.
+`tests/unit/variants.test.ts` asserts that: the demonstration runs the _same_
+`Rules` object as Classic, and the documents that differ between the two variants
+are exactly the ones the overlay directory holds.
+
+**One limit worth stating, because it bounds what an overlay can be.** `loadPack`
+validates a pack's references _within that pack_, which is what makes
+`npm run validate-packs` meaningful per pack and what lets a pack be loaded on its
+own. So an overlay can **replace** a self-contained document — a sprite, a sound,
+a path that names no sound — but cannot add one that _references_ the base pack's
+content: a stage naming Classic's aliens, or a stage sequence naming Classic's
+stages, fails its own load. Richer overlays would need the reference pass to run
+over the composed variant, and nothing does that today.
+
+**A variant does not override rules.** There is no mechanism in the schema for
+patching a rules field, deliberately: a variant that could nudge individual
+numbers would be a difficulty multiplier with a different name, and
+[`docs/DESIGN.md`](DESIGN.md#6-configuration-system) section 6 is explicit that
+rank selects whole data tables instead. A variant that wants different numbers
+ships a pack with a `rules.json` that has them — which is also exactly what
+[§4.4](#44-where-a-second-game-plugs-in) says a sibling game does.
+
 ---
 
 ## 5. What is not here yet
@@ -612,9 +700,10 @@ describing as deliberately absent something that shipped two merges ago.
   out, and the six other ids `src/content/schema.ts` already reserves, is
   Milestone 3.
   <!-- check:count sim.abilities.modules 0 schema.abilityIds 7 -->
-- **The optional CRT filter, music, the settings menu** and the validator's
-  playability checks are named in the design plan and are not written yet.
-  <!-- check:absent src/render/crt.ts src/audio/music.ts src/ui/menus.ts -->
+- **The optional CRT filter, music** and the validator's playability checks are
+  named in the design plan and are not written yet. The CRT **option** is in: the
+  settings menu shows it, it persists, and the menu row says on screen that no
+  filter reads it. <!-- check:absent src/render/crt.ts src/audio/music.ts -->
 - **No stage is a boss stage.** `boss` is one of the three stage kinds the schema
   admits, and no pack document uses it — what a boss stage would be has never
   been specified ([`docs/IDEAS.md`](IDEAS.md)).
@@ -636,6 +725,14 @@ describing as deliberately absent something that shipped two merges ago.
   formation tune on that same frame, and `packs/classic/pack.json` binds no sound
   to the event. The second half of acceptance test **M2** is therefore about
   something the pack does not ship yet.
+- **The pack manager and the stage-sequence editor.** The settings menu shows the
+  active variant's pack list as a read-only row, and the settings document already
+  carries a per-variant override the loader honours — nothing writes one yet, which
+  is the whole of what is missing.
+- **An overlay pack cannot reference the base pack's documents**
+  ([§4.5](#45-variants-the-games-this-build-offers)). It can replace a
+  self-contained document and nothing more, because the loader's reference pass
+  runs within one pack.
 
 Two arcade questions are also still open rather than decided, and the game is
 built to one reading of each. Both are written down in
@@ -657,11 +754,11 @@ in [`docs/ROADMAP.md`](ROADMAP.md#open-questions-this-roadmap-does-not-answer):
 
 <!-- check:count reference.openQuestions 2 -->
 
-### Two places where the tree departs from the plan
+### Three places where the tree departs from the plan
 
 [`docs/DESIGN.md`](DESIGN.md#9-architecture-split-so-crewmates-dont-collide)
 section 9 fixes the six directories under `src/` and what belongs in each; it
-names no modules, deliberately, and this document is the listing. Two of its
+names no modules, deliberately, and this document is the listing. Three of its
 divisions of labour did not survive contact with the code, and the code is what
 this document follows:
 
@@ -675,12 +772,76 @@ this document follows:
   <!-- check:absent src/sim/scoring.ts src/sim/stages.ts -->
 - **`src/content/` grew past the three modules the plan sketched.** Alongside
   `schema.ts`, `loader.ts` and `registry.ts` there are `rules.ts`, `stages.ts`,
-  `errors.ts`, and the two pack readers `fs.ts` and `bundle.ts` — one for Node,
-  one for the browser, held to each other by a test
+  `variants.ts`, `errors.ts`, and the two pack readers `fs.ts` and `bundle.ts` —
+  one for Node, one for the browser, held to each other by a test
   ([§4.1](#41-the-content-pipeline)).
+- **There is a seventh top-level directory, `variants/`.** Section 9 lists what
+  sits outside `src/` — `packs/`, `tests/`, `docs/` — and a variant does not fit
+  any of them: it _composes_ packs, so it cannot live inside one, and
+  `npm run validate-packs` treats every directory under `packs/` as a pack. It is
+  a sibling of `packs/` for that reason
+  ([§4.5](#45-variants-the-games-this-build-offers)).
 
-Neither is a change of plan; the plan remains the source of truth for scope and
-milestones.
+None of the three is a change of plan; the plan remains the source of truth for
+scope and milestones.
+
+---
+
+## 6. Settings, and the difficulty preset
+
+[`docs/DESIGN.md`](DESIGN.md#6-configuration-system) section 6 has three
+configuration layers: engine rules, content packs, and the player's settings. The
+third is in, as `src/ui/settings.ts` and the menu in `src/ui/menus.ts`, and the
+whole of what is interesting about it is the boundary with the first.
+
+**Nothing in the settings is a number the simulation steps.** The seven values are
+the chosen variant, the difficulty **preset id**, volume, mute, the CRT option, the
+control scheme, and a per-variant pack-list override. Where each one arrives:
+
+| Setting      | Applied by                                                                 |
+| ------------ | -------------------------------------------------------------------------- |
+| `variant`    | which game `src/ui/flow.ts` builds every world from                        |
+| `difficulty` | a preset id → a rank → the rules layer's own tables                        |
+| `volume`     | `Synth.setVolume`                                                          |
+| `muted`      | `Synth.setMuted`                                                           |
+| `controls`   | the keyboard map handed to `createKeyboardInput`, one of three schemes     |
+| `crt`        | stored and reported; no filter reads it yet                                |
+| `packs`      | an override of a variant's pack list, honoured on load, written by nothing |
+
+<!-- check:count ui.controlSchemes 3 -->
+
+**The difficulty preset does exactly one thing: it chooses the rank.** It is not a
+multiplier and there is nowhere in the shape to make it one. A preset is an id, a
+label and a rank id; `rankFor` in `src/content/variants.ts` turns the setting into
+a rank, and `src/content/rules.ts` resolves that rank into whole data tables. The
+rank reaches **both** halves of what section 6 says a rank selects — the per-stage
+difficulty rows and the entry-wave script sequence — because the flow passes it to
+`createWorld` _and_ to `createStageSource`; a preset that reached only the world
+would apply half of it. `tests/unit/variants.test.ts` asserts the resolved row is
+_identical_ to the rank's own row rather than merely different between presets,
+which is the assertion a multiplier would also pass.
+
+A preset the active variant does not offer resolves to that variant's default
+rather than throwing. A settings document outlives the build it was written
+against, so an id from another game — or a variant that is no longer installed —
+has to read as "use the default".
+
+**Settings persist the way high scores do, and degrade the same way.**
+`src/ui/storage.ts` holds the one `KeyedStorage` both use: two methods over a
+string, neither of which may throw. `localStorage` is not available in every
+browser state — a private window, blocked site data, a cookie policy that makes
+the property access itself throw — so the browser implementation catches on every
+path, including the construction-time probe, and falls back to an in-memory store
+that behaves identically for one session and reports `persistent: false`. The
+settings screen says so when it is session-only.
+
+**The menu applies nothing.** A row that changes calls `write` with a patch and
+stops; what a changed setting _does_ belongs to whoever owns the synth, the
+keyboard and the sprite sheet, which is `src/main.ts`. So there is one place a
+setting has consequences, and the menu is testable on the Node environment with no
+DOM like everything else in `src/ui/`.
+
+![The start-up selector, then the settings menu changing the difficulty preset](media/m3-variants.gif)
 
 ---
 

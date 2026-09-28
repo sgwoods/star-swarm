@@ -63,8 +63,11 @@ class FakeTarget implements EventTarget {
 }
 
 describe('action set', () => {
-  it('covers the Milestone 0 actions', () => {
-    expect([...ACTIONS]).toEqual(['left', 'right', 'fire', 'start']);
+  it('covers the four cabinet actions, then the front end\u2019s own', () => {
+    // The first four are the cabinet's and are the whole of what `src/sim/` reads.
+    // `menu` is the front end's service button: it opens the settings screen and
+    // no simulation code looks at it.
+    expect([...ACTIONS]).toEqual(['left', 'right', 'fire', 'start', 'menu']);
   });
 
   it('assigns each action a distinct single bit', () => {
@@ -76,7 +79,15 @@ describe('action set', () => {
   });
 
   it('keeps the bit assignment stable, because replay logs depend on it', () => {
-    expect(ACTION_BIT).toEqual({ left: 1, right: 2, fire: 4, start: 8 });
+    // The four original bits are pinned to the values every recorded log in
+    // `tests/sim/golden/` was written against. The list is **append-only** for
+    // exactly this reason: a fifth action takes the next free bit and changes
+    // nothing, where inserting or reordering would reinterpret every log on disk.
+    expect(ACTION_BIT.left).toBe(1);
+    expect(ACTION_BIT.right).toBe(2);
+    expect(ACTION_BIT.fire).toBe(4);
+    expect(ACTION_BIT.start).toBe(8);
+    expect(ACTION_BIT).toEqual({ left: 1, right: 2, fire: 4, start: 8, menu: 16 });
   });
 });
 

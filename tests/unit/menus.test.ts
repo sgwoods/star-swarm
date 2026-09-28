@@ -1,0 +1,428 @@
+import { describe, expect, it } from 'vitest';
+
+import type { DifficultyPreset } from '../../src/content/variants.js';
+import { LOGICAL_HEIGHT } from '../../src/render/canvas.js';
+import { GLYPH_CHARS } from '../../src/render/text.js';
+import {
+  cardHeight,
+  createSettingsMenu,
+  createVariantMenu,
+  fitText,
+  MENU_TEXT,
+  type MenuVariant,
+  SELECT_CARD_TOP,
+  SETTINGS_CARD_TOP,
+  SETTINGS_ROW_IDS,
+  settingsLines,
+  type SettingsMenu,
+  variantSelectLines,
+  volumeBar,
+} from '../../src/ui/menus.js';
+import { DEFAULT_SETTINGS, type Settings, VOLUME_STEPS } from '../../src/ui/settings.js';
+import { shippedVariants } from '../helpers/variants.js';
+
+/**
+ * The two menus of `src/ui/menus.ts`, as values with a cursor.
+ *
+ * Both are pure: the flow calls a verb when it sees an input edge and the draw
+ * functions render what the value says, which is what lets this run on the Node
+ * environment with no DOM. The property worth protecting is that **neither menu
+ * applies anything** — a row that changes calls `write` with a patch and stops
+ * there, so there is exactly one place in the codebase where a changed setting
+ * has consequences.
+ */
+
+const preset = (id: string, rank: string): DifficultyPreset => ({
+  id,
+  label: id.toUpperCase(),
+  rank,
+});
+
+function variantOf(id: string, overrides: Partial<MenuVariant> = {}): MenuVariant {
+  const presets = overrides.presets ?? [preset('arcade', 'A'), preset('expert', 'D')];
+  const first = presets[0];
+  if (first === undefined) throw new Error('a variant needs a preset');
+  return {
+    id,
+    name: id.toUpperCase(),
+    demonstration: false,
+    packs: [id],
+    presets,
+    defaultPreset: first,
+    ...overrides,
+  };
+}
+
+/** A menu over a settings value this test holds, so writes are observable. */
+function menuOver(
+  variants: readonly MenuVariant[],
+  initial: Partial<Settings> = {},
+): { menu: SettingsMenu; settings: () => Settings } {
+  let settings: Settings = { ...DEFAULT_SETTINGS, ...initial };
+  const first = variants[0];
+  if (first === undefined) throw new Error('a menu needs a variant');
+  const menu = createSettingsMenu({
+    read: () => settings,
+    write: (patch) => {
+      settings = { ...settings, ...patch };
+    },
+    variants,
+    // The variant in force follows the settings, as the flow's does.
+    active: () => variants.find((entry) => entry.id === settings.variant) ?? first,
+  });
+  return { menu, settings: () => settings };
+}
+
+describe('the variant selector', () => {
+  const variants = [variantOf('classic'), variantOf('remix'), variantOf('other')];
+
+  it('starts on the first variant when nothing is remembered', () => {
+    expect(createVariantMenu({ variants }).chosen.id).toBe('classic');
+  });
+
+  it('starts on the remembered variant', () => {
+    expect(createVariantMenu({ variants, selected: 'other' }).chosen.id).toBe('other');
+  });
+
+  it('starts on the first when the remembered one is no longer installed', () => {
+    // A settings document outlives the build it was written against.
+    expect(createVariantMenu({ variants, selected: 'deleted' }).chosen.id).toBe('classic');
+  });
+
+  it('wraps in both directions', () => {
+    const menu = createVariantMenu({ variants });
+    menu.previous();
+    expect(menu.chosen.id).toBe('other');
+    menu.next();
+    expect(menu.chosen.id).toBe('classic');
+    menu.next();
+    menu.next();
+    menu.next();
+    expect(menu.chosen.id).toBe('classic');
+  });
+
+  it('hands back the caller’s own variant, not a copy of it', () => {
+    // Generic in the variant type so the flow gets a `FlowVariant` back and does
+    // not have to look the choice up again by id.
+    const menu = createVariantMenu({ variants });
+    expect(menu.chosen).toBe(variants[0]);
+  });
+
+  it('refuses to exist with nothing to choose from', () => {
+    expect(() => createVariantMenu({ variants: [] })).toThrow(/at least one/);
+  });
+});
+
+describe('the settings menu', () => {
+  it('shows no GAME row when there is only one variant', () => {
+    // The same rule that keeps the selector from being a screen nobody needs: a
+    // one-game cabinet grows no row whose only value is the game in front of you.
+    const { menu } = menuOver([variantOf('classic')]);
+    expect(menu.rows.map((row) => row.id)).not.toContain('game');
+    expect(menu.rows.map((row) => row.id)).toEqual([
+      'difficulty',
+      'volume',
+      'sound',
+      'controls',
+      'crt',
+      'packs',
+    ]);
+  });
+
+  it('shows a GAME row when there is a choice', () => {
+    const { menu } = menuOver([variantOf('classic'), variantOf('remix')]);
+    expect(menu.rows[0]?.id).toBe('game');
+    expect(menu.rows[0]?.value).toBe('CLASSIC');
+  });
+
+  it('marks a demonstration variant on the GAME row', () => {
+    const { menu, settings } = menuOver(
+      [variantOf('classic'), variantOf('remix', { demonstration: true })],
+      { variant: 'remix' },
+    );
+    expect(settings().variant).toBe('remix');
+    expect(menu.rows[0]?.note).toBe('DEMONSTRATION');
+  });
+
+  it('walks the rows with a wrapping cursor', () => {
+    const { menu } = menuOver([variantOf('classic')]);
+    expect(menu.row.id).toBe('difficulty');
+    menu.previous();
+    expect(menu.row.id).toBe('packs');
+    menu.next();
+    expect(menu.row.id).toBe('difficulty');
+  });
+
+  it('changes the variant through the GAME row, and only by writing an id', () => {
+    const { menu, settings } = menuOver([variantOf('classic'), variantOf('remix')]);
+    expect(menu.row.id).toBe('game');
+    menu.adjust(1);
+    expect(settings().variant).toBe('remix');
+    // A patch and nothing else: the menu applied no consequence of its own.
+    expect(settings().difficulty).toBeUndefined();
+    menu.adjust(1);
+    expect(settings().variant).toBe('classic');
+  });
+
+  it('cycles the difficulty preset, writing a preset id and never a number', () => {
+    const { menu, settings } = menuOver([variantOf('classic')]);
+    expect(menu.row.id).toBe('difficulty');
+    expect(menu.row.value).toBe('ARCADE');
+    menu.adjust(1);
+    expect(settings().difficulty).toBe('expert');
+    expect(menu.row.value).toBe('EXPERT');
+    menu.adjust(-1);
+    expect(settings().difficulty).toBe('arcade');
+  });
+
+  it('says on the row what a preset does, which is choose a rank', () => {
+    const { menu } = menuOver([
+      variantOf('classic', {
+        presets: [preset('arcade', 'A')],
+        defaultPreset: preset('arcade', 'A'),
+      }),
+    ]);
+    expect(menu.row.note).toBe('RANK A');
+  });
+
+  it('prefers the preset’s own description when it has one', () => {
+    const described: DifficultyPreset = {
+      id: 'arcade',
+      label: 'ARCADE',
+      rank: 'A',
+      description: 'THE FACTORY SETTING',
+    };
+    const { menu } = menuOver([
+      variantOf('classic', { presets: [described], defaultPreset: described }),
+    ]);
+    expect(menu.row.note).toBe('THE FACTORY SETTING');
+  });
+
+  it('offers the presets of whichever variant is in force', () => {
+    const { menu, settings } = menuOver([
+      variantOf('classic'),
+      variantOf('remix', { presets: [preset('only', 'B')], defaultPreset: preset('only', 'B') }),
+    ]);
+    menu.adjust(1);
+    expect(settings().variant).toBe('remix');
+    menu.next();
+    expect(menu.row.id).toBe('difficulty');
+    expect(menu.row.value).toBe('ONLY');
+    // The remembered `arcade` is not on offer here, so the row shows this
+    // variant's own default rather than an id it cannot honour.
+    menu.adjust(1);
+    expect(settings().difficulty).toBe('only');
+  });
+
+  it('steps the volume one menu step at a time and stops at the ends', () => {
+    const { menu, settings } = menuOver([variantOf('classic')], { volume: 0.5 });
+    menu.next();
+    expect(menu.row.id).toBe('volume');
+    menu.adjust(1);
+    expect(settings().volume).toBeCloseTo(0.6, 10);
+    for (let step = 0; step < VOLUME_STEPS * 2; step += 1) menu.adjust(1);
+    expect(settings().volume).toBe(1);
+    for (let step = 0; step < VOLUME_STEPS * 2; step += 1) menu.adjust(-1);
+    expect(settings().volume).toBe(0);
+  });
+
+  it('toggles sound and the CRT option', () => {
+    const { menu, settings } = menuOver([variantOf('classic')]);
+    menu.next();
+    menu.next();
+    expect(menu.row.id).toBe('sound');
+    menu.adjust(1);
+    expect(settings().muted).toBe(true);
+    expect(menu.row.value).toBe('OFF');
+
+    menu.next();
+    menu.next();
+    expect(menu.row.id).toBe('crt');
+    menu.adjust(1);
+    expect(settings().crt).toBe(true);
+    // Honest about the half that is not built.
+    expect(menu.row.note).toContain('NOT BUILT');
+  });
+
+  it('cycles the control scheme', () => {
+    const { menu, settings } = menuOver([variantOf('classic')]);
+    menu.next();
+    menu.next();
+    menu.next();
+    expect(menu.row.id).toBe('controls');
+    expect(menu.row.value).toBe('ARROWS + WASD');
+    menu.adjust(1);
+    expect(settings().controls).toBe('arrows');
+    menu.adjust(1);
+    expect(settings().controls).toBe('wasd');
+    menu.adjust(1);
+    expect(settings().controls).toBe('both');
+  });
+
+  it('shows the active pack list, read-only, as the seam for the pack manager', () => {
+    const { menu, settings } = menuOver([variantOf('classic', { packs: ['classic', 'extra'] })]);
+    menu.previous();
+    expect(menu.row.id).toBe('packs');
+    // A count in the value column and the list underneath: a pack list is a
+    // sentence's worth of text and the value column is a word's worth.
+    expect(menu.row.value).toBe('2');
+    expect(menu.row.note).toBe('classic + extra');
+    expect(menu.row.editable).toBe(false);
+    const before = settings();
+    menu.adjust(1);
+    expect(settings()).toEqual(before);
+  });
+
+  it('shows a stored per-variant pack override when there is one', () => {
+    const { menu } = menuOver([variantOf('classic', { packs: ['classic'] })], {
+      packs: { classic: ['classic', 'chosen-by-the-player'] },
+    });
+    menu.previous();
+    expect(menu.row.note).toBe('classic + chosen-by-the-player');
+  });
+
+  it('derives its rows on every read, so nothing on screen goes stale', () => {
+    const { menu, settings } = menuOver([variantOf('classic')]);
+    menu.adjust(1);
+    expect(settings().difficulty).toBe('expert');
+    // Read again without touching the menu: the row reflects the write.
+    expect(menu.rows[0]?.value).toBe('EXPERT');
+  });
+});
+
+describe('the volume bar', () => {
+  it('fills one cell per menu step', () => {
+    expect(volumeBar(0)).toBe(`[${'.'.repeat(VOLUME_STEPS)}]`);
+    expect(volumeBar(1)).toBe(`[${'#'.repeat(VOLUME_STEPS)}]`);
+    expect(volumeBar(0.5)).toBe('[#####.....]');
+  });
+
+  it('is the same width whatever it is handed', () => {
+    for (const value of [-1, 0, 0.33, 0.67, 1, 2, Number.NaN]) {
+      expect(volumeBar(value)).toHaveLength(VOLUME_STEPS + 2);
+    }
+  });
+});
+
+describe('fitting text to a card', () => {
+  it('leaves anything that already fits alone', () => {
+    expect(fitText('ARCADE', 10)).toBe('ARCADE');
+    expect(fitText('ARCADE', 6)).toBe('ARCADE');
+  });
+
+  it('cuts anything longer', () => {
+    expect(fitText('THE HARDEST ROM SETTING', 10)).toBe('THE HARDES');
+    expect(fitText('anything', 0)).toBe('');
+  });
+
+  it('is what keeps an authored description on the plate', () => {
+    // The playfield is 224 pixels and the font advances a fixed 8 per character,
+    // so a card holds a fixed number of them — and a variant's description comes
+    // from a document this code has never seen. `drawText` clips nothing, so the
+    // alternative to cutting is a sentence drawn across the formation and off the
+    // screen, which is what the first recorded clip of the selector showed.
+    const description = 'THE 1981 ARCADE GAME, AS FAITHFULLY AS THE REFERENCE ALLOWS.';
+    expect(fitText(description, 24)).toHaveLength(24);
+  });
+});
+
+describe('the variants and presets this repository ships', () => {
+  /** Characters that fit across the widest card, inside its padding. */
+  const CARD_CELLS = 24;
+
+  it('fit the cards they are drawn on without being cut', () => {
+    // Cutting is the safety net, not the plan: the shipped copy is short enough
+    // that nothing is lost, and this is what says so when someone edits it.
+    for (const variant of shippedVariants()) {
+      expect(fitText(variant.name, CARD_CELLS)).toBe(variant.name);
+      if (variant.description !== undefined) {
+        expect(fitText(variant.description, CARD_CELLS)).toBe(variant.description);
+      }
+      for (const preset of variant.presets) {
+        expect(fitText(preset.label, CARD_CELLS)).toBe(preset.label);
+        if (preset.description !== undefined) {
+          expect(fitText(preset.description, CARD_CELLS)).toBe(preset.description);
+        }
+      }
+    }
+  });
+});
+
+describe('the cards fit the playfield', () => {
+  /**
+   * A card drawn taller than 288 rows runs off the bottom of the screen and
+   * nothing reports it — no exception, no failing assertion, just a menu whose
+   * last rows are not there. The first draft of the settings card did exactly
+   * that: seven rows each carrying their own note came to 196 rows of plate on a
+   * 288-row playfield. So the arithmetic is the test.
+   */
+  const fits = (top: number, height: number): boolean =>
+    top - 6 >= 0 && top - 6 + height <= LOGICAL_HEIGHT;
+
+  it('holds the selector, however many variants are on it', () => {
+    for (const count of [1, 2, 3, 5, 8]) {
+      for (const demonstrations of [false, true]) {
+        const height = cardHeight(count, variantSelectLines(demonstrations));
+        expect(fits(SELECT_CARD_TOP, height)).toBe(true);
+      }
+    }
+  });
+
+  it('holds the settings menu at its full row count', () => {
+    for (const persistent of [true, false]) {
+      const height = cardHeight(SETTINGS_ROW_IDS.length, settingsLines(persistent));
+      expect(fits(SETTINGS_CARD_TOP, height)).toBe(true);
+    }
+  });
+
+  it('holds the settings menu the shipped build actually draws', () => {
+    const { menu } = menuOver([variantOf('classic'), variantOf('remix')]);
+    expect(fits(SETTINGS_CARD_TOP, cardHeight(menu.rows.length, settingsLines(true)))).toBe(true);
+  });
+});
+
+describe('everything these cards draw is in the pixel font', () => {
+  /**
+   * `drawText` draws an unknown character as **nothing** and still advances the
+   * cursor (`src/render/text.ts`), so a string with a character the font lacks is
+   * a gap on screen that no test, no type and no lint rule notices. The first
+   * recorded clip of the settings menu showed a volume bar whose filled half was
+   * invisible, because the obvious `|` is not one of the glyphs.
+   *
+   * The font has no lower case either — `drawText` upper-cases, so lower case is
+   * fine — and this checks the upper-cased form for that reason.
+   */
+  const drawable = new Set(GLYPH_CHARS);
+  const missing = (text: string): string[] =>
+    [...text.toUpperCase()].filter((char) => !drawable.has(char));
+
+  it('covers every fixed string on both cards', () => {
+    for (const text of Object.values(MENU_TEXT)) expect(missing(text)).toEqual([]);
+  });
+
+  it('covers every volume level the menu can show', () => {
+    for (let step = 0; step <= VOLUME_STEPS; step += 1) {
+      expect(missing(volumeBar(step / VOLUME_STEPS))).toEqual([]);
+    }
+  });
+
+  it('covers every row of a menu with every kind of value on it', () => {
+    const { menu } = menuOver([variantOf('classic'), variantOf('remix', { demonstration: true })]);
+    for (const row of menu.rows) {
+      expect(missing(row.label)).toEqual([]);
+      expect(missing(row.value)).toEqual([]);
+      expect(missing(row.note ?? '')).toEqual([]);
+    }
+  });
+
+  it('covers the copy the shipped variants carry', () => {
+    for (const variant of shippedVariants()) {
+      expect(missing(variant.name)).toEqual([]);
+      expect(missing(variant.description ?? '')).toEqual([]);
+      for (const preset of variant.presets) {
+        expect(missing(preset.label)).toEqual([]);
+        expect(missing(preset.description ?? '')).toEqual([]);
+      }
+    }
+  });
+});

@@ -18,6 +18,20 @@ A pack holds:
 live in the manifest rather than a sixth directory, because section 9 fixes the
 five content directories and both are tables rather than a document apiece.
 
-`npm run validate-packs` schema-checks then reference-checks every pack and must
-pass in CI; a pack that fails validation never loads. It succeeds on an empty
-tree and on a pack whose content directories are still empty.
+**Which packs a player actually plays is a variant's business, not this
+directory's.** `variants/<id>.json` names the packs one game layers; see
+[`variants/README.md`](../variants/README.md). A pack here that no variant names is
+installed and unused, which is not an error.
+
+**An overlay pack states only what it changes.** Every manifest field has a
+default and the registry composes the layered manifests field by field, so a
+`pack.json` may be as little as an id and a name — `packs/swarm-remix/` is one, and
+inherits the roles, formation, stage sequence, badges, palette and `rules.json` of
+the pack it is layered over. The limit is that `loadPack` resolves references
+_within_ a pack: an overlay may replace a self-contained document (a sprite, a
+sound, a path naming no sound) and may **not** add one that references the base
+pack's content, such as a stage naming another pack's aliens.
+
+`npm run validate-packs` schema-checks then reference-checks every pack, then every
+variant, and must pass in CI; a pack that fails validation never loads. It succeeds
+on an empty tree and on a pack whose content directories are still empty.
