@@ -9,7 +9,7 @@ import type { Rules } from '../../src/content/schema.js';
 import { isChallengeStage } from '../../src/content/rules.js';
 import { EMPTY_FRAME, frameOf } from '../../src/engine/input.js';
 import type { CapturePhase } from '../../src/sim/capture.js';
-import { beamWindow, capturedFighter, captorOfCaptive } from '../../src/sim/capture.js';
+import { beamIsOut, beamWindow, capturedFighter, captorOfCaptive } from '../../src/sim/capture.js';
 import { hitsAny, windowGapsX } from '../../src/sim/collision.js';
 import { armDives } from '../../src/sim/dive.js';
 import type { Enemy } from '../../src/sim/enemies.js';
@@ -302,6 +302,71 @@ describe('a capture, end to end', () => {
     // Already lost to the beam; killing it here would swallow the capture.
     expect(eventsOfType(hitPlayer(world), 'player-hit')).toHaveLength(0);
     expect(world.capture.phase).toBe('carrying');
+  });
+});
+
+describe('the fighter lost while a beam is out', () => {
+  /**
+   * {@link unarmedFleet} whose next fighter is due back **before** the beam that
+   * is out can retract.
+   *
+   * One field, and it is the subject rather than a convenience. A capture attempt
+   * is a *committed swoop*: the captor takes its aim once, at the frame its
+   * `aimAtPlayer` segment begins, and opens its beam where that aim pointed
+   * whatever has happened since. Destroy the fighter in between and the beam comes
+   * out over the column it died in and stays there for the rest of its
+   * extend/hold/retract cycle — while the replacement is due back at a *fixed*
+   * column. Whether those two overlap is a race between `player.respawnFrames` and
+   * the stage's beam period, and on the shipped pack stage 1 loses it (a 12-frame
+   * period against 90 frames of respawn) while stage 20 wins it (3 frames). These
+   * tests run on stage 20, because that is where a captor launches often enough to
+   * test at all, so the race is put back by hand rather than left to the stage.
+   */
+  function beamOutlastsRespawn(): Rules {
+    const base = unarmedFleet();
+    return { ...base, player: { ...base.player, respawnFrames: 12 } };
+  }
+
+  it('holds the next fighter off the field until the beam has retracted', () => {
+    const world = armedWorld({ rules: beamOutlastsRespawn() });
+    runToPhase(world, ['beam']);
+    expect(eventsOfType(hitPlayer(world), 'player-hit')).toHaveLength(1);
+    expect(world.player.alive).toBe(false);
+
+    // The wait itself is served — the timer runs down as it always does — and the
+    // fighter still does not appear, because the field is not safe to step onto.
+    run(world, world.rules.player.respawnFrames + 1);
+    expect(world.player.respawnTimer).toBe(0);
+    expect(world.player.alive).toBe(false);
+    expect(beamIsOut(world.capture)).toBe(true);
+
+    // And the hold is bounded: a beam that catches nothing always retracts and
+    // releases, so the fighter comes back on its own rather than waiting forever.
+    const events = runUntil(world, (live) => live.player.alive, { limit: 600 });
+    expect(beamIsOut(world.capture)).toBe(false);
+    expect(eventsOfType(events, 'player-ready')).toHaveLength(1);
+  });
+
+  it('never announces a fighter ready while a beam is over the playfield', () => {
+    // The invariant the whole fix is: a replacement fighter arrives at one fixed
+    // column, so arriving underneath an open beam means being taken on the frame
+    // it appears, with no frame in which to move. Played out over a long run with
+    // the fighter shot down again and again, so it is the *rule* that is asserted
+    // and not one arrangement of it.
+    const world = armedWorld({ rules: beamOutlastsRespawn(), seed: 'ready-under-beam' });
+    let arrivals = 0;
+    for (let frame = 0; frame < 4_000; frame += 1) {
+      const events = stepWorld(world, EMPTY_FRAME);
+      for (const event of events) {
+        if (event.type !== 'player-ready') continue;
+        arrivals += 1;
+        expect(beamIsOut(world.capture)).toBe(false);
+      }
+      // Shoot the fighter down whenever it is up, so the run is a stream of
+      // arrivals rather than one.
+      if (world.player.alive && frame % 90 === 0) hitPlayer(world);
+    }
+    expect(arrivals).toBeGreaterThan(4);
   });
 });
 

@@ -333,6 +333,21 @@ ids are per stage**. `CaptureState.captiveId` is cleared on every stage entry an
 set again only if a captive is actually placed, because a stale id is some other
 enemy's number next stage — and shooting _that_ would release the channel.
 
+**An attempt outlives the fighter it was aimed at, and the three capture goldens
+cannot see that.** A capture dive is a committed swoop — the captor takes its aim
+once, where `aimAtPlayer` begins — so killing the fighter in between leaves a beam
+open over the column it died in, and the channel rightly stays busy (the ROM's
+flag is not cleared by the player dying; the reference enumerates every write that
+does clear it). The replacement therefore waits: `resolveRespawn` serves the timer
+and then holds the fighter off the field while `beamIsOut`, or it arrives at its
+one fixed column underneath a full-extension beam and is taken on the frame it
+appears. **`capture-beam`, `capture-rescue` and `dual-fighter` all run on
+`unbombedCabinet` — `maxBullets` 0, `collision` off — so the beam is the only
+thing in them that can cost a fighter, and any capture bug needing a death
+mid-attempt is unreachable in all three.** `tests/e2e/capture.spec.ts` plays the
+real browser for exactly that reason; when you touch this channel, ask what the
+bombs-off cabinet is hiding.
+
 ## Audio is the other side of that boundary
 
 `src/audio/synth.ts` is in two halves on purpose: `buildSoundPlan` is pure and

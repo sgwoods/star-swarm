@@ -25,6 +25,15 @@ The clips are screen recordings of the dev build.
   attacking, spins in and docks as a second ship. Played back from the committed
   `dual-fighter` golden replay through the real simulation and the real renderer,
   so the clip is the golden — fast-forwarded to the capture and cut at the dock.
+- `m2-capture-live.gif` — a capture in **live play** rather than from a replay:
+  the dev build in a browser, the shipped three-fighter cabinet, stage 1, with
+  bombs and bodies live. A Warden slides down and opens its beam, the beam takes
+  the fighter and drags it up into the captive slot, the captured fighter parks
+  at the top of the formation, and the **next fighter comes back and play carries
+  on** — which is the part that was broken. Recorded unedited at 20 fps by
+  grabbing the presenting canvas back down to the logical 224x288 playfield, so
+  the pixels are the game's own. The companion to `m2-capture.gif`: that one is
+  the golden, this one is the game.
 - `m2-challenge.gif` — the first challenge stage played to a perfect and the
   between-stage card that follows it: forty enemies in five groups of eight
   flying scripted convoys and **leaving without attacking**, the fighter standing
