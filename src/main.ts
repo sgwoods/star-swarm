@@ -23,6 +23,7 @@ import { createDisplay, LOGICAL_HEIGHT, LOGICAL_WIDTH } from './render/canvas.js
 import { drawScene } from './render/scene.js';
 import { createSpriteSheet } from './render/sprites.js';
 import { createStarfield } from './render/starfield.js';
+import { beamCaptor, capturedFighter } from './sim/capture.js';
 import { aliveEnemies } from './sim/enemies.js';
 import type { SimEvent } from './sim/events.js';
 import { drawAttract } from './ui/attract.js';
@@ -242,6 +243,25 @@ declare global {
       readonly stage: number;
       readonly lives: number;
       readonly playerX: number;
+      readonly playerY: number;
+      readonly playerAlive: boolean;
+      readonly playerMode: string;
+      /**
+       * The capture channel, flattened: which phase it is in, where the captor
+       * holding a beam is, and whether a captured fighter is on the field.
+       *
+       * Here because the capture goldens run headlessly and the browser is the
+       * path they cannot see — `tests/e2e/capture.spec.ts` plays a whole capture
+       * through this page and needs somewhere to aim.
+       */
+      readonly capture: {
+        readonly phase: string;
+        readonly beamStep: number;
+        readonly captorX: number | undefined;
+        readonly captorY: number | undefined;
+        readonly captiveId: number | undefined;
+        readonly captiveOnField: boolean;
+      };
       /** Enemies still on the field, and how many of them have reached their slot. */
       readonly enemiesAlive: number;
       readonly enemiesHome: number;
@@ -295,6 +315,34 @@ window.starSwarm = {
   },
   get playerX(): number {
     return flow.world.player.x;
+  },
+  get playerY(): number {
+    return flow.world.player.y;
+  },
+  get playerAlive(): boolean {
+    return flow.world.player.alive;
+  },
+  get playerMode(): string {
+    return flow.world.player.mode;
+  },
+  get capture(): {
+    phase: string;
+    beamStep: number;
+    captorX: number | undefined;
+    captorY: number | undefined;
+    captiveId: number | undefined;
+    captiveOnField: boolean;
+  } {
+    const world = flow.world;
+    const captor = beamCaptor(world.capture, world.fleet);
+    return {
+      phase: world.capture.phase,
+      beamStep: world.capture.beamStep,
+      captorX: captor?.x,
+      captorY: captor?.y,
+      captiveId: world.capture.captiveId,
+      captiveOnField: capturedFighter(world.capture, world.fleet) !== undefined,
+    };
   },
   get enemiesAlive(): number {
     return aliveEnemies(flow.world.fleet.enemies).length;

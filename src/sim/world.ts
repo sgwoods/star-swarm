@@ -39,6 +39,7 @@ import { createRng, type Rng, type RngState } from '../engine/rng.js';
 import type { CaptureState } from './capture.js';
 import {
   beamHasFighter,
+  beamIsOut,
   captureAllowsFire,
   captureFingerprint,
   captureNoteDestroyed,
@@ -540,6 +541,12 @@ function resolveRespawn(world: World): void {
   world.player.respawnTimer -= 1;
   if (world.player.respawnTimer > 0) return;
   world.player.respawnTimer = 0;
+  // The wait is served, but the field may not be safe to step onto: a beam still
+  // out is aimed at the column the last fighter died in, and the next one always
+  // arrives at the same column. Put it there now and the catch test takes it on
+  // the frame it appears, with no frame in which to move — see {@link beamIsOut}.
+  // The hold is bounded: a beam that catches nothing retracts and releases.
+  if (beamIsOut(world.capture)) return;
   world.player.alive = true;
   world.player.x = startX(world.rules, world.player.mode);
   // And back onto its own row: a tractor beam is the one thing that moves the

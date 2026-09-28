@@ -219,6 +219,33 @@ export function beamHasFighter(state: CaptureState): boolean {
 }
 
 /**
+ * Is a beam out over the playfield — extended, or already dragging the fighter?
+ *
+ * Asked by `resolveRespawn` in `src/sim/world.ts`, and the reason it has to be
+ * asked at all is that a capture attempt is a **committed swoop**: the captor
+ * takes its aim once, at the frame its `aimAtPlayer` segment begins, and opens
+ * its beam where that aim pointed whatever has happened since. Destroy the
+ * fighter in between — a bomb, a body, anything — and the beam still comes out
+ * over the column the fighter died in, and holds there for the rest of its
+ * extend/hold/retract cycle.
+ *
+ * The replacement fighter arrives at a *fixed* column (`startX`), so it can
+ * materialise inside that window with no frame in which to move: the catch test
+ * runs on the very step it arrives. The channel is right to still be busy — the
+ * arcade's capture flag is not cleared by the player dying, and
+ * `docs/reference/arcade-reference.md` section 7 enumerates every ROM write that
+ * does clear it — so this is not a release. It is the *other* half: a fighter
+ * does not walk onto the field underneath a beam that is already open.
+ *
+ * **Provisional.** The reference does not cover what a replacement fighter does
+ * while a beam is out; this is the player-favourable reading, and it is bounded
+ * because a beam that catches nothing always retracts and releases.
+ */
+export function beamIsOut(state: CaptureState): boolean {
+  return state.phase === 'beam' || state.phase === 'carrying';
+}
+
+/**
  * May the player fire?
  *
  * "Once the boss has connected with your ship, your fire is disabled" — the

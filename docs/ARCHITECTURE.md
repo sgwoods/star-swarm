@@ -202,6 +202,19 @@ ship you fly alongside.
 That clip is a golden replay played back through the real simulation and the real
 renderer, so what it shows is the recorded run rather than a staged one.
 
+An attempt is a **committed swoop**: the captor takes its aim once, at the frame
+its `aimAtPlayer` segment begins, and opens its beam where that aim pointed
+whatever has happened since. So destroying the fighter in between — a bomb, a
+body — leaves a beam open over the column it died in, and the channel stays busy,
+because the arcade's capture flag is not cleared by the player dying. The
+replacement fighter therefore waits: `resolveRespawn` serves the respawn timer as
+usual but holds the fighter off the field until the beam has retracted
+(`beamIsOut` in `src/sim/capture.ts`). Without that hold it arrives at its one
+fixed column underneath a beam already at full extension and is taken on the
+frame it appears. The hold is bounded — a beam that catches nothing always
+retracts and releases — and the beam stays on screen throughout, so the pause
+reads as the beam passing rather than as a stall.
+
 **A challenge stage and its card.** Forty enemies in five groups of eight fly
 scripted convoys and leave without ever attacking; the stage then ends on the
 between-stage card, with the hit count and the end-of-stage award.
