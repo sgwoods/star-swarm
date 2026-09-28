@@ -205,6 +205,46 @@ Two consequences worth knowing before editing either:
   gate, and still leave the game a blank page. Bundle the whole tree; never a
   list of the files someone remembered.
 
+## A variant is a game; a pack is content for one
+
+`variants/<id>.json` declares one game the player may start: a display name, the
+packs it layers and the difficulty presets it offers. `src/content/variants.ts`
+holds the schema and the two-pass load, and is the only place a variant is
+interpreted. Adding a game is adding a document — nothing under `src/` names a
+variant, a pack or a rank, and the Classic game is `variants/classic.json` rather
+than a default anything falls back to.
+
+Four things to know before editing either side of it:
+
+- **A variant selects; it never overrides.** There is no mechanism for patching a
+  rules field, deliberately: rules are a whole document from a pack, because a
+  variant that could nudge single numbers is a difficulty multiplier with a
+  different name. The player-settings difficulty preset is the same rule seen from
+  the other end — it chooses a **rank** and does nothing else, and the rank has to
+  reach `createStageSource` as well as `createWorld`, because a rank selects the
+  entry-wave sequence too.
+- **"Later wins" covers the manifest and the rules, not just the content maps.**
+  `composeManifest` in `src/content/registry.ts` layers manifest fields one at a
+  time — records merge per key, the palette is a union, badges and each half of the
+  stage sequence are replaced by the last pack to state one — and rules are the last
+  pack that ships any. A one-pack registry is unchanged by all of it, which is what
+  keeps this a generalisation rather than a second rule.
+- **An overlay pack may replace a document, not reference one.** `loadPack`
+  resolves references _within_ a pack, so an overlay can ship a different sprite,
+  sound or sound-free path under an existing id — and cannot ship a stage naming
+  the base pack's aliens. `packs/swarm-remix/` is the demonstration and stays
+  inside that line; `docs/ARCHITECTURE.md` §4.5 records the limit.
+- **`variants/` is read two ways, like `packs/`**, and for the same reason:
+  `readVariantSources` in `src/content/fs.ts` for the validator and the tests,
+  `bundledVariantSources` in `src/content/bundle.ts` for the browser, held to each
+  other by `tests/unit/bundled-packs.test.ts`.
+
+Player settings live in `src/ui/settings.ts` and persist through
+`src/ui/storage.ts` — the one `KeyedStorage` the high-score table uses too, which
+catches on every path so that blocked site data degrades to defaults instead of
+throwing. The menu in `src/ui/menus.ts` **applies nothing**: a row writes a patch
+and `src/main.ts` is the one place a setting has consequences.
+
 ## Enemies address the formation; the formation is sixteen numbers
 
 A formation is `N` column X coordinates and `M` row Y coordinates —
@@ -456,11 +496,13 @@ Two consequences when working here:
   byte-to-pixels conversion is in `src/render/starfield.ts` — so `provenance` cannot
   reach it and a `check:count` counter reading the module is what holds the state
   document to it instead.
-- The game boots into **attract mode**, not into play: `src/ui/flow.ts` is the
-  one state machine — attract, playing, the between-stage challenge card, game
-  over, results and high-score entry <!-- check:count flow.phases 6 --> — and
-  `src/main.ts` only calls `flow.step(frame)` and draws the phase. Anything
-  driving the browser has to push start first — that is what `startGame()` in
+- The game boots into the **start-up selector** when more than one variant ships
+  and into **attract mode** otherwise, never into play: `src/ui/flow.ts` is the
+  one state machine — variant-select, attract, settings, playing, the between-stage
+  challenge card, game over, results and high-score entry
+  <!-- check:count flow.phases 8 --> — and `src/main.ts` only calls
+  `flow.step(frame)` and draws the phase. Anything driving the browser has to get
+  past the selector and push start — that is what `startGame()` in
   `tests/e2e/smoke.spec.ts` is for — and every phase timer counts **simulation
   steps**, never the wall clock. The attract demo is the real simulation played
   through `src/engine/replay.ts`, so it cannot drift from the game.
@@ -486,6 +528,11 @@ Two consequences when working here:
   of screen and no single-position test notices;
   `tests/unit/classic-paths.test.ts` flies each one from six slots for that
   reason. `/lab` starts such a path at its slot marker, so a dive previews there.
+- `ACTIONS` in `src/engine/input.ts` is **append-only**: `ACTION_BIT` is
+  `1 << index` and a golden replay on disk is a list of those masks, so a new
+  action takes the next free bit and changes nothing, while inserting or reordering
+  silently reinterprets every log in `tests/sim/golden/`. `menu` is the fifth and is
+  the front end's alone — no simulation code reads it.
 - `/.scratch/` is git-, Prettier- and ESLint-ignored: put probe scripts, one-off
   harnesses and video frames there rather than in `/tmp`, which sibling worktrees
   share.

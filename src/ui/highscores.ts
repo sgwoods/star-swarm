@@ -4,13 +4,10 @@
  *
  * Two halves, and the split is the point:
  *
- * - {@link HighScoreStorage} is the whole of what this module knows about
- *   persistence: two methods over a string. `localStorage` is not available in
- *   every browser state — a private window, blocked site data, a cookie policy
- *   that makes the *property access itself* throw — and a blocked storage API
- *   must never take the game down. So the board is built over an interface, the
- *   browser implementation catches on every path, and the fallback is an
- *   in-memory table that behaves identically for one session.
+ * - {@link KeyedStorage} — now in `./storage.ts`, because the player's settings
+ *   persist the same way — is the whole of what this module knows about
+ *   persistence: two methods over a string, neither of which may throw. A blocked
+ *   storage API must never take the game down.
  * - {@link HighScoreBoard} is ordering and insertion, and knows nothing about
  *   where the bytes go. It is therefore testable on the Node environment that
  *   `tests/unit/` runs, without a DOM.
@@ -22,6 +19,7 @@
 
 import { drawText, measureText } from '../render/text.js';
 import { drawCentredPanel } from './panel.js';
+import { createMemoryStorage, type KeyedStorage } from './storage.js';
 
 /** One row of the table. */
 export interface HighScoreEntry {
@@ -45,7 +43,7 @@ export const INITIALS_LENGTH = 3;
 export const INITIALS_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ.-';
 
 /** Key the browser implementation stores under. */
-export const STORAGE_KEY = 'star-swarm/high-scores/v1';
+export const HIGH_SCORE_STORAGE_KEY = 'star-swarm/high-scores/v1';
 
 /**
  * The table a machine ships with, so the attract screen has something to show
@@ -60,120 +58,6 @@ export const DEFAULT_HIGH_SCORES: readonly HighScoreEntry[] = Object.freeze([
   { initials: 'DDD', score: 10_000, stage: 5 },
   { initials: 'EEE', score: 5_000, stage: 3 },
 ]);
-
-/**
- * Everything the board needs from a place to keep bytes.
- *
- * Neither method may throw: an implementation that cannot read says so by
- * returning `undefined`, and one that cannot write says so by returning `false`.
- */
-export interface HighScoreStorage {
-  /** The stored document, or `undefined` when there is none or it is unreadable. */
-  load: () => string | undefined;
-  /** Persist. `false` means the write did not stick; the caller carries on. */
-  save: (text: string) => boolean;
-  /** False for the in-memory fallback, so the UI can say the table is session-only. */
-  readonly persistent: boolean;
-}
-
-/** The slice of the Web Storage API this needs. */
-export interface WebStorageLike {
-  getItem: (key: string) => string | null;
-  setItem: (key: string, value: string) => void;
-}
-
-/** A table that lives as long as the tab. The fallback, and useful in tests. */
-export function createMemoryStorage(initial?: string): HighScoreStorage {
-  let held: string | undefined = initial;
-  return {
-    load: () => held,
-    save(text: string): boolean {
-      held = text;
-      return true;
-    },
-    persistent: false,
-  };
-}
-
-export interface WebStorageOptions {
-  readonly key?: string;
-  /**
-   * How to reach the store. Called on every access rather than once, because a
-   * browser can revoke it between calls. Defaults to `globalThis.localStorage`,
-   * read inside a `try` — reading the property is itself what throws when site
-   * data is blocked.
-   */
-  readonly resolve?: () => WebStorageLike | undefined;
-}
-
-function defaultResolve(): WebStorageLike | undefined {
-  try {
-    const store: unknown = (globalThis as { localStorage?: unknown }).localStorage;
-    if (store === null || store === undefined) return undefined;
-    const candidate = store as Partial<WebStorageLike>;
-    if (typeof candidate.getItem !== 'function' || typeof candidate.setItem !== 'function') {
-      return undefined;
-    }
-    return candidate as WebStorageLike;
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * Browser-backed storage that degrades instead of throwing.
- *
- * If the store is missing or any call throws, this falls back to an in-memory
- * table for the rest of the session and reports `persistent: false`. The game
- * keeps its high scores for as long as the tab lives and never sees an error.
- */
-export function createWebStorage(options: WebStorageOptions = {}): HighScoreStorage {
-  const { key = STORAGE_KEY, resolve = defaultResolve } = options;
-  const fallback = createMemoryStorage();
-  let usable = resolve() !== undefined;
-
-  return {
-    load(): string | undefined {
-      // Once anything has failed, the in-memory table is the newer of the two:
-      // it took every write the browser refused, so it is what to read back.
-      if (!usable) return fallback.load();
-      const store = resolve();
-      if (store === undefined) {
-        usable = false;
-        return fallback.load();
-      }
-      try {
-        return store.getItem(key) ?? fallback.load();
-      } catch {
-        usable = false;
-        return fallback.load();
-      }
-    },
-
-    save(text: string): boolean {
-      fallback.save(text);
-      if (!usable) return false;
-      const store = resolve();
-      if (store === undefined) {
-        usable = false;
-        return false;
-      }
-      try {
-        store.setItem(key, text);
-        return true;
-      } catch {
-        // A quota error or a blocked write: the session keeps its table, the
-        // next run does not.
-        usable = false;
-        return false;
-      }
-    },
-
-    get persistent(): boolean {
-      return usable;
-    },
-  };
-}
 
 /** The document shape on disk. Bumped if the shape ever changes. */
 const DOCUMENT_VERSION = 1;
@@ -257,7 +141,7 @@ export interface HighScoreBoard {
 }
 
 export interface HighScoreBoardOptions {
-  readonly storage?: HighScoreStorage;
+  readonly storage?: KeyedStorage;
   readonly capacity?: number;
   /** Table used when storage holds nothing. Defaults to {@link DEFAULT_HIGH_SCORES}. */
   readonly defaults?: readonly HighScoreEntry[];

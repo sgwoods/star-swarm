@@ -1,0 +1,6 @@
+{
+  "id": "swarm-remix",
+  "name": "Swarm Remix",
+  "version": "0.1.0",
+  "description": "A demonstration overlay, not a game anyone has committed to. It states nothing but the three documents it replaces: a different drone dive, a different fire sound and a differently coloured player shot. Everything else - the roles, the forty-slot formation, the stage sequence, the badges, the palette and the whole of rules.json - it inherits from the pack it is layered over."
+}

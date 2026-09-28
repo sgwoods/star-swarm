@@ -21,6 +21,7 @@
 
 import type { PackDocument, PackSource } from './loader.js';
 import { CONTENT_DIRS } from './schema.js';
+import type { VariantSource } from './variants.js';
 
 /**
  * Every JSON file under `packs/`, keyed by its path from the project root.
@@ -29,6 +30,18 @@ import { CONTENT_DIRS } from './schema.js';
  * a lazily-imported pack would make `loadPack` async for no gain.
  */
 const PACK_FILES = import.meta.glob<unknown>('/packs/**/*.json', {
+  eager: true,
+  import: 'default',
+});
+
+/**
+ * Every variant document, keyed by its path from the project root.
+ *
+ * A glob rather than a list, for the reason this file's header gives: the whole
+ * point of a variant is that adding one is adding a file, and a remembered list
+ * is exactly how a file stops being enough.
+ */
+const VARIANT_FILES = import.meta.glob<unknown>('/variants/*.json', {
   eager: true,
   import: 'default',
 });
@@ -93,4 +106,19 @@ export function bundledPackSources(): Map<string, PackSource> {
 /** One bundled pack by directory name, or `undefined` if it is not in the tree. */
 export function bundledPackSource(name: string): PackSource | undefined {
   return collect().get(name);
+}
+
+/**
+ * Every bundled variant document, in file order. Nothing is validated yet — that
+ * is `loadVariants`. The filesystem twin is `readVariantSources` in `./fs.ts`,
+ * and `tests/unit/bundled-packs.test.ts` holds the two to each other.
+ */
+export function bundledVariantSources(): VariantSource[] {
+  const sources: VariantSource[] = [];
+  for (const [fullPath, value] of Object.entries(VARIANT_FILES)) {
+    const file = fullPath.split('/').pop();
+    if (file === undefined || !file.endsWith('.json')) continue;
+    sources.push({ file, value });
+  }
+  return sources.sort((a, b) => a.file.localeCompare(b.file));
 }

@@ -1,4 +1,6 @@
-import { expect, type Page, test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+
+import { startGame } from './harness.js';
 
 /**
  * Smoke test: the dev build loads, the canvas exists, and it is presenting the
@@ -12,18 +14,6 @@ import { expect, type Page, test } from '@playwright/test';
 
 const LOGICAL_WIDTH = 224;
 const LOGICAL_HEIGHT = 288;
-
-/**
- * Put a game on the screen.
- *
- * The cabinet boots into attract mode (`src/ui/flow.ts`), so a test that wants
- * to drive the ship has to push start first — exactly as a player does.
- */
-async function startGame(page: Page): Promise<void> {
-  await page.waitForFunction(() => (window.starSwarm?.step ?? 0) > 0);
-  await page.keyboard.press('Enter');
-  await page.waitForFunction(() => window.starSwarm?.phase === 'playing');
-}
 
 test('the game canvas is present and correctly sized', async ({ page }) => {
   const errors: string[] = [];
@@ -143,7 +133,6 @@ test('the display relayouts on resize without distorting', async ({ page }) => {
 });
 
 test('a keypress in the browser reaches the simulation', async ({ page }) => {
-  await page.goto('/');
   await startGame(page);
 
   const start = await page.evaluate(() => window.starSwarm?.playerX ?? 0);
@@ -169,7 +158,6 @@ test('a keypress in the browser reaches the simulation', async ({ page }) => {
 });
 
 test('the entry waves fly in and fill the formation', async ({ page }) => {
-  await page.goto('/');
   await startGame(page);
 
   expect(await page.evaluate(() => window.starSwarm?.stage)).toBe(1);
@@ -190,7 +178,6 @@ test('the entry waves fly in and fill the formation', async ({ page }) => {
 });
 
 test('holding fire scores against the formation', async ({ page }) => {
-  await page.goto('/');
   await startGame(page);
 
   // Auto-fire: the button goes down once and stays down, as it does in the

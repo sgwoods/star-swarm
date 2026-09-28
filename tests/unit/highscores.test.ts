@@ -3,19 +3,21 @@ import { describe, expect, it } from 'vitest';
 import {
   createHighScoreBoard,
   createInitialsEntry,
-  createMemoryStorage,
-  createWebStorage,
   DEFAULT_HIGH_SCORES,
   formatTableScore,
-  type HighScoreEntry,
-  type HighScoreStorage,
   HIGH_SCORE_CAPACITY,
+  HIGH_SCORE_STORAGE_KEY,
+  type HighScoreEntry,
   INITIALS_ALPHABET,
   normaliseInitials,
   parseHighScores,
-  STORAGE_KEY,
-  type WebStorageLike,
 } from '../../src/ui/highscores.js';
+import {
+  createMemoryStorage,
+  createWebStorage,
+  type KeyedStorage,
+  type WebStorageLike,
+} from '../../src/ui/storage.js';
 
 /** A table with room to spare, so insertion is visible without truncation. */
 const TABLE: readonly HighScoreEntry[] = [
@@ -173,11 +175,14 @@ describe('storage that is not there', () => {
         map.set(key, value);
       },
     };
-    const storage: HighScoreStorage = createWebStorage({ resolve: () => fake });
+    const storage: KeyedStorage = createWebStorage({
+      key: HIGH_SCORE_STORAGE_KEY,
+      resolve: () => fake,
+    });
     expect(storage.persistent).toBe(true);
     createHighScoreBoard({ storage, defaults: TABLE }).submit('WIN', 50_000, 11);
-    expect(map.has(STORAGE_KEY)).toBe(true);
-    expect(parseHighScores(map.get(STORAGE_KEY))?.[0]?.initials).toBe('WIN');
+    expect(map.has(HIGH_SCORE_STORAGE_KEY)).toBe(true);
+    expect(parseHighScores(map.get(HIGH_SCORE_STORAGE_KEY))?.[0]?.initials).toBe('WIN');
   });
 
   it('works with no arguments on a host that has no browser storage', () => {

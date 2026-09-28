@@ -5,6 +5,9 @@
  *
  * Used by `scripts/validate-packs.ts` and by tests. The browser gets its packs
  * through `packSourceFromRecord` over a bundled `import.meta.glob` instead.
+ *
+ * It reads `variants/` too ({@link readVariantSources}), for the same reason and
+ * with the same twin in `./bundle.ts`.
  */
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -13,6 +16,7 @@ import { basename, join } from 'node:path';
 import type { ContentError } from './errors.js';
 import type { PackDocument, PackSource } from './loader.js';
 import { CONTENT_DIRS } from './schema.js';
+import { VARIANTS_GROUP, type VariantSource } from './variants.js';
 
 /** Files that are bookkeeping rather than content. */
 const IGNORED_FILES = new Set(['.gitkeep', '.DS_Store', 'README.md']);
@@ -108,4 +112,56 @@ export function listPackDirs(packsRoot: string): string[] {
   return listDir(packsRoot)
     .map((name) => join(packsRoot, name))
     .filter(isDirectory);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Variants                                                                    */
+/* -------------------------------------------------------------------------- */
+
+export interface ReadVariantsResult {
+  readonly sources: readonly VariantSource[];
+  /** JSON that would not parse. Reported before schemas run, as for a pack. */
+  readonly errors: readonly ContentError[];
+}
+
+/**
+ * Read every `variants/*.json` into the shape `loadVariants` takes.
+ *
+ * An absent or empty directory is not an error here: a repository with no
+ * variant documents has no games to offer, which `scripts/validate-packs.ts`
+ * reports and `src/main.ts` refuses to boot on — but it is not a *malformed*
+ * tree, and this reader only reads.
+ */
+export function readVariantSources(variantsRoot: string): ReadVariantsResult {
+  if (!isDirectory(variantsRoot)) return { sources: [], errors: [] };
+
+  const sources: VariantSource[] = [];
+  const errors: ContentError[] = [];
+
+  for (const name of listDir(variantsRoot)) {
+    const path = join(variantsRoot, name);
+    if (isDirectory(path) || !name.endsWith('.json')) continue;
+    let text: string;
+    try {
+      text = readFileSync(path, 'utf8');
+    } catch (error) {
+      errors.push({
+        pack: VARIANTS_GROUP,
+        file: name,
+        message: `could not be read: ${error instanceof Error ? error.message : String(error)}`,
+      });
+      continue;
+    }
+    try {
+      sources.push({ file: name, value: JSON.parse(text) });
+    } catch (error) {
+      errors.push({
+        pack: VARIANTS_GROUP,
+        file: name,
+        message: `invalid JSON: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+  }
+
+  return { sources, errors };
 }
