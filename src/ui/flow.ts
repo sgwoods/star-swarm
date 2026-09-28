@@ -1,7 +1,7 @@
 /**
  * The game-state machine (docs/DESIGN.md section 4, "Game flow").
  *
- * One explicit machine rather than flags spread through the loop. There are eight
+ * One explicit machine rather than flags spread through the loop. There are ten
  * phases and every transition is named here:
  *
  * ```
@@ -13,6 +13,10 @@
  *                                    └── start/menu ──▶ attract ◀── no ◀── qualifies?
  *                                                          ▲                │ yes
  *                                                          └─ submitted ◀── high-score-entry
+ *
+ *   playing ──pause──▶ paused ──pause──▶ playing
+ *      │                  │  ▲
+ *      └──── exit ────────┴──┴── exit-confirm ──exit chosen──▶ attract (the run is gone)
  * ```
  *
  * `challenge-results` is the original's between-stage screen, and it is the one
@@ -22,7 +26,7 @@
  * "playing" sometimes means "not stepping the world" is the thing this file
  * exists to avoid.
  *
- * The two phases Milestone 3 adds are here for the same reason and no other:
+ * The two phases the variant work added are here for the same reason and no other:
  *
  * - **`variant-select`** lists the games this build offers and starts the chosen
  *   one. It is entered at boot **only when there is more than one**; with exactly
@@ -34,6 +38,26 @@
  *   saying "attract, but not responding to start" is exactly the shape this file
  *   refuses, so it is a phase: it takes input exclusively and the world behind it
  *   is not stepped.
+ *
+ * The two after them are the pause and the way out, and they are phases for the
+ * third time for the same reason — a boolean `paused` beside `phase` is "playing,
+ * but not stepping the world", which is the shape above:
+ *
+ * - **`paused`** is the game held. Pausing is a flow concern and nothing else:
+ *   `src/sim/` has no notion of being paused, it is simply not stepped, and the
+ *   frame that carried the press was stepped before the phase changed. So the
+ *   simulation sees exactly the frames it would have seen had nobody paused —
+ *   the resume frame is the flow's, the way the start frame in attract is — and a
+ *   resumed run continues bit for bit. `tests/unit/flow.test.ts` asserts that
+ *   against an unpaused run of the same frames.
+ * - **`exit-confirm`** asks before a run in progress is thrown away, and it is
+ *   entered **through** the pause: `exit` stops the game on the frame it is
+ *   pressed and the card comes up over a world that is no longer moving, so the
+ *   question is never answered under fire. Cancelling lands in `paused`, which is
+ *   where an ordinary pause lands, so resuming is one path and not two. Choosing
+ *   to leave discards the run — the score does not reach the high-score table —
+ *   which is why the card says the score out loud and says when it would have
+ *   taken a place. Nothing here is silent, and nothing here is one keypress.
  *
  * Three properties this file exists to keep:
  *
@@ -72,6 +96,7 @@ import {
   type SettingsMenu,
   type VariantMenu,
 } from './menus.js';
+import { createExitConfirm, type ExitConfirm } from './pause.js';
 import { countEvents, EMPTY_STATS, type ResultRow, resultRows, type RunStats } from './results.js';
 import { DEFAULT_SETTINGS, type Settings, type SettingsStore } from './settings.js';
 
@@ -80,6 +105,8 @@ export type GamePhase =
   | 'attract'
   | 'settings'
   | 'playing'
+  | 'paused'
+  | 'exit-confirm'
   | 'challenge-results'
   | 'game-over'
   | 'results'
@@ -221,6 +248,8 @@ export interface GameFlow {
   readonly variantMenu: VariantMenu<FlowVariant> | undefined;
   /** The settings rows, present only during `settings`. */
   readonly settingsMenu: SettingsMenu | undefined;
+  /** The exit confirmation's cursor, present only during `exit-confirm`. */
+  readonly exitConfirm: ExitConfirm | undefined;
   /** Rows the results screen shows for the run just played. */
   resultRows: () => readonly ResultRow[];
   /** Advance exactly one simulation step with one input frame. */
@@ -346,6 +375,7 @@ export function createGameFlow(options: FlowOptions): GameFlow {
   let previous: InputFrame = 0;
   let variantMenu: VariantMenu<FlowVariant> | undefined;
   let settingsMenu: SettingsMenu | undefined;
+  let confirm: ExitConfirm | undefined;
   /** Where the settings screen returns to. */
   let settingsFrom: GamePhase = 'attract';
 
@@ -434,6 +464,41 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     enter('variant-select');
   };
 
+  /**
+   * Stop the game and ask whether to leave it.
+   *
+   * Called from `playing` *after* the step for that frame has run and from
+   * `paused`, which is the whole of the captain's ordering: the world is already
+   * still by the time the card is on screen, so nothing can happen to the fighter
+   * while the question is open.
+   */
+  const openExitConfirm = (): void => {
+    confirm = createExitConfirm();
+    enter('exit-confirm');
+  };
+
+  /**
+   * Throw the run away and go home.
+   *
+   * **Home is attract**, in both cabinets. The selector is a boot-time screen —
+   * with one variant installed it is never entered at all — so "the screen the
+   * game came from" is not a thing that exists for every build; attract is, and it
+   * is already where a finished game ends up. A player who wants the list takes
+   * the settings screen's `GAME` row, exactly as they do between games.
+   *
+   * The run is **discarded**: the score does not reach the high-score table, and
+   * the stats go back to empty so nothing downstream can show a run nobody
+   * finished. Not silently, though — `drawExitConfirm` says the score and says
+   * when it would have taken a place, which is the whole reason the confirmation
+   * exists.
+   */
+  const abandonRun = (): void => {
+    game = undefined;
+    stats = EMPTY_STATS;
+    lastRank = undefined;
+    enter('attract');
+  };
+
   if (phase === 'variant-select') openVariantSelect();
 
   return {
@@ -486,6 +551,9 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     },
     get settingsMenu(): SettingsMenu | undefined {
       return phase === 'settings' ? settingsMenu : undefined;
+    },
+    get exitConfirm(): ExitConfirm | undefined {
+      return phase === 'exit-confirm' ? confirm : undefined;
     },
 
     resultRows: () => resultRowsFor(stats),
@@ -562,14 +630,63 @@ export function createGameFlow(options: FlowOptions): GameFlow {
             enter('attract');
             break;
           }
+          // The step comes first, and the pause is decided on what it produced.
+          // That is what makes a pause cost the simulation nothing: the frame
+          // carrying the press is an ordinary frame, so the world sees exactly
+          // the frames it would have seen had nobody pressed anything, and the
+          // resume frame is the flow's — the way the start frame in attract is.
           events = stepWorld(world, frame);
           stats = countEvents(stats, events);
           // Game over first: a challenge stage cannot end on the same step as a
-          // game over, but if the two ever met, the run being over wins.
+          // game over, but if the two ever met, the run being over wins. Either
+          // beats a pause asked for on the same frame, because there is no longer
+          // a game to hold.
           if (events.some((event) => event.type === 'game-over')) {
             enter('game-over');
           } else if (events.some((event) => event.type === 'challenge-ended')) {
             enter('challenge-results');
+          } else if (wasPressed(previous, frame, 'exit')) {
+            openExitConfirm();
+          } else if (wasPressed(previous, frame, 'pause')) {
+            enter('paused');
+          }
+          break;
+        }
+
+        case 'paused': {
+          // Nothing is stepped here — not the game, not the demo. That is the
+          // whole of what pausing is, and it is why `src/sim/` never learns of it.
+          if (wasPressed(previous, frame, 'exit')) {
+            openExitConfirm();
+            break;
+          }
+          if (wasPressed(previous, frame, 'pause')) enter('playing');
+          break;
+        }
+
+        case 'exit-confirm': {
+          const choice = confirm;
+          if (choice === undefined) {
+            enter('paused');
+            break;
+          }
+          if (wasPressed(previous, frame, 'left')) choice.previous();
+          if (wasPressed(previous, frame, 'right')) choice.next();
+          // The key that opened the card also closes it, so holding or
+          // double-tapping the exit key can never be the press that ends a run;
+          // the service button is a second way back for the same reason.
+          if (wasPressed(previous, frame, 'exit') || wasPressed(previous, frame, 'menu')) {
+            confirm = undefined;
+            enter('paused');
+            break;
+          }
+          if (wasPressed(previous, frame, 'fire')) {
+            const chosen = choice.choice;
+            confirm = undefined;
+            // Cancelling lands where an ordinary pause lands, so there is one
+            // way to resume and not two.
+            if (chosen === 'exit') abandonRun();
+            else enter('paused');
           }
           break;
         }

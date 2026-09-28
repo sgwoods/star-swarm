@@ -2,6 +2,7 @@
 
 `flow.ts` (the game-state machine), `attract.ts`, `hud.ts`, `results.ts`,
 `highscores.ts`, `menus.ts` (the start-up variant selector and the settings menu),
+`pause.ts` (the pause card and the one that asks before a run is thrown away),
 `settings.ts` (what the player has chosen), `storage.ts` (where it is kept),
 `panel.ts` (the plate every card sits on), `build-info.ts` and `build-stamp.ts`
 (which build is this, and is a newer one being served), and `lab/` (the `/lab`
@@ -13,14 +14,15 @@ and events and draws; it never writes back, and `src/sim/` never imports it.
 `hud.ts` landed with Milestone 1: score, reserve fighters and the stage badges.
 The front-end shell around it landed with Milestone 2:
 
-- **`flow.ts` is the one state machine.** Eight phases — the start-up variant
-  selector, attract, the settings menu, playing, the between-stage challenge card,
-  game over, results, high-score entry — and every transition is in that file.
-  `challenge-results` is the one that goes _back_ to playing: the stage is over and
-  the next is already on the field, so the world simply stops being stepped while
-  the card is up. That is why it is a phase and not a flag — "playing" must never
-  sometimes mean "not stepping the world" — and it is why the two menus are phases
-  too: "attract, but not responding to start" is the same mistake. A phase flag
+- **`flow.ts` is the one state machine.** Ten phases — the start-up variant
+  selector, attract, the settings menu, playing, paused, the exit confirmation, the
+  between-stage challenge card, game over, results, high-score entry — and every
+  transition is in that file. `challenge-results` is one of the two that go _back_
+  to playing: the stage is over and the next is already on the field, so the world
+  simply stops being stepped while the card is up. That is why it is a phase and
+  not a flag — "playing" must never sometimes mean "not stepping the world" — and
+  it is why the two menus are phases too, and why the pause is the third: a
+  `paused` boolean beside `phase` is exactly the shape being refused. A phase flag
   anywhere else is a bug: `src/main.ts` owns the display, the input device and the
   starfield, calls `flow.step(frame)` once per simulation step, and draws whatever
   phase says. Time is counted in **simulation steps**, never the wall clock, so a
@@ -92,6 +94,26 @@ Milestone 3's front-end half landed next:
   changes calls `write` with a patch, and `main.ts` is the one place a setting has
   consequences. Their rows are derived on every read, so a value changed elsewhere
   cannot leave a stale row on screen.
+
+And then the pause, which is two more phases and no simulation change at all:
+
+- **`pause.ts` draws two cards and decides nothing.** The pause card, and the one
+  that asks before a run in progress is thrown away. The confirmation is a value
+  with a cursor like both menus, and it opens on `RESUME` by construction rather
+  than by the caller's choice: confirming is destructive, so the safe default is a
+  property of the type.
+- **Pausing is a flow concern and `src/sim/` never hears about it.** `paused` is a
+  phase the world is not stepped in. The frame carrying the press is stepped
+  before the phase changes and the resume frame is the flow's, so the simulation
+  sees exactly the frames it would have seen unpaused and a resumed run continues
+  bit for bit — asserted against an unpaused run of the same frames, not against a
+  remembered fingerprint.
+- **`exit` pauses first and then asks**, so the question is never answered under
+  fire; cancelling lands in `paused`, which is where an ordinary pause lands.
+  Confirming discards the run — the score does not reach the high-score table —
+  and the card says the score, and the place it would have taken, so nothing is
+  discarded silently. Home is attract in both cabinets, because the selector is a
+  boot-time screen that a one-variant build never enters.
 
 Seams left for the tasks that follow, so they attach without editing a screen:
 

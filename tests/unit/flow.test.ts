@@ -5,6 +5,7 @@ import type { StageSource } from '../../src/content/stages.js';
 import type { DifficultyPreset } from '../../src/content/variants.js';
 import { EMPTY_FRAME, frameOf, type InputFrame } from '../../src/engine/input.js';
 import { launchEnemyBullet } from '../../src/sim/shots.js';
+import { fingerprintWorld } from '../../src/sim/world.js';
 import { createAttractDemo } from '../../src/ui/attract.js';
 import {
   createGameFlow,
@@ -13,6 +14,7 @@ import {
   type GameFlow,
 } from '../../src/ui/flow.js';
 import { createHighScoreBoard, type HighScoreEntry } from '../../src/ui/highscores.js';
+import { EMPTY_STATS, resultRows } from '../../src/ui/results.js';
 import {
   createSettingsStore,
   DEFAULT_SETTINGS,
@@ -853,5 +855,398 @@ describe('the attract demo follows the game it is demonstrating', () => {
     press(flow, MENU);
     // The volume moved, which the simulation knows nothing about.
     expect(flow.demo).toBe(before);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Pause, and the way out                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The captain's two controls: **P pauses, X exits — and X pauses first, then
+ * asks.**
+ *
+ * Four properties, in the order they matter:
+ *
+ * 1. **Pausing is a flow concern and nothing else.** The simulation has no notion
+ *    of being paused; it is simply not stepped. So a paused run has to resume
+ *    *bit for bit*, which is asserted against an unpaused run of the very same
+ *    frames rather than against a remembered number.
+ * 2. **X stops the game before it asks.** The confirmation is never answered
+ *    under fire, and cancelling lands where an ordinary pause lands — so
+ *    resuming is one path and not two.
+ * 3. **The default is the safe one**, and no single press ends a run.
+ * 4. **Both keys are ignored where they mean nothing** — there is no game to
+ *    hold in attract, in the menus or on any of the end-of-run cards.
+ */
+
+const PAUSE = frameOf('pause');
+const EXIT = frameOf('exit');
+
+/**
+ * A flow on the *shipped* rules rather than `quickRunRules`, for the tests that
+ * run a stretch of real simulation and compare it with itself: the bent hit
+ * window in a quick-run flow clears the field in seconds, and what is under test
+ * here is the frames, not the scoring.
+ */
+function steadyFlow(): GameFlow {
+  const stages = classicStages();
+  return createGameFlow({
+    rules: classicRules(),
+    stages,
+    seed: 'flow-pause',
+    highScores: createHighScoreBoard({ storage: createMemoryStorage(), defaults: [] }),
+    demo: createAttractDemo({ rules: classicRules(), stages, seed: 'flow-pause:attract' }),
+  });
+}
+
+/** A frame script with movement and fire in it, so the run is not a straight line. */
+function scriptFrame(index: number): InputFrame {
+  const moving = index % 6 < 3 ? LEFT : RIGHT;
+  return index % 2 === 0 ? moving | FIRE : moving;
+}
+
+const SCRIPT_LENGTH = 240;
+const INTERRUPT_AT = 90;
+
+/**
+ * Play {@link SCRIPT_LENGTH} scripted frames, interrupting at
+ * {@link INTERRUPT_AT} with whatever `interrupt` does, and report the world it
+ * left behind.
+ *
+ * `interrupt` is handed the flow with the run in progress and must leave it back
+ * in `playing`; the frame it is called *with* is the one it should hand to the
+ * flow, because that frame is an ordinary frame of the run and the simulation is
+ * owed it.
+ */
+function playScript(interrupt?: (flow: GameFlow, frame: InputFrame) => void): {
+  readonly fingerprint: string;
+  readonly flow: GameFlow;
+} {
+  const flow = steadyFlow();
+  press(flow, START);
+  for (let index = 0; index < SCRIPT_LENGTH; index += 1) {
+    const frame = scriptFrame(index);
+    if (index === INTERRUPT_AT && interrupt !== undefined) interrupt(flow, frame);
+    else flow.step(frame);
+  }
+  expect(flow.phase).toBe('playing');
+  return { fingerprint: fingerprintWorld(flow.world), flow };
+}
+
+describe('pausing suspends the simulation and nothing else', () => {
+  it('holds the game on the pause button and lets it go on the next one', () => {
+    const flow = testFlow();
+    press(flow, START);
+    expect(flow.phase).toBe('playing');
+
+    press(flow, PAUSE);
+    expect(flow.phase).toBe('paused');
+
+    press(flow, PAUSE);
+    expect(flow.phase).toBe('playing');
+  });
+
+  it('does not step the world while it is held', () => {
+    const flow = testFlow();
+    press(flow, START);
+    flow.step(PAUSE);
+    expect(flow.phase).toBe('paused');
+
+    const at = flow.world.step;
+    for (let i = 0; i < 300; i += 1) flow.step(i % 3 === 0 ? FIRE : LEFT);
+    expect(flow.world.step).toBe(at);
+    expect(flow.phase).toBe('paused');
+  });
+
+  it('raises no events and never claims to be showing the demo', () => {
+    const flow = testFlow();
+    press(flow, START);
+    press(flow, PAUSE);
+    const step = flow.step(FIRE);
+    expect(step.phase).toBe('paused');
+    expect(step.events).toEqual([]);
+    expect(step.demo).toBe(false);
+    // The run is still what is on screen, not the attract world.
+    expect(flow.world).toBe(flow.world);
+    expect(flow.world.status).not.toBe('game-over');
+  });
+
+  it('leaves the run exactly where it was: a resumed game is bit for bit the unpaused one', () => {
+    // The assertion this whole arrangement exists for. The reference is the same
+    // frames played without interruption, so nothing here is a remembered
+    // number: a swallowed frame, a doubled step or a simulation that learned
+    // about pausing would all show up as a different fingerprint.
+    const reference = playScript().fingerprint;
+
+    const paused = playScript((flow, frame) => {
+      // The frame carrying the press is an ordinary frame of the run, and the
+      // simulation is handed it before anything stops.
+      flow.step(frame | PAUSE);
+      expect(flow.phase).toBe('paused');
+      for (let i = 0; i < 400; i += 1) flow.step(EMPTY_FRAME);
+      flow.step(PAUSE);
+      expect(flow.phase).toBe('playing');
+    }).fingerprint;
+
+    expect(paused).toBe(reference);
+  });
+
+  it('is the same resume whether the pause was P or a cancelled exit', () => {
+    // "Cancelling returns to exactly the paused state" — so the two ways in are
+    // one state, and resuming from either is the same run.
+    const reference = playScript().fingerprint;
+
+    const viaExit = playScript((flow, frame) => {
+      flow.step(frame | EXIT);
+      expect(flow.phase).toBe('exit-confirm');
+      // Wander around the card: the cursor is the only thing that moves.
+      press(flow, RIGHT);
+      press(flow, LEFT);
+      press(flow, EXIT);
+      expect(flow.phase).toBe('paused');
+      for (let i = 0; i < 120; i += 1) flow.step(EMPTY_FRAME);
+      flow.step(PAUSE);
+      expect(flow.phase).toBe('playing');
+    }).fingerprint;
+
+    expect(viaExit).toBe(reference);
+  });
+
+  it('loses to a game over raised on the very frame it was asked for', () => {
+    // A pause has nothing to hold if the run ended on the same step. The order in
+    // `flow.ts` says so; this finds the exact frame and presses both keys on it.
+    const fatalStep = (): number => {
+      const probe = testFlow();
+      press(probe, START);
+      bombThePlayer(probe);
+      let steps = 0;
+      while (probe.phase === 'playing' && steps < 500) {
+        probe.step(EMPTY_FRAME);
+        steps += 1;
+      }
+      expect(probe.phase).toBe('game-over');
+      return steps;
+    };
+
+    const fatal = fatalStep();
+    for (const frame of [PAUSE, EXIT]) {
+      const flow = testFlow();
+      press(flow, START);
+      bombThePlayer(flow);
+      for (let step = 1; step < fatal; step += 1) flow.step(EMPTY_FRAME);
+      flow.step(frame);
+      expect(flow.phase).toBe('game-over');
+    }
+  });
+});
+
+describe('X pauses first, then asks', () => {
+  it('stops the game on the frame the key is pressed, and puts the card up', () => {
+    const flow = testFlow();
+    press(flow, START);
+    flow.step(EXIT);
+    expect(flow.phase).toBe('exit-confirm');
+
+    // Nothing runs while the question is open: that is the whole of "not
+    // answered under fire". Movement is pressed throughout, because a card that
+    // let the fighter move would be a card drawn over a game still being played.
+    const at = flow.world.step;
+    for (let i = 0; i < 200; i += 1) flow.step(i % 2 === 0 ? LEFT : EMPTY_FRAME);
+    expect(flow.world.step).toBe(at);
+    expect(flow.phase).toBe('exit-confirm');
+  });
+
+  it('opens on the safe choice', () => {
+    const flow = testFlow();
+    press(flow, START);
+    press(flow, EXIT);
+    expect(flow.exitConfirm?.choice).toBe('resume');
+  });
+
+  it('asks from a game already paused, without unpausing it first', () => {
+    const flow = testFlow();
+    press(flow, START);
+    press(flow, PAUSE);
+    const at = flow.world.step;
+    press(flow, EXIT);
+    expect(flow.phase).toBe('exit-confirm');
+    expect(flow.world.step).toBe(at);
+  });
+
+  it('cancels back to the pause on the exit key, so a second press cannot end a run', () => {
+    const flow = testFlow();
+    press(flow, START);
+    press(flow, EXIT);
+    press(flow, EXIT);
+    expect(flow.phase).toBe('paused');
+    expect(flow.exitConfirm).toBeUndefined();
+  });
+
+  it('cancels on the service button too', () => {
+    const flow = testFlow();
+    press(flow, START);
+    press(flow, EXIT);
+    press(flow, MENU);
+    expect(flow.phase).toBe('paused');
+  });
+
+  it('takes the default on a stray fire press, which is to carry on playing', () => {
+    const flow = testFlow();
+    press(flow, START);
+    press(flow, EXIT);
+    press(flow, FIRE);
+    expect(flow.phase).toBe('paused');
+    press(flow, PAUSE);
+    expect(flow.phase).toBe('playing');
+  });
+
+  it('leaves the game only when the player moves to EXIT and commits', () => {
+    const flow = testFlow();
+    press(flow, START);
+    press(flow, EXIT);
+    press(flow, RIGHT);
+    expect(flow.exitConfirm?.choice).toBe('exit');
+    press(flow, FIRE);
+    expect(flow.phase).toBe('attract');
+    expect(flow.exitConfirm).toBeUndefined();
+  });
+
+  it('goes home to attract in a cabinet with a choice of games too', () => {
+    // "Home" is attract in both cabinets: the selector is a boot-time screen, and
+    // with one variant installed it is never entered at all, so it cannot be what
+    // leaving a game means. The way back to the list is the settings screen's
+    // GAME row, exactly as it is between games.
+    const flow = twoVariantFlow();
+    expect(flow.phase).toBe('variant-select');
+    press(flow, START);
+    expect(flow.phase).toBe('playing');
+
+    press(flow, EXIT);
+    press(flow, RIGHT);
+    press(flow, FIRE);
+    expect(flow.phase).toBe('attract');
+    expect(flow.variantMenu).toBeUndefined();
+  });
+});
+
+describe('a run abandoned this way is discarded, and said to be', () => {
+  /** Start a game and score in it, so there is something to lose. */
+  function scoreThenAbandon(flow: GameFlow): number {
+    press(flow, START);
+    for (let i = 0; i < 900 && flow.stats.score === 0; i += 1) flow.step(FIRE);
+    const scored = flow.stats.score;
+    expect(scored).toBeGreaterThan(0);
+
+    press(flow, EXIT);
+    press(flow, RIGHT);
+    press(flow, FIRE);
+    expect(flow.phase).toBe('attract');
+    return scored;
+  }
+
+  it('never reaches the high-score table, even with a score that would have placed', () => {
+    const flow = testFlow({ defaults: [] });
+    const before = flow.highScores.entries();
+    const scored = scoreThenAbandon(flow);
+    // It would have placed: the table was empty, so any score qualifies. The
+    // card says so on screen — `src/ui/pause.ts` draws the rank it would have
+    // taken — which is what stops this being a score discarded silently.
+    expect(flow.highScores.rankFor(scored)).toBeDefined();
+    expect(flow.highScores.entries()).toEqual(before);
+    expect(flow.highScores.best()).toBe(0);
+  });
+
+  it('does not stop at the results card or the initials screen on the way', () => {
+    const flow = testFlow({ defaults: [] });
+    scoreThenAbandon(flow);
+    expect(flow.entry).toBeUndefined();
+    expect(flow.entryRank).toBeUndefined();
+    expect(flow.lastRank).toBeUndefined();
+    // And it stays home rather than falling through into one of them.
+    for (let i = 0; i < 600; i += 1) flow.step(EMPTY_FRAME);
+    expect(flow.phase).toBe('attract');
+  });
+
+  it('empties the run totals, so nothing downstream can show a run nobody finished', () => {
+    const flow = testFlow({ defaults: [] });
+    scoreThenAbandon(flow);
+    expect(flow.stats.score).toBe(0);
+    expect(flow.stats.shotsFired).toBe(0);
+    expect(flow.resultRows()).toEqual(resultRows(EMPTY_STATS));
+  });
+
+  it('leaves the cabinet ready for the next game', () => {
+    const flow = testFlow({ defaults: [] });
+    scoreThenAbandon(flow);
+    press(flow, START);
+    expect(flow.phase).toBe('playing');
+    expect(flow.world.score).toBe(0);
+  });
+});
+
+describe('both keys are ignored where there is no game to hold', () => {
+  /** Press each of the two and report the phases they left behind. */
+  const phasesAfter = (build: () => GameFlow): readonly string[] =>
+    [PAUSE, EXIT].map((frame) => {
+      const flow = build();
+      const before = flow.phase;
+      press(flow, frame);
+      expect(flow.phase).toBe(before);
+      return flow.phase;
+    });
+
+  it('in attract', () => {
+    expect(phasesAfter(() => testFlow())).toEqual(['attract', 'attract']);
+  });
+
+  it('on the settings screen', () => {
+    expect(
+      phasesAfter(() => {
+        const flow = testFlow();
+        press(flow, MENU);
+        expect(flow.phase).toBe('settings');
+        return flow;
+      }),
+    ).toEqual(['settings', 'settings']);
+  });
+
+  it('on the start-up selector', () => {
+    expect(phasesAfter(() => twoVariantFlow())).toEqual(['variant-select', 'variant-select']);
+  });
+
+  it('on the game-over banner', () => {
+    expect(
+      phasesAfter(() => {
+        const flow = testFlow();
+        playUntilGameOver(flow);
+        return flow;
+      }),
+    ).toEqual(['game-over', 'game-over']);
+  });
+
+  it('on the results card', () => {
+    expect(
+      phasesAfter(() => {
+        const flow = testFlow();
+        playUntilGameOver(flow);
+        runPhase(flow);
+        expect(flow.phase).toBe('results');
+        return flow;
+      }),
+    ).toEqual(['results', 'results']);
+  });
+
+  it('on the initials screen, where the letters are what the keys are for', () => {
+    expect(
+      phasesAfter(() => {
+        const flow = testFlow({ defaults: [] });
+        playUntilGameOver(flow);
+        runPhase(flow);
+        runPhase(flow);
+        expect(flow.phase).toBe('high-score-entry');
+        return flow;
+      }),
+    ).toEqual(['high-score-entry', 'high-score-entry']);
   });
 });

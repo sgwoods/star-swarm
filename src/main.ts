@@ -8,9 +8,11 @@
  *
  * What runs each step is decided by the state machine in `src/ui/flow.ts`: this
  * file owns the display, the input device, the sprite sheet, the starfield and
- * the audio, and nothing else. Attract demo, play, the between-stage challenge
- * card, game over, results and high-score entry all arrive through one
- * `flow.step(frame)` call, which is why there are no phase flags here.
+ * the audio, and nothing else. Attract demo, play, the pause and its exit
+ * confirmation, the between-stage challenge card, game over, results and
+ * high-score entry all arrive through one `flow.step(frame)` call, which is why
+ * there are no phase flags here — including no `paused` boolean, which is the
+ * flag `src/ui/flow.ts` refuses on the same grounds as every other.
  */
 
 import { createSfx, createSynth, type Sfx } from './audio/index.js';
@@ -49,6 +51,7 @@ import {
 import { badgesForStage, drawHud } from './ui/hud.js';
 import { drawSettings, drawVariantSelect, SELECT_CARD_TOP, SETTINGS_CARD_TOP } from './ui/menus.js';
 import { CARD_TOP } from './ui/panel.js';
+import { drawExitConfirm, drawPaused, EXIT_CARD_TOP, PAUSE_CARD_TOP } from './ui/pause.js';
 import { drawChallengeResults, drawGameOver, drawResults } from './ui/results.js';
 import {
   bindingsFor,
@@ -252,7 +255,10 @@ const loop = createLoop({
     updates.step();
   },
   render() {
-    starfield.advance();
+    // The backdrop is the one thing on screen that is not driven by a step, so
+    // it is the one thing that would carry on scrolling behind a held game.
+    // A pause that leaves the stars moving reads as a game still running.
+    if (flow.phase !== 'paused' && flow.phase !== 'exit-confirm') starfield.advance();
 
     const { ctx } = display;
     ctx.fillStyle = '#000';
@@ -340,6 +346,26 @@ const loop = createLoop({
         }
         break;
       }
+      case 'paused':
+        drawPaused(ctx, { steps: flow.phaseSteps, x: LOGICAL_WIDTH / 2, y: PAUSE_CARD_TOP });
+        break;
+      case 'exit-confirm': {
+        const confirm = flow.exitConfirm;
+        if (confirm !== undefined) {
+          // The rank the run *would* have taken, asked of the same table the
+          // results screen asks. `undefined` means it would not have placed, and
+          // the card leaves the line out.
+          drawExitConfirm(ctx, {
+            confirm,
+            steps: flow.phaseSteps,
+            x: LOGICAL_WIDTH / 2,
+            y: EXIT_CARD_TOP,
+            score: flow.world.score,
+            rank: flow.highScores.rankFor(flow.world.score),
+          });
+        }
+        break;
+      }
       case 'playing':
         break;
     }
@@ -357,6 +383,14 @@ declare global {
     starSwarm?: {
       readonly stepHz: number;
       readonly step: number;
+      /**
+       * Steps the **world on screen** has run.
+       *
+       * Distinct from `step`, which is the flow's and never stops: this one is
+       * the simulation's own counter, so it is what a test watches to see that a
+       * paused game really is not being stepped.
+       */
+      readonly simStep: number;
       readonly phase: GamePhase;
       readonly score: number;
       readonly stage: number;
@@ -406,6 +440,8 @@ declare global {
       readonly settingsMenuNote: string;
       /** The variant under the selector's cursor. Empty off that phase. */
       readonly selecting: string;
+      /** The exit confirmation's choice — `resume` or `exit`. Empty off that phase. */
+      readonly exitChoice: string;
       /** Which motion the formation is running: sway, breathe or still. */
       readonly formationMotion: string;
       readonly shotsFired: number;
@@ -436,6 +472,9 @@ window.starSwarm = {
     // The flow's own counter, not the world's: a world is replaced whenever a
     // game starts or the attract demo loops, and this must only ever go up.
     return flow.steps;
+  },
+  get simStep(): number {
+    return flow.world.step;
   },
   get phase(): GamePhase {
     return flow.phase;
@@ -529,6 +568,9 @@ window.starSwarm = {
   },
   get selecting(): string {
     return flow.variantMenu?.chosen.id ?? '';
+  },
+  get exitChoice(): string {
+    return flow.exitConfirm?.choice ?? '';
   },
   get formationMotion(): string {
     return flow.world.formation?.motion ?? 'none';

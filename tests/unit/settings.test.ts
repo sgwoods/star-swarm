@@ -244,6 +244,17 @@ describe('the control schemes', () => {
     }
   });
 
+  it('keep the pause and the way out reachable in every scheme', () => {
+    // A scheme narrows the three keys a player *plays* with and nothing else, so
+    // an action appended to the default map is in every scheme by default. A
+    // control scheme that could not pause is a game a player could not put down.
+    for (const scheme of CONTROL_SCHEMES) {
+      const bound = Object.values(bindingsFor(scheme));
+      expect(bound).toContain('pause');
+      expect(bound).toContain('exit');
+    }
+  });
+
   it('narrow the movement keys to the scheme’s own', () => {
     const arrows = bindingsFor('arrows');
     expect(arrows.ArrowLeft).toBe('left');
