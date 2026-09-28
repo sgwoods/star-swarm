@@ -377,6 +377,28 @@ and turning a bitmap into something `drawImage` takes is an injectable
 and font through the real pipeline into `docs/media/`, which is the contact sheet
 `docs/DESIGN.md` section 11 asks a visual PR to attach.
 
+## The build says what it is, and nothing about it is hand-written
+
+`scripts/build-identity.ts` derives the short commit, the dirty flag, the build
+date and `dev`/`release` from git and the clock; the plugin in `vite.config.ts`
+puts that **one serialisation** into the bundle (`define`) and into the
+`build.json` it serves in development and emits into `dist/`. The two must stay
+one serialisation — a page compares itself against that file, so a second
+serialiser is a phantom "new build" notice. Never add a hand-maintained version
+number; this project's recorded failure mode is exactly that.
+
+Two consequences when working here:
+
+- **A dev server's stamp is the moment `npm run dev` started**, because the
+  identity is derived when Vite reads its config. Everything else about editing
+  needs no action at all — the dev server reloads the page itself for `src/`,
+  for `packs/` and for `index.html`. `docs/ARCHITECTURE.md` §2 has the measured
+  table, including the one case that needs a restart (a new dependency).
+- **`src/ui/build-info.ts` imports nothing**, on purpose: `vite.config.ts`
+  imports the served file's name from it, and an import chain reaching a canvas
+  would drag browser code into the Node config. Drawing lives in
+  `src/ui/build-stamp.ts`.
+
 ## Sharp edges
 
 - Vitest runs two projects, `unit` and `sim`, both on the **Node** environment.

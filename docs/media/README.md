@@ -58,9 +58,23 @@ The clips are screen recordings of the dev build.
 - `arch-front-end.gif` — the whole front-end loop in one take, from live play:
   attract mode, start, a real game lost to three bombs, the game-over banner, the
   results card with its hit ratio, and back to attract.
+- `build-stamp.png` — the build stamp on the attract screen of a dev build: the
+  date and `<commit>DEV` in the top-right of the HUD band, and the same identity
+  spelled out with its century under the "push start" prompt.
+- `build-update-notice.png` — the same screen on a _hosted_ build after the site
+  was re-published under it: `NEW BUILD` blinking in place of the commit, and
+  `NEW BUILD - REFRESH` in place of the identity line. Captured by building
+  `dist/`, serving it from a static server under a subpath, opening it, building
+  again and letting the page's own poll find the difference — which is the hosted
+  update path end to end rather than a mock of it.
 - `arch-lab.gif` — the `/lab` previewer: an entry path playing, then scrubbed
   frame by frame with the readout following, then the same path mirrored, then a
   dive path flown from the slot marker.
+
+The two build-stamp stills are ordinary screenshots of the dev build at a
+viewport 576 pixels tall, so the canvas takes a 2x scale, cropped to the
+playfield's own 448x576 with `sips -c 576 448`. No scaling filter is involved, so
+the pixels are the renderer's.
 
 The playfield clips were captured by driving `npm run dev` with Playwright's
 `recordVideo` at 448x576 — two whole-number scales, so the canvas fills the frame

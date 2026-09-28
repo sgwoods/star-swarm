@@ -18,6 +18,30 @@ run in parallel. **Ship** tasks change code; **scout** tasks produce reports.
 
 ---
 
+## First: a hosted build
+
+Asked for ahead of the rest of this list. It will be the publishing and nothing
+else: what a deployment has to carry is described in
+[`docs/ARCHITECTURE.md`](ARCHITECTURE.md#refresh-or-restart), and this task will
+not have to add to it.
+
+- **Ship: publish `dist/` somewhere anyone can open from a link**, including from
+  a subpath.
+- The deployment will serve **`build.json` beside `index.html`**, and serve it
+  **uncached**. That file is how an open page learns a newer build exists; a host
+  that caches it will make the detector permanently blind, and a host that omits
+  it will make the detector permanently silent. Neither will break the game.
+- Re-publishing will be the whole update path: a rebuild writes a new
+  `build.json`, and a tab already open will notice within a minute of play and say
+  so. Nothing will have to be pushed to a running page.
+- The question it will have to answer, which is not a deployment question:
+  whether a public build changes what "original art and audio by rule"
+  ([`docs/DESIGN.md`](DESIGN.md#2-ground-rules-read-before-building) section 2)
+  has to be able to prove.
+
+_Exit check:_ a link opens the game for someone who has never cloned it, and
+re-publishing makes an already-open tab say so.
+
 ## Next: Milestone 3 — configurable
 
 - **Ship: rules layer + settings menu + difficulty presets.** The rules layer
@@ -69,9 +93,10 @@ attached to its own pull request.
 
 Recurring firstmate requests rather than a fixed list: "forge a new pack themed
 X", "add ability Y", "tune stage Z to be harder". The candidates the plan names —
-boss stages, two-player alternating play, gamepad and touch controls, a published
-build — are in [`docs/IDEAS.md`](IDEAS.md), because naming a thing in a roadmap
-implies an order and none of them has one yet.
+boss stages, two-player alternating play, gamepad and touch controls — are in
+[`docs/IDEAS.md`](IDEAS.md), because naming a thing in a roadmap implies an order
+and none of them has one yet. A published build was one of them until the captain
+asked for it, which is why it is at the top of this page instead.
 
 ---
 

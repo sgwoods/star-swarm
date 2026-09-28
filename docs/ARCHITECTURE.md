@@ -101,6 +101,70 @@ Playwright smoke test on every push and pull request.
 > worktree's Playwright run will silently test the first one's build. Set
 > `STAR_SWARM_PORT` to give a checkout its own.
 
+### Which build am I playing?
+
+Every screen carries it, and **no part of it is written down by hand**: the short
+commit the build was made from, a `+` if the working tree was modified, `DEV` if a
+dev server made it rather than `npm run build`, and the date. `scripts/build-identity.ts`
+derives all four from git and the clock, and the plugin in `vite.config.ts` puts
+that one serialisation in two places — into the bundle, and into a static
+`build.json` beside `index.html`.
+
+It is two dim rows in the **top HUD band**, hard right of the arcade's own score
+labels, and one spelled-out line under the attract screen's prompt. Nothing is
+drawn over the playfield, and the corner rows fit the gaps the score leaves
+exactly (`src/ui/build-stamp.ts` has the arithmetic).
+
+![The attract screen, with the build date and commit in the top-right corner and spelled out under the prompt](media/build-stamp.png)
+
+**A running page notices when a newer build is being served.** It fetches
+`build.json` every 60 seconds of simulation time, and when what is served is not
+what it is running it blinks an amber notice in place of the commit and on the
+attract line.
+<!-- check:count build.pollSeconds 60 -->
+
+![The same screen with a newer build published: NEW BUILD in the corner, NEW BUILD - REFRESH under the prompt](media/build-update-notice.png)
+
+The notice is text and nothing else. It never pauses the game, never takes a key,
+and never moves anything already on screen — the rows it blinks in are rows it
+already owned. A fetch that fails, or a host with no `build.json` to serve,
+changes nothing at all: `src/ui/build-info.ts` swallows it, counts a miss, and a
+detection already made is not retracted by going offline. Refreshing **does** lose
+the run in progress; the high-score table survives a reload, a game does not,
+which is why nothing here ever refreshes for you.
+
+### Refresh, or restart?
+
+Measured against the dev server rather than assumed — a page was open throughout
+and each row is what it actually did:
+
+| You changed                    | The dev server                                     | You do                                    |
+| ------------------------------ | -------------------------------------------------- | ----------------------------------------- |
+| anything under `src/`          | serves the new module and reloads the page for you | nothing                                   |
+| a JSON document under `packs/` | the same — a pack edit reloads the page too        | nothing                                   |
+| `index.html`                   | the same                                           | nothing                                   |
+| `vite.config.ts`               | restarts itself, and the page reloads              | nothing                                   |
+| a dependency in `package.json` | ignores it completely                              | `npm install`, then restart `npm run dev` |
+
+So in day-to-day work there is nothing to press: the dev server reloads the page
+itself, for game code and for pack data alike. Two things do not follow that rule:
+
+- **The stamp is the moment `npm run dev` started**, not the moment you last
+  edited a file, because the identity is derived when Vite reads its config.
+  Restarting the dev server re-stamps it; so does touching `vite.config.ts`,
+  which restarts the server anyway.
+- **A new dependency needs both halves.** A running dev server goes on failing to
+  resolve a package after `npm install` has put it in `node_modules`; only a
+  restart picks it up.
+
+For a **hosted** build there is no dev server and no reload: publishing is
+`npm run build` and then serving `dist/`, which already contains `build.json`
+alongside `index.html`. An open tab notices the new build within a minute of
+simulation time and says so; nothing else has to be pushed to it. Two things the
+host has to get right — `build.json` must be served uncached, or the poll reads
+the old answer forever, and it must sit beside `index.html`, because the page asks
+for it relative to its own document so that a deployment under a subpath works.
+
 ### What it looks like
 
 Stage 1 from the first frame: five entry waves flying in on scripted paths, the

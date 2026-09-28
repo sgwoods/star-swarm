@@ -15,6 +15,14 @@ npm run dev            # http://localhost:5173
 Press **Enter** to start, **←/→** to move, **Space** to fire. The game boots into
 attract mode, so press start before the arrows do anything.
 
+The top-right corner of the screen says which build you are looking at — the
+commit, whether the tree was modified, and the date — and a page that is open
+when a newer build is published blinks **NEW BUILD** at you rather than
+interrupting. Editing game code or pack data needs no refresh at all; the dev
+server reloads the page itself. The two cases where that is not enough, and what
+a hosted deployment has to serve, are in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#refresh-or-restart).
+
 Node **22.13 or newer on the 22 LTS line, or 24 and newer** — `"node": "^22.13.0 || >=24.0.0"`,
 and the floor is Vitest's and ESLint's rather than the game's. CI runs Node 24.
 

@@ -26,6 +26,13 @@ import { createStarfield } from './render/starfield.js';
 import { aliveEnemies } from './sim/enemies.js';
 import type { SimEvent } from './sim/events.js';
 import { drawAttract } from './ui/attract.js';
+import {
+  BUILD,
+  type BuildComparison,
+  createUpdateWatcher,
+  fetchServedIdentity,
+} from './ui/build-info.js';
+import { drawBuildLine, drawBuildStamp } from './ui/build-stamp.js';
 import { createGameFlow, type GamePhase } from './ui/flow.js';
 import { createHighScoreBoard, createWebStorage, drawInitialsEntry } from './ui/highscores.js';
 import { badgesForStage, drawHud } from './ui/hud.js';
@@ -64,6 +71,20 @@ const SEED = 'star-swarm-m2';
 // The high-score table survives the tab if the browser lets it, and quietly
 // becomes a session-only table if it does not (`src/ui/highscores.ts`).
 const highScores = createHighScoreBoard({ storage: createWebStorage() });
+
+/**
+ * Is a newer build being served? Polled once a minute of *simulation* time, so a
+ * hidden tab stops asking and resumes on return.
+ *
+ * Nothing it finds interrupts anything: `src/ui/build-stamp.ts` draws a blinking
+ * line and that is all. A failed fetch — offline, or a host with no `build.json`
+ * to serve — is silent by construction (`src/ui/build-info.ts`).
+ */
+const updates = createUpdateWatcher({
+  local: BUILD,
+  load: fetchServedIdentity(),
+  everySteps: 60 * STEP_HZ,
+});
 
 // The flow builds every world the game runs — the attract demo's and each
 // game's — so the rules and the stage source go to it rather than to a world
@@ -131,6 +152,9 @@ const loop = createLoop({
     // Exactly one input sample per simulation step (docs/DESIGN.md pillar 4).
     const frame: InputFrame = input.sample();
     applyEvents(flow.step(frame).events);
+    // Outside the simulation on purpose: the poll is a host concern counted in
+    // simulation steps, and nothing it learns reaches the world.
+    updates.step();
   },
   render() {
     starfield.advance();
@@ -152,6 +176,9 @@ const loop = createLoop({
       badges: registry.manifest.stageBadges,
       sheet: sprites,
     });
+    // The top HUD band, never the playfield. Every phase, so "what is running?"
+    // is answerable without leaving the game.
+    drawBuildStamp(ctx, { build: BUILD, comparison: updates.comparison, steps: flow.steps });
 
     switch (flow.phase) {
       case 'attract':
@@ -159,6 +186,11 @@ const loop = createLoop({
           steps: flow.phaseSteps,
           highScores: flow.highScores.entries(),
           persistent: flow.highScores.persistent,
+        });
+        drawBuildLine(ctx, {
+          build: BUILD,
+          comparison: updates.comparison,
+          steps: flow.steps,
         });
         break;
       case 'game-over':
@@ -224,6 +256,20 @@ declare global {
       readonly hits: number;
       readonly highScore: number;
       readonly layout: ReturnType<typeof createDisplay>['layout'];
+      /** What build this page is running, as `src/ui/build-info.ts` derived it. */
+      readonly build: typeof BUILD;
+      /** The update poller: its last verdict, and how many polls have settled. */
+      readonly buildComparison: BuildComparison;
+      readonly buildUpdateAvailable: boolean;
+      readonly buildChecks: number;
+      readonly buildCheckFailures: number;
+      /**
+       * Poll now rather than waiting for the next due step. Here so
+       * `tests/e2e/build-identity.spec.ts` can test the detector without sitting
+       * out a minute of simulation, and handy from the console for the same
+       * reason. It never rejects.
+       */
+      readonly checkBuild: () => Promise<BuildComparison>;
     };
   }
 }
@@ -282,4 +328,18 @@ window.starSwarm = {
   get layout(): ReturnType<typeof createDisplay>['layout'] {
     return display.layout;
   },
+  build: BUILD,
+  get buildComparison(): BuildComparison {
+    return updates.comparison;
+  },
+  get buildUpdateAvailable(): boolean {
+    return updates.available;
+  },
+  get buildChecks(): number {
+    return updates.checks;
+  },
+  get buildCheckFailures(): number {
+    return updates.failures;
+  },
+  checkBuild: updates.check,
 };

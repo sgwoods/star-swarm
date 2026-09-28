@@ -557,6 +557,26 @@ export function counters(root = REPO_ROOT): ReadonlyMap<string, () => number> {
       () => [...read('vitest.config.ts').matchAll(/^\s*name: '[^']+',$/gm)].length,
     ],
 
+    /**
+     * How often a running page asks whether a newer build is being served, in
+     * seconds.
+     *
+     * Read off the cadence `src/main.ts` hands the update watcher, which is
+     * written in simulation steps against `STEP_HZ` because every timer in
+     * `src/ui/` is. The document states the number a reader cares about and the
+     * code keeps the number it needs, and this is what holds the two together.
+     */
+    [
+      'build.pollSeconds',
+      () => {
+        const match = /everySteps:\s*(\d+)\s*\*\s*STEP_HZ/.exec(read('src/main.ts'));
+        if (match?.[1] === undefined) {
+          throw new Error('could not find the build-poll cadence in src/main.ts');
+        }
+        return Number(match[1]);
+      },
+    ],
+
     /* The layers, and the modules in them. */
     [
       'src.layers',
