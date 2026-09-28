@@ -35,7 +35,11 @@ and the floor is Vitest's and ESLint's rather than the game's. CI runs Node 24.
 | `npm run test:e2e`       | Playwright smoke test                       |
 | `npm run validate-packs` | Validate everything under `packs/`          |
 
-CI runs all of these on every push and pull request.
+CI runs all of these on every push and pull request, and a push to `main` that
+passes them publishes the built game to GitHub Pages — so the hosted build is
+always one that went green. How that works, and what the page does when a newer
+build goes out under it, is in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#refresh-or-restart).
 
 ## The documentation, in four layers
 

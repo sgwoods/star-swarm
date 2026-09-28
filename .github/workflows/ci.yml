@@ -8,7 +8,10 @@ on:
     branches: [main]
   pull_request:
 
-# A new push to the same branch supersedes the run in flight.
+# A new push to the same branch supersedes the run in flight. That covers the
+# deploy job below as well, which is the behaviour you want from a publisher:
+# when two merges land in quick succession, the second one's build is the one
+# that should reach the site, and the first's is already stale.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -69,3 +72,48 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+
+      # Packaging is the last step of `check`, so the bundle that reaches the
+      # site is the one every step above just passed against — and a failure
+      # anywhere before this leaves no artifact for `deploy` to publish.
+      #
+      # `dist/` is what the Build step already produced. There is deliberately
+      # no second build: a publisher that rebuilds can publish something the
+      # suite never saw.
+      - name: Package dist/ for Pages
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  # Publish the bundle `check` built and tested. Pull requests never reach this
+  # job, and neither does a push whose checks failed: `needs: check` is the gate.
+  #
+  # Nothing here builds, configures a base path or writes a file. `vite.config.ts`
+  # sets `base: './'` so the bundle is already subpath-safe, which is what a
+  # project Pages site under /star-swarm/ needs, and the plugin there already
+  # emits `build.json` beside `index.html`. Publishing really is "serve dist/".
+  deploy:
+    name: Publish to GitHub Pages
+    needs: check
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # Narrower than the workflow default, and only on this job: the token that
+    # can publish a site is not handed to the job that runs the tests.
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+    # GitHub serialises deployments to a given environment, so two merges cannot
+    # race each other onto the site.
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
