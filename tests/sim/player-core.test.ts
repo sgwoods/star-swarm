@@ -404,6 +404,40 @@ describe('what the goldens actually cover', () => {
     });
   });
 
+  it('S8 — pays a captor 400 mid-dive and 150 at home, across four real runs', () => {
+    // The scout report's S8, asserted over runs nobody wrote for it: a captor's
+    // kill is either its plain 150 (at home, or rotating back into its slot) or
+    // 300 doubled plus the 100-unit solo escort record its stage start installed.
+    // A third value anywhere in four recorded games means the escort bonus has
+    // stopped riding the doubling — which a single staged kill would not catch,
+    // because it would agree on whichever case it staged.
+    const bonus = rules.scoring.escortBonus.byEscortCount[0] ?? 0;
+    const atHome = 150;
+    const diving = 150 * rules.scoring.movingMultiplier + bonus;
+    expect([atHome, diving]).toEqual([150, 400]);
+
+    let captorKills = 0;
+    let diveKills = 0;
+    for (const golden of ['player-core', 'player-survival', 'stage-dives', 'dual-fighter']) {
+      const { events } = replayEvents(golden);
+      const scores = eventsOfType(events, 'target-destroyed')
+        .filter((event) => event.alienId === rules.capture.captorRole)
+        .map((event) => event.score);
+      captorKills += scores.length;
+      diveKills += scores.filter((score) => score === diving).length;
+      expect([golden, [...new Set(scores)].sort((a, b) => a - b)]).toEqual([
+        golden,
+        [...new Set(scores)]
+          .sort((a, b) => a - b)
+          .filter((score) => score === atHome || score === diving),
+      ]);
+    }
+    // And the interesting case really occurs, rather than every captor happening
+    // to be shot in its slot.
+    expect(captorKills).toBeGreaterThan(4);
+    expect(diveKills).toBeGreaterThan(0);
+  });
+
   it('pays exactly 19,000 for a perfect first challenge stage', () => {
     // `docs/DESIGN.md` section 11: 40 x 100 on impact, 5 x 1,000 in group
     // bonuses, and a 10,000 perfect bonus that *replaces* the 100 x hits bonus.

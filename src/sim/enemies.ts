@@ -29,6 +29,7 @@
  * No constants: every number arrives in the `Rules` value or the stage document.
  */
 
+import { resolveEscortBonus } from '../content/rules.js';
 import type { Alien, Rules, Wave } from '../content/schema.js';
 import type { StageContent } from '../content/stages.js';
 import type { HitPadding } from './collision.js';
@@ -124,6 +125,25 @@ export interface Enemy {
   readonly scoreBase: number;
   /** What a moving target's base value is multiplied by, for this alien. */
   readonly movingMultiplier: number;
+  /**
+   * Points this enemy's own kill pays on top of its doubled value — a captor's
+   * escort bonus (`resolveEscortBonus`), and 0 for everything else.
+   *
+   * **Latched, and reset every stage**, which is what a flat score table cannot
+   * express: the arcade writes one escort record per boss, resets all four to the
+   * solo value at the *start of every stage* and overwrites one only when that
+   * boss is launched by the bomber launcher. Nothing touches it when an escort
+   * dies, so killing the escorts first does not reduce the captor's value, and a
+   * captor that reaches a dive without having been launched is worth the solo
+   * value (`docs/reference/arcade-reference.md` section 9).
+   *
+   * A fleet is built anew for every stage, so *this field being set here is the
+   * per-stage reset*. Nothing overwrites it yet because nothing launches escorts:
+   * Star Swarm's launcher sends one enemy of a role at a time, so the reachable
+   * value is the solo one. When escorts arrive this stops being `readonly` and
+   * `launchDive` in `./dive.js` is where the launch count is latched.
+   */
+  readonly escortBonus: number;
   readonly hitPadding: HitPadding;
 
   /** The attack paths this alien may dive along; empty for one that never dives. */
@@ -274,13 +294,22 @@ export function fleetEnemies(enemies: readonly Enemy[]): Enemy[] {
  *
  * The base value comes from the alien, the multiplier from the alien or the rules
  * layer, and which of the two applies from the enemy's *state* — see
- * {@link EnemyState}. Bonuses (a captor's escorts, a challenge group) are a
- * separate channel and are not this function's business.
+ * {@link EnemyState}.
+ *
+ * A captor's latched {@link Enemy.escortBonus} is part of that value rather than a
+ * separate award, which is the one place this differs from the transform trio and
+ * the challenge group of eight. Those are bonuses for clearing a *set*, and the
+ * original floats their own score tile beside the kill; a captor's escort record
+ * carries the tile the boss itself shows, so a diving captor is one number — 400,
+ * 800 or 1,600 — and not 300 with something else arriving alongside it (reference
+ * section 9, `bmbr_boss_scode.b1` used as the floating score sprite). It rides the
+ * doubled branch only: a captor shot **at home** is worth its plain 150, which is
+ * the verified scoring table's other column.
  */
 export function enemyScore(enemy: Enemy): number {
   return AT_HOME_VALUE.has(enemy.state)
     ? enemy.scoreBase
-    : enemy.scoreBase * enemy.movingMultiplier;
+    : enemy.scoreBase * enemy.movingMultiplier + enemy.escortBonus;
 }
 
 /** The sprite an enemy shows, given the hits it has already survived. */
@@ -363,6 +392,9 @@ function createEnemy(alien: Alien, seed: EnemySeed, rules: Rules): Enemy {
     hp: alien.hp,
     scoreBase: alien.score.base,
     movingMultiplier: alien.score.movingMultiplier ?? rules.scoring.movingMultiplier,
+    // Zero escorts: the value every stage start installs, and the only one the
+    // launcher can produce. See {@link Enemy.escortBonus}.
+    escortBonus: resolveEscortBonus(rules, alien.role, 0),
     hitPadding: alien.hitPadding,
     divePaths: alien.dive?.paths ?? [],
     diveWeight: alien.dive?.weight ?? 0,

@@ -10,12 +10,19 @@
  * `$40 + ((min(stage, 16) × 4) AND $70)` at the start of every stage, giving
  * five discrete values that step every four stages and plateau from stage 16.
  * That formula is verified and lives in the pack's `rules.json`, read through
- * `src/content/rules.ts`; the conversion from the byte to a visible pixel rate
- * is *not* — it is unresolved item 4 in
- * `docs/reference/arcade-reference.md`, because the write path into the Namco
- * 05XX generator's 3-bit scroll fields was never traced. {@link SPEED_TIERS} is
- * therefore ours, chosen to look right, and it is the one number to change when
- * that item is closed.
+ * `src/content/rules.ts`.
+ *
+ * **The conversion from the byte to a visible pixel rate is now verified too, and
+ * {@link SPEED_TIERS} is not it.** A second pass traced the write path into the
+ * Namco 05XX generator's 3-bit scroll fields and closed what was unresolved item
+ * 4: the rate is `byte / 64`, so the five bytes are 1.00, 1.25, 1.50, 1.75 and
+ * 2.00 px/frame, dithered to whole pixels each frame
+ * (`docs/reference/arcade-reference.md` section 2). The tiers below are half that
+ * and have parallax layers of their own, and the same routine's ramp between
+ * stages, its 3 px/frame reverse under a tractor beam and its star-bank twinkle
+ * are absent. Moving to the verified numbers doubles the visible scroll rate, so
+ * it is a deliberate change to how the game looks rather than a correction to
+ * make in passing; `docs/ARCHITECTURE.md` section 5 records it as not built.
  *
  * The field also **pauses** during certain transitions, which is why
  * {@link advanceStars} takes the speed each frame rather than owning it.
@@ -26,7 +33,8 @@ import { LOGICAL_HEIGHT, LOGICAL_WIDTH } from './canvas.js';
 
 /**
  * Pixels per frame for each of the five speed bytes `$40 $50 $60 $70 $80`.
- * **Provisional** — see the note above.
+ * **Ours, not the arcade's** — the verified rates are `byte / 64`, twice these.
+ * See the note above.
  */
 export const SPEED_TIERS: readonly number[] = Object.freeze([0.5, 0.75, 1, 1.25, 1.5]);
 

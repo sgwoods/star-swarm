@@ -299,6 +299,25 @@ export function resolveTransformType(rules: Rules, stage: number): string | unde
   return types[index % types.length];
 }
 
+/**
+ * What a captor's own kill pays on top of its value, for `escorts` escorts.
+ *
+ * The one place a flat `{type, moving} -> points` table gets the arcade wrong,
+ * and the reason an alien stores its **base** score alone: a captor is its base
+ * doubled *plus* a bonus chosen by how many escorts launched with it — 300 + 100,
+ * 500 or 1,300, giving 400, 800 and 1,600 (`docs/DESIGN.md` section 4, reference
+ * section 9). The role that carries it is the pack's `capture.captorRole`, which
+ * is what "a captor's value" means: the arcade keeps one escort record per boss
+ * object, and a boss is exactly the thing that captures.
+ *
+ * Returns 0 for every other role, and for an escort count the pack's table does
+ * not reach — a pack that states no table pays no bonus rather than a default.
+ */
+export function resolveEscortBonus(rules: Rules, role: string, escorts: number): number {
+  if (role !== rules.capture.captorRole) return 0;
+  return rules.scoring.escortBonus.byEscortCount[escorts] ?? 0;
+}
+
 /** Convenience wrapper so callers do not have to import `resolveRow` as well. */
 export function lookup<T>(table: PlateauTable<T> | undefined | null, index: number): T | undefined {
   if (table === undefined || table === null) return undefined;

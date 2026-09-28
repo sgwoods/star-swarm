@@ -359,6 +359,11 @@ describe('exactly one captured fighter, ever', () => {
     const events = run(world, 3_000);
     expect(eventsOfType(events, 'capture-started')).toHaveLength(0);
     expect(world.capture.phase).not.toBe('idle');
+    // R3 is "survive several Warden launches", and "no beam appeared" only means
+    // that if some captor actually launched. `capture.launches` cannot say so —
+    // it only advances while the channel is idle, which is the whole point — so
+    // the dives themselves are the evidence.
+    expect(captorDives(world, events)).toBeGreaterThan(1);
   });
 
   it('attempts no capture while the fighter is parked as a rogue', () => {
@@ -373,6 +378,8 @@ describe('exactly one captured fighter, ever', () => {
 
     const events = run(world, 3_000);
     expect(eventsOfType(events, 'capture-started')).toHaveLength(0);
+    // As R3: captors did launch in those frames and none of them carried a beam.
+    expect(captorDives(world, events)).toBeGreaterThan(1);
   });
 
   it('never targets a dual fighter, and resumes once it loses a half', () => {
@@ -400,7 +407,79 @@ describe('exactly one captured fighter, ever', () => {
     // One eligible launch has happened and it did not become an attempt.
     expect(world.capture.phase).toBe('idle');
   });
+
+  it('R8 — attempts on the 2nd eligible launch, and on no odd-numbered one', () => {
+    // The other half of R8, and the half that would still pass if `everyNthLaunch`
+    // were ignored entirely: capture must be *reachable*, on the 2nd, 4th, 6th
+    // eligible launch. Asserted as the pairing of counter and phase on the frame
+    // each launch is counted, over a whole stage's worth of them.
+    expect(rules.capture.everyNthLaunch).toBe(2);
+    const world = armedWorld({ seed: 'every-other' });
+    // Read on the frame the counter moves: `beginCaptureDive` counts the launch
+    // and, if it is the one, leaves the channel `diving` on the same frame. The
+    // beam itself (`capture-started`) is a long way further down the dive, which is
+    // why the gate is read here and the beam is asserted separately below.
+    const attemptedOn: number[] = [];
+    const seenCounts: number[] = [];
+    let beams = 0;
+    for (let i = 0; i < 4_000; i += 1) {
+      const before = world.capture.launches;
+      beams += eventsOfType(stepWorld(world, EMPTY_FRAME), 'capture-started').length;
+      if (world.capture.launches === before) continue;
+      seenCounts.push(world.capture.launches);
+      if (world.capture.phase !== 'idle') attemptedOn.push(world.capture.launches);
+    }
+    // Only an idle channel counts a launch, so the counts this loop saw are the
+    // consecutive run 1, 2, 3 … and the run covered at least two of them.
+    expect(seenCounts.length).toBeGreaterThanOrEqual(2);
+    expect(seenCounts).toEqual(seenCounts.map((_each, index) => index + 1));
+    // Every attempt fell on an even count, the first fell on exactly 2, and one of
+    // them went on to put a beam out — so "reachable" is a beam and not a phase.
+    expect(attemptedOn.filter((n) => n % 2 !== 0)).toEqual([]);
+    expect(attemptedOn[0]).toBe(2);
+    expect(beams).toBeGreaterThan(0);
+  });
+
+  it('R9 — a capture attempt arrives solo, so its kill is worth the solo 400', () => {
+    // R9 is "it arrives solo — never with escorts". Star Swarm has no escort
+    // launch at all: the director launches one enemy of a role per round robin
+    // (`src/sim/dive.ts`), so *every* captor is solo and the arcade's 800 and
+    // 1,600 are unreachable — recorded in `docs/ARCHITECTURE.md` section 5 rather
+    // than papered over here.
+    //
+    // What is assertable is the consequence, and it is the one a flat score table
+    // gets wrong: the captor carries the escort record its stage start installed,
+    // so shooting it mid-attempt pays 300 + 100 and not 300, 800 or 1,600.
+    const world = armedWorld({ seed: 'solo-captor' });
+    runToPhase(world, ['beam']);
+    const captor = world.fleet.enemies.find((enemy) => enemy.id === world.capture.captorId);
+    expect(captor?.state).toBe('beaming');
+    if (captor === undefined) return;
+    expect(captor.escortBonus).toBe(rules.scoring.escortBonus.byEscortCount[0]);
+
+    captor.hitsRemaining = 1;
+    const events = shoot(world, captor);
+    const kill = eventsOfType(events, 'target-destroyed').find(
+      (event) => event.targetId === captor.id,
+    );
+    expect(kill?.score).toBe(400);
+  });
 });
+
+/**
+ * How many dives the captor role began in `events`.
+ *
+ * The evidence behind every "no beam appeared" assertion: the claim is that
+ * captors kept launching and none of them carried a beam, and a run in which no
+ * captor launched at all would satisfy the beam half for the wrong reason.
+ */
+function captorDives(world: World, events: readonly SimEvent[]): number {
+  const role = world.rules.capture.captorRole;
+  return eventsOfType(events, 'enemy-dived').filter((event) => {
+    const enemy = world.fleet.enemies.find((each) => each.id === event.targetId);
+    return enemy !== undefined && enemy.role === role && !enemy.inCaptiveSlot;
+  }).length;
+}
 
 /** Are the captor and its captive both sitting in the formation? */
 function bothHome(world: World): boolean {
@@ -514,6 +593,46 @@ describe('every way the channel is released', () => {
     expect(world.capture.phase).toBe('idle');
     // And attempts really do come back, which is the point of releasing it.
     expect(eventsOfType(run(world, 3_000), 'capture-started').length).toBeGreaterThan(0);
+  });
+
+  it('R5 — the rogue shot: 500 parked, and beams resume', () => {
+    // R4 leaves the fighter parked as a rogue with capture off; R5 is what ends
+    // that. Shooting it is worth the same 500 it was worth in its captor's care —
+    // the doubling rule reads the *state*, and a rogue waiting in its slot is at
+    // home — and it is the release that lets a beam appear again.
+    const world = heldWorld({ seed: 'shoot-rogue' });
+    runUntil(world, bothHome);
+    shoot(world, captorOf(world));
+    expect(world.capture.phase).toBe('rogue');
+
+    const rogue = capturedFighter(world.capture, world.fleet);
+    expect(rogue?.state).toBe('home');
+    if (rogue === undefined) return;
+    const killed = shoot(world, rogue);
+    expect(
+      eventsOfType(killed, 'target-destroyed').find((event) => event.targetId === rogue.id)?.score,
+    ).toBe(500);
+    expect(world.capture.phase).toBe('idle');
+    expect(eventsOfType(run(world, 3_000), 'capture-started').length).toBeGreaterThan(0);
+  });
+
+  it('R5 — the rogue shot mid-swoop: 1,000, by the same doubling rule', () => {
+    // The other half of R5's "(or +1,000 if attacking)". A rogue takes exactly one
+    // dive, so this is the same ship in the same run worth twice as much for the
+    // few seconds it is attacking — and nothing about it is a special case.
+    const world = heldWorld({ seed: 'shoot-rogue-diving' });
+    runUntil(world, bothHome);
+    shoot(world, captorOf(world));
+    expect(world.capture.phase).toBe('rogue');
+
+    runUntil(world, (live) => capturedFighter(live.capture, live.fleet)?.state === 'diving');
+    const rogue = capturedFighter(world.capture, world.fleet);
+    if (rogue === undefined) return;
+    const killed = shoot(world, rogue);
+    expect(
+      eventsOfType(killed, 'target-destroyed').find((event) => event.targetId === rogue.id)?.score,
+    ).toBe(1_000);
+    expect(world.capture.phase).toBe('idle');
   });
 
   it('a dual fighter losing a half: covered above', () => {

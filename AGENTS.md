@@ -425,6 +425,18 @@ Two consequences when working here:
   `docs/reference/arcade-reference.md`.
 - `tests/unit/sim-boundary.test.ts` briefly writes a `__boundary_probe__.ts` into `src/sim/`
   and removes it again. The path is gitignored in case a run dies mid-test.
+- **Killing the last enemy on the field rolls the stage over on the same step**, and
+  the next stage's fleet replaces the one under test — so a test that watches
+  `world.fleet.enemies[0]` is watching some other enemy a frame later. Hold the
+  enemy by reference. The same applies to the attack director: parking an enemy in
+  front of the fighter and holding fire will also shoot whatever the launcher sends
+  down the same column, so set `world.dive.armed = false` when the measurement is
+  about one specific kill.
+- A value in `packs/classic/rules.json` with **no `provenance` entry is unmarked,
+  and nothing fails**: `unknownProvenancePaths` catches a marking that names no
+  field, but not a field that carries no marking. The lists in
+  `tests/unit/classic-pack.test.ts` are the only thing holding the arcade values to
+  `AGENTS.md`'s verified/provisional rule, so a new value goes in one of them.
 - The game boots into **attract mode**, not into play: `src/ui/flow.ts` is the
   one state machine — attract, playing, the between-stage challenge card, game
   over, results and high-score entry <!-- check:count flow.phases 6 --> — and
