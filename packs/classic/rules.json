@@ -2174,6 +2174,14 @@
       "confidence": "verified",
       "note": "A target that is neither at home in the formation nor rotating back into its slot scores exactly twice its formation value; the ROM stashes the test at `$078D` and consumes it at `$080D`. Arcade reference section 9."
     },
+    "scoring.escortBonus": {
+      "confidence": "verified",
+      "note": "`d_1CFD` = {13, 5, 1} units of 100 indexed by escort count, added to a captor's doubled 300 to give 1,600 / 800 / 400. Latched at launch and reset to the solo entry at every stage start — the per-boss record `bmbr_boss_scode` is written in exactly two places and nothing updates it when an escort dies, so killing the escorts first does not reduce the captor's value. Arcade reference section 9."
+    },
+    "scoring.transformGroupBonus": {
+      "confidence": "verified",
+      "note": "`d_1B59` = {30, 10, 20} units of 100 selected by `(floor(stage / 4) mod 3) + 4`, which is 1,000 at stage 4, 2,000 at 8, 3,000 at 12 and 1,000 again at 16 — a rule rather than a table of stage bands. Arcade reference section 6."
+    },
     "scoring.challenge.groupBonus": {
       "confidence": "verified",
       "note": "`d_stage_chllg_rnd_attrib` = {10, 15, 20, 30} units of 100, indexed `(stage >> 3) AND 3` and clamped to 3 from stage 32 \u2014 1,000 / 1,000 / 1,500 / 1,500 / 2,000 / 2,000 / 3,000 by challenge-stage ordinal, then held. Arcade reference section 8."

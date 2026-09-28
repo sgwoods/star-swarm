@@ -466,8 +466,8 @@ describe('scoring a dive kill', () => {
 
   it('pays a warden’s whole value on the hit that destroys it', () => {
     // A two-hit enemy's first hit scores nothing; the doubling still applies to
-    // the second. 150 at home, 300 diving — the escort bonus that makes it 400 is
-    // the capture task's, and is a separate channel.
+    // the second. 150 at home, and 400 diving — 300 plus the solo escort bonus
+    // every stage start latches onto a captor (report acceptance test S8).
     expect(rules.scoring.movingMultiplier).toBe(2);
     const world = createWorld({ seed: 'warden', rules, stages });
     const target = world.fleet.enemies.find((enemy) => enemy.alienId === 'warden');
@@ -480,7 +480,7 @@ describe('scoring a dive kill', () => {
 
     const events = run(world, 60, FIRE);
     expect(eventsOfType(events, 'target-hit')).toHaveLength(1);
-    expect(eventsOfType(events, 'target-destroyed')[0]?.score).toBe(300);
+    expect(eventsOfType(events, 'target-destroyed')[0]?.score).toBe(400);
   });
 });
 
@@ -592,69 +592,93 @@ describe('the transform attack', () => {
     ]);
   });
 
+  /**
+   * Destroy `kills` of a fresh group on `stage` and report what the kills paid.
+   *
+   * The group is caught on the frame it appears and frozen there: left to fly, it
+   * leaves the bottom of the screen within a few seconds, and a group with a
+   * survivor can never be wholly destroyed — which is the other half of the
+   * all-of-them rule and the reason it is measured rather than assumed.
+   */
+  const trioKillScore = (stage: number, kills: number, seed = 'bonus'): number => {
+    const world = transformWorld(stage, 6, seed);
+    let group: readonly number[] = [];
+    for (let i = 0; i < 600 && group.length === 0; i += 1) {
+      const step = stepWorld(world, EMPTY_FRAME);
+      group = eventsOfType(step, 'enemy-transformed')[0]?.group ?? [];
+    }
+    expect(group).toHaveLength(3);
+    const members = group.map((id) => {
+      const member = world.fleet.enemies.find((enemy) => enemy.id === id);
+      if (member === undefined) throw new Error('missing group member');
+      return member;
+    });
+
+    // Park the group off screen, so a shot aimed at one cannot catch another and
+    // pay the bonus early; send everyone else back to its slot, where a shot
+    // from the fighter's row cannot reach it; and silence every bomb, because a
+    // bomb that killed the fighter would clear the shots mid-measurement.
+    //
+    // The launcher is disarmed for the same reason: on a later stage its rates are
+    // high enough that an unrelated diver crosses the fighter's column during the
+    // measurement and is shot, which would credit its value to the trio. The trio
+    // is already on the field, so nothing under test needs the launcher.
+    world.dive.armed = false;
+    for (const member of members) {
+      world.fleet.flights.delete(member.id);
+      member.x = -64;
+      member.y = -64;
+    }
+    for (const enemy of world.fleet.enemies) {
+      enemy.bombTimer = 100_000;
+      if (!members.includes(enemy) && enemy.state !== 'dead') {
+        enemy.state = 'home';
+        world.fleet.flights.delete(enemy.id);
+      }
+    }
+
+    const before = world.score;
+    let destroyed = 0;
+    for (const member of members.slice(0, kills)) {
+      member.x = world.player.x;
+      member.y = world.player.y - 8;
+      member.state = 'diving';
+      // A shot reaches the row above the fighter on the frame it is fired, but
+      // the two-slot cap means the *next* shot waits for one of the pair to
+      // leave the top of the screen — which is a good sixty frames away.
+      for (let i = 0; i < 90; i += 1) {
+        destroyed += eventsOfType(stepWorld(world, FIRE), 'target-destroyed').length;
+      }
+    }
+    expect(destroyed).toBe(kills);
+    return world.score - before;
+  };
+
   it('pays the all-of-them bonus only when all of them are destroyed', () => {
-    /**
-     * Destroy `kills` of a fresh group and report what the kills paid.
-     *
-     * The group is caught on the frame it appears and frozen there: left to fly,
-     * it leaves the bottom of the screen within a few seconds, and a group with a
-     * survivor can never be wholly destroyed — which is the other half of this
-     * rule and the reason it is measured rather than assumed.
-     */
-    const scoreFor = (kills: number): number => {
-      const world = transformWorld(4, 6, 'bonus');
-      let group: readonly number[] = [];
-      for (let i = 0; i < 600 && group.length === 0; i += 1) {
-        const step = stepWorld(world, EMPTY_FRAME);
-        group = eventsOfType(step, 'enemy-transformed')[0]?.group ?? [];
-      }
-      expect(group).toHaveLength(3);
-      const members = group.map((id) => {
-        const member = world.fleet.enemies.find((enemy) => enemy.id === id);
-        if (member === undefined) throw new Error('missing group member');
-        return member;
-      });
-
-      // Park the group off screen, so a shot aimed at one cannot catch another and
-      // pay the bonus early; send everyone else back to its slot, where a shot
-      // from the fighter's row cannot reach it; and silence every bomb, because a
-      // bomb that killed the fighter would clear the shots mid-measurement.
-      for (const member of members) {
-        world.fleet.flights.delete(member.id);
-        member.x = -64;
-        member.y = -64;
-      }
-      for (const enemy of world.fleet.enemies) {
-        enemy.bombTimer = 100_000;
-        if (!members.includes(enemy) && enemy.state !== 'dead') {
-          enemy.state = 'home';
-          world.fleet.flights.delete(enemy.id);
-        }
-      }
-
-      const before = world.score;
-      let destroyed = 0;
-      for (const member of members.slice(0, kills)) {
-        member.x = world.player.x;
-        member.y = world.player.y - 8;
-        member.state = 'diving';
-        // A shot reaches the row above the fighter on the frame it is fired, but
-        // the two-slot cap means the *next* shot waits for one of the pair to
-        // leave the top of the screen — which is a good sixty frames away.
-        for (let i = 0; i < 90; i += 1) {
-          destroyed += eventsOfType(stepWorld(world, FIRE), 'target-destroyed').length;
-        }
-      }
-      expect(destroyed).toBe(kills);
-      return world.score - before;
-    };
-
     const bonus = rules.scoring.transformGroupBonus?.rows[0] ?? 0;
     expect(bonus).toBe(1000);
     // Each transform is 80 doubled = 160 while it is attacking. Two of the three
     // pays nothing extra; the third completes the group.
-    expect(scoreFor(2)).toBe(320);
-    expect(scoreFor(3)).toBe(480 + bonus);
+    expect(trioKillScore(4, 2)).toBe(320);
+    expect(trioKillScore(4, 3)).toBe(480 + bonus);
+  });
+
+  it('S11 — steps the trio bonus 1,000 / 2,000 / 3,000 / 1,000 on stages 4, 8, 12 and 16', () => {
+    // The scout report's acceptance test S11, played rather than resolved: three
+    // transforms at 160 plus the stage's own all-of-them bonus. The bonus is the
+    // ROM's `(floor(stage / 4) mod 3)` rule, so stage 16 starts the cycle again —
+    // and a stage-banded table that stopped at 12 would pass at 4, 8 and 12 and
+    // fail here. Slower than the resolver test in `classic-pack.test.ts`, and it
+    // is the one that says the *score* moved.
+    for (const [stage, bonus] of [
+      [4, 1_000],
+      [8, 2_000],
+      [12, 3_000],
+      [16, 1_000],
+    ] as const) {
+      const paid = trioKillScore(stage, 3, `s11-${String(stage)}`);
+      expect([stage, paid]).toEqual([stage, 3 * 160 + bonus]);
+    }
   });
 
   it('withholds the bonus once a member has left the screen alive', () => {

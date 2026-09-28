@@ -639,6 +639,8 @@ describe('how far each value may be trusted', () => {
       'challengeStages.firstStage',
       'challengeStages.everyStages',
       'scoring.movingMultiplier',
+      'scoring.escortBonus',
+      'scoring.transformGroupBonus',
       'scoring.challenge.groupBonus',
       'scoring.challenge.perHit',
       'scoring.challenge.perfect',

@@ -43,6 +43,7 @@ function enemyAt(overrides: Partial<Enemy> = {}): Enemy {
     hp: 1,
     scoreBase: 50,
     movingMultiplier: 2,
+    escortBonus: 0,
     hitPadding: { x: 0, y: 0 },
     divePaths: [],
     diveWeight: 0,
@@ -155,6 +156,149 @@ describe('player shots against the fleet', () => {
     world.player.x = 0;
     runUntil(world, FIRE, (w) => w.score > 0);
     expect(world.score).toBe(100);
+  });
+});
+
+/**
+ * What a kill is worth, played end to end against the shipped aliens — the scout
+ * report's acceptance tests **S1 to S6, S8 and S10**.
+ *
+ * Every other scoring test in the tree asserts one link of the chain: `enemyScore`
+ * on a hand-made enemy (`tests/unit/enemies.test.ts`), the pack's own numbers
+ * (`tests/unit/classic-pack.test.ts`), one state against another
+ * (`tests/unit/dive.test.ts`). None of them says what the *game* pays for shooting
+ * a drone, and a table of numbers that agree with each other is exactly the shape
+ * an audit mistakes for coverage. So these fly a real shot from the real fighter
+ * into the pack's own `drone`, `wing` and `warden`, and read the score off the
+ * kill's own event **and** off the run's total — which is what catches a bonus
+ * arriving from somewhere else, or failing to.
+ */
+describe('S1–S6, S8, S10 — what a kill pays', () => {
+  /** One slot, directly above the fighter's home column, out of ramming reach. */
+  const TARGET_Y = 200;
+
+  /**
+   * Nothing in the air but the shot: the global bullet cap at zero.
+   *
+   * A warden takes two hits, and a bomb that killed the fighter between them would
+   * measure a lost life rather than a score. Two rules fields; every value under
+   * test is the pack's.
+   */
+  function noBombs(): Rules {
+    return { ...rules, enemies: { ...rules.enemies, maxBullets: 0 } };
+  }
+
+  /** A stage holding exactly one of `alien`, in a slot above the fighter. */
+  function oneAlienStage(alien: string, role: string): ReturnType<typeof stageSourceOf> {
+    return stageSourceOf(
+      {
+        id: `one-${alien}`,
+        formation: `above-the-fighter-${role}`,
+        waves: [{ at: 0, entryPath: 'entry-side-file', slots: [{ alien, home: 0 }] }],
+      },
+      {
+        id: `above-the-fighter-${role}`,
+        grid: { originX: 103, originY: TARGET_Y, columnSpacing: 16, rowSpacing: 16 },
+        slots: [{ row: 0, column: 0, role }],
+      },
+    );
+  }
+
+  /**
+   * Shoot one `alien` held in `state`, and report what happened.
+   *
+   * `home` is the state that cannot be staged by parking a body: an enemy at home
+   * *is* its slot, so the fleet puts it back there every frame. It is reached by
+   * putting the slot itself where the shot goes and holding the formation still —
+   * the sway would walk the slot out from under the shot within a few frames, and
+   * what is under test here is the value, not the motion (`formation.test.ts` owns
+   * that). Every other state has no flight registered, so the enemy stays exactly
+   * where it is put, which is how the rest of this file reaches them too.
+   */
+  function shootOne(
+    alien: string,
+    role: string,
+    state: Enemy['state'],
+  ): { readonly kill: number; readonly hits: number; readonly total: number } {
+    const world = createWorld({
+      seed: `pays-${alien}-${state}`,
+      rules: noBombs(),
+      stages: oneAlienStage(alien, role),
+    });
+    const enemy = world.fleet.enemies[0];
+    expect(enemy, `no ${alien} on the field`).toBeDefined();
+    if (enemy === undefined) throw new Error('no enemy');
+
+    world.fleet.entryComplete = true;
+    world.fleet.flights.delete(enemy.id);
+    enemy.state = state;
+    if (state === 'home') {
+      if (world.formation !== undefined) world.formation.motion = 'still';
+    } else {
+      enemy.x = world.player.x;
+      enemy.y = TARGET_Y;
+    }
+
+    // Stepped by hand rather than through `runUntil`: killing the only enemy on
+    // the field clears the stage on the same step, and the next stage's fleet
+    // replaces this one — so the enemy has to be watched by reference, not by index.
+    const events = runUntil(world, FIRE, () => enemy.state === 'dead', 120);
+    const destroyed = eventsOfType(events, 'target-destroyed');
+    expect(destroyed).toHaveLength(1);
+    return {
+      kill: destroyed[0]?.score ?? -1,
+      hits: eventsOfType(events, 'target-hit').length,
+      total: world.score,
+    };
+  }
+
+  it.each([
+    { id: 'S1', alien: 'drone', state: 'home', pays: 50 },
+    { id: 'S2', alien: 'drone', state: 'diving', pays: 100 },
+    { id: 'S3', alien: 'drone', state: 'entering', pays: 100 },
+    { id: 'S4', alien: 'drone', state: 'returning', pays: 50 },
+    { id: 'S5 (in formation)', alien: 'wing', state: 'home', pays: 80 },
+    { id: 'S5 (mid-dive)', alien: 'wing', state: 'diving', pays: 160 },
+  ] as const)('$id — a $alien shot while $state pays $pays', ({ alien, state, pays }) => {
+    const shot = shootOne(alien, alien, state);
+    // The kill's own event, the run's total, and no non-fatal hit on a one-hit
+    // alien: the three together say the whole value landed once, from one channel.
+    expect(shot.kill).toBe(pays);
+    expect(shot.total).toBe(pays);
+    expect(shot.hits).toBe(0);
+  });
+
+  it('S6 — a warden in formation scores nothing on the first hit and 150 on the second', () => {
+    const shot = shootOne('warden', 'warden', 'home');
+    expect(shot.hits).toBe(1);
+    expect(shot.kill).toBe(150);
+    // The first hit really did pay nothing: the total is the kill and no more.
+    expect(shot.total).toBe(150);
+  });
+
+  it('S8, S10 — a warden killed mid-dive pays 400: 300 and the solo escort bonus', () => {
+    // The one case a flat `{type, moving} -> points` table cannot express, and the
+    // reason an alien stores its base score alone. 300 is the doubled base; the
+    // extra 100 is the escort record every stage start installs, which is also S10:
+    // this warden has not been launched by anything, so the solo value is what it
+    // carries.
+    const bonus = rules.scoring.escortBonus.byEscortCount[0];
+    expect(bonus).toBe(100);
+    const shot = shootOne('warden', 'warden', 'diving');
+    expect(shot.hits).toBe(1);
+    expect(shot.kill).toBe(150 * rules.scoring.movingMultiplier + (bonus ?? 0));
+    expect(shot.kill).toBe(400);
+    // One channel, one number: the escort bonus is part of the captor's own value
+    // and does not arrive as a second score change the way a group bonus does.
+    expect(shot.total).toBe(400);
+  });
+
+  it('pays a warden its plain 150 at home, so the escort bonus rides the doubling', () => {
+    // Stated as the pair, because "400 while diving" is only the arcade's rule if
+    // the same warden is 150 sitting still — the verified scoring table's two
+    // columns, not a flat +100 on every captor kill.
+    expect(shootOne('warden', 'warden', 'home').kill).toBe(150);
+    expect(shootOne('warden', 'warden', 'returning').kill).toBe(150);
   });
 });
 
