@@ -776,3 +776,82 @@ describe('the difficulty preset', () => {
     expect(flow.world.rank).toBe('A');
   });
 });
+
+describe('the attract demo follows the game it is demonstrating', () => {
+  /**
+   * Two variants and **no injected demo**, so the flow builds its own: an
+   * `options.demo` is the same object however often `buildDemo` is called, which
+   * is what every other test here wants and exactly what these three cannot use.
+   */
+  const ownDemoFlow = (): GameFlow => {
+    const rules = quickRunRules();
+    return createGameFlow({
+      variants: [flowVariant('first', rules), flowVariant('second', rules)],
+      seed: 'own-demo',
+    });
+  };
+
+  it('is rebuilt on the variant that was chosen', () => {
+    const flow = ownDemoFlow();
+    const before = flow.demo;
+    press(flow, RIGHT);
+    press(flow, FIRE);
+    expect(flow.variant.id).toBe('second');
+    // The demo is the real game, so it has to be *this* game.
+    expect(flow.demo).not.toBe(before);
+  });
+
+  it('is left alone when the chosen variant is the one already running', () => {
+    const flow = ownDemoFlow();
+    const before = flow.demo;
+    press(flow, FIRE);
+    expect(flow.phase).toBe('attract');
+    // Nothing changed, so nothing restarts under the player.
+    expect(flow.demo).toBe(before);
+  });
+
+  it('is rebuilt when the difficulty preset moved the rank, on leaving settings', () => {
+    const ranks: string[] = [];
+    const flow = createGameFlow({
+      variants: [
+        flowVariant('only', quickRunRules(), {
+          ranks,
+          presets: [
+            { id: 'gentle', label: 'GENTLE', rank: 'A' },
+            { id: 'brutal', label: 'BRUTAL', rank: 'D' },
+          ],
+        }),
+      ],
+      seed: 'demo-rank',
+    });
+    const before = flow.demo;
+
+    press(flow, MENU);
+    press(flow, RIGHT);
+    expect(flow.rank).toBe('D');
+    // Not while the player is still choosing: a rebuild here would restart the
+    // attract world under them on every press of a direction.
+    expect(flow.demo).toBe(before);
+
+    press(flow, MENU);
+    expect(flow.phase).toBe('attract');
+    // Rank reaches stage resolution, so a demo built on another rank can fly the
+    // wrong entry sequence.
+    expect(flow.demo).not.toBe(before);
+    expect(ranks).toContain('D');
+  });
+
+  it('is left alone when nothing that reaches it changed', () => {
+    const flow = createGameFlow({
+      variants: [flowVariant('only', quickRunRules())],
+      seed: 'own-demo-2',
+    });
+    const before = flow.demo;
+    press(flow, MENU);
+    press(flow, FIRE);
+    press(flow, RIGHT);
+    press(flow, MENU);
+    // The volume moved, which the simulation knows nothing about.
+    expect(flow.demo).toBe(before);
+  });
+});

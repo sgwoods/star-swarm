@@ -303,15 +303,36 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     stages: variant.stagesFor(rankOf()),
   });
 
-  const buildDemo = (): AttractDemo =>
-    options.demo ??
-    createAttractDemo({
-      rules: variant.rules,
-      seed: `${seed}:attract`,
-      ...stageOption(),
-    });
+  /**
+   * The demo is the real game, so it has to be *this* game: the active variant's
+   * rules, and the stages that variant resolves at the rank now in force.
+   */
+  let demoRank: string | undefined;
+  const buildDemo = (): AttractDemo => {
+    demoRank = rankOf();
+    return (
+      options.demo ??
+      createAttractDemo({
+        rules: variant.rules,
+        seed: `${seed}:attract`,
+        ...stageOption(),
+      })
+    );
+  };
 
   let demo = buildDemo();
+
+  /**
+   * Rebuild the demo if the rank it was built on is no longer the one in force.
+   *
+   * Called when the settings screen closes rather than when the row changes: rank
+   * reaches stage resolution, so a demo built on another rank can fly the wrong
+   * entry sequence — but rebuilding on every press of a direction would restart
+   * the attract world under the player while they are still choosing.
+   */
+  const refreshDemo = (): void => {
+    if (rankOf() !== demoRank) demo = buildDemo();
+  };
 
   let phase: GamePhase = variants.length > 1 ? 'variant-select' : 'attract';
   let steps = 0;
@@ -339,11 +360,11 @@ export function createGameFlow(options: FlowOptions): GameFlow {
    * settings menu's `GAME` row must not be two ways of doing this.
    */
   const selectVariant = (next: FlowVariant): void => {
-    const changed = next.id !== variant.id;
+    if (next.id === variant.id) return;
     variant = next;
     writeSettings({ variant: next.id });
     demo = buildDemo();
-    if (changed) options.onVariantChange?.(next);
+    options.onVariantChange?.(next);
   };
 
   /** Start a game. Its opening events are this step's events. */
@@ -512,6 +533,7 @@ export function createGameFlow(options: FlowOptions): GameFlow {
           if (wasPressed(previous, frame, 'fire')) menu.next();
           if (wasPressed(previous, frame, 'menu') || wasPressed(previous, frame, 'start')) {
             settingsMenu = undefined;
+            refreshDemo();
             if (settingsFrom === 'variant-select') openVariantSelect();
             else enter('attract');
             break;
