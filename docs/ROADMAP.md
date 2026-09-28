@@ -18,29 +18,19 @@ run in parallel. **Ship** tasks change code; **scout** tasks produce reports.
 
 ---
 
-## First: a hosted build
+## First: what publishing the game left open
 
-Asked for ahead of the rest of this list. It will be the publishing and nothing
-else: what a deployment has to carry is described in
-[`docs/ARCHITECTURE.md`](ARCHITECTURE.md#refresh-or-restart), and this task will
-not have to add to it.
+The hosted build itself is done and has moved to
+[`docs/ARCHITECTURE.md`](ARCHITECTURE.md#refresh-or-restart), which is where a
+thing that exists is described. What it did **not** settle stays here, because it
+was never a deployment question:
 
-- **Ship: publish `dist/` somewhere anyone can open from a link**, including from
-  a subpath.
-- The deployment will serve **`build.json` beside `index.html`**, and serve it
-  **uncached**. That file is how an open page learns a newer build exists; a host
-  that caches it will make the detector permanently blind, and a host that omits
-  it will make the detector permanently silent. Neither will break the game.
-- Re-publishing will be the whole update path: a rebuild writes a new
-  `build.json`, and a tab already open will notice within a minute of play and say
-  so. Nothing will have to be pushed to a running page.
-- The question it will have to answer, which is not a deployment question:
-  whether a public build changes what "original art and audio by rule"
-  ([`docs/DESIGN.md`](DESIGN.md#2-ground-rules-read-before-building) section 2)
-  has to be able to prove.
-
-_Exit check:_ a link opens the game for someone who has never cloned it, and
-re-publishing makes an already-open tab say so.
+- **Scout: what a public build has to be able to prove about its art and audio.**
+  "Original by rule" ([`docs/DESIGN.md`](DESIGN.md#2-ground-rules-read-before-building)
+  section 2) is a rule the repository has kept; a build anyone can open is the
+  first time anyone outside it can ask. The report will say what evidence the
+  rule needs to have ready — provenance for the sprite and font pixels and for
+  every synthesised sound — and whether anything shipped falls short of it.
 
 ## Next: Milestone 3 — configurable
 

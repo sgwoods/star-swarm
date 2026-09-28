@@ -176,6 +176,41 @@ host has to get right — `build.json` must be served uncached, or the poll read
 the old answer forever, and it must sit beside `index.html`, because the page asks
 for it relative to its own document so that a deployment under a subpath works.
 
+That host is GitHub Pages, and the publisher is the workflow that already runs
+the checks. [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) packages the
+`dist/` its own build step produced, and a second job deploys that package — so
+**every push to `main` that passes lint, typecheck, both test suites, pack
+validation and the smoke test publishes, and a push that fails any of them does
+not.** Pull requests never reach the deploy job at all. There is no release build
+and nothing to run by hand: what reaches the site is the bundle the suite just
+passed against, because it is the same bundle.
+
+Both host requirements above are met, and neither is met by a setting:
+
+- **Beside `index.html`** — `dist/` is published whole, and `build.json` is
+  already in it. A project Pages site is served from a repository subpath, which
+  is why `vite.config.ts` sets `base: './'`: every asset reference and the
+  identity poll alike are relative to the document, so the same bundle works at a
+  domain root and under `/star-swarm/` without being rebuilt for either.
+- **Uncached** — not by a response header, because GitHub Pages does not let you
+  set one on a single file. By the request instead: `src/ui/build-info.ts` fetches
+  with `cache: 'no-store'` and a `?t=` stamp that differs on every poll, so no
+  cache between the page and the file has ever seen that URL. A host cannot serve
+  a stale answer to a question it has not been asked. This is the mechanism the
+  build-identity work already shipped; publishing on Pages is what makes it load
+  bearing.
+
+So the update path for a hosted build is the merge, and nothing else: a merge to
+`main` rebuilds, republishes, and a tab that was already open says **NEW BUILD**
+within a minute of simulation time. Refreshing is still the player's to press —
+it costs the run in progress, which is why nothing refreshes for them.
+
+Where the site is depends on how the repository has Pages configured, so this
+document does not write the address down: the deploy job publishes its URL as the
+`github-pages` environment's, which is on the workflow run and under the
+repository's **Environments**. A hand-copied address here is the same
+hand-maintained fact the build stamp exists to avoid.
+
 ### What it looks like
 
 Stage 1 from the first frame: five entry waves flying in on scripted paths, the
