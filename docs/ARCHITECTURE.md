@@ -189,6 +189,41 @@ and the world simply stops being stepped while the card is up. It is a phase
 rather than a flag precisely so that "playing" never sometimes means "not
 stepping the world" — `src/ui/flow.ts` says so at the top of the file.
 
+### The backdrop
+
+The starfield behind all of that is the arcade's routine rather than a scroll of
+our own. The simulation reports a per-stage **speed byte** — the pack's verified
+ROM formula, five values stepping every four stages and plateauing from stage 16 —
+and `src/render/starfield.ts` turns it into pixels the way the hardware does: the
+byte is added into a six-bit phase accumulator every frame, and the accumulator's
+overflow is what scrolls. The rate is therefore `byte / 64`, the field moves
+**whole pixels**, and the five bytes give 1.00, 1.25, 1.50, 1.75 and 2.00
+px/frame. At 1.25 that is three frames of one pixel and a fourth of two, and the
+dithering is the point rather than a rounding detail: a float scroll averaging the
+same rate has none of the shimmer. The parallax layers and per-star blink this
+replaced were ours — the chip has one scroll register, so every star moves the
+same whole pixels on the same frame.
+<!-- check:count starfield.speedByteUnit 64 starfield.stageSpeeds 5 -->
+
+Three more behaviours come out of the same ROM routine. The byte **ramps** one
+unit per frame toward the stage's target, so stage 4 eases into its rate over
+sixteen frames rather than jumping. The field runs **backwards at 3 px/frame while
+a tractor beam is out**, which reaches the renderer as `capture-started` and ends
+on `capture-failed` or `player-captured` — the backdrop learns it from an event
+and never reads the capture channel. And the **twinkle** is not a per-star blink
+at all: the generator holds four star banks and draws a pair of them, picked from
+two bits of a frame counter the scroll cannot stop, so half the field swaps out
+every 8 frames and each star is lit for exactly half of a 32-frame cycle.
+<!-- check:count starfield.reversePixels 3 starfield.banks 4 starfield.twinkleFrames 8 -->
+
+All four are verified in `docs/reference/arcade-reference.md` section 2, and they
+are the scout report's acceptance tests **M6, M7 and M8** in
+`tests/unit/starfield.test.ts`. The reverse is asserted by playing a real capture
+and feeding the renderer the events the simulation raised, rather than by setting
+the flag and believing it.
+
+![The scroll rate before and after: half the reference's, then the reference's](media/starfield-rate.gif)
+
 ### The two mechanics that are easiest to read about and hardest to picture
 
 **Capture.** A captor loops out of the formation, slides down and opens its
@@ -595,16 +630,6 @@ describing as deliberately absent something that shipped two merges ago.
   therefore not satisfiable today, and the latch that makes them interesting —
   killing the escorts first must not reduce the captor's value — cannot be
   observed either.
-- **The starfield scrolls at its own rate, not the reference's.** The per-stage
-  _speed byte_ is the pack's verified formula and the simulation reports it
-  (`starfieldSpeedByte`, `stage-started`), but the byte-to-pixels conversion in
-  `src/render/starfield.ts` is `SPEED_TIERS`, which is ours and is half the
-  reference's closed value of `byte / 64` — 0.5 to 1.5 px/frame against 1.00 to
-  2.00. Three behaviours in the same routine are also absent: the one-unit-per-frame
-  ramp between stages, the 3 px/frame reverse while a tractor beam is pulling the
-  ship in, and the star-bank twinkle. Acceptance tests **M6, M7 and M8**. Closing
-  them doubles the visible scroll rate, which is a change to how the game feels
-  rather than a defect, so it is the captain's call and not a quiet fix.
 - **There is no pulsing-formation sound.** `formation-settled` is raised on the
   frame the sway passes back through zero and the breathe begins there, which is
   asserted in `tests/unit/formation.test.ts`; the arcade starts its pulsing

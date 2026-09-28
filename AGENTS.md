@@ -451,7 +451,11 @@ Two consequences when working here:
   and nothing fails**: `unknownProvenancePaths` catches a marking that names no
   field, but not a field that carries no marking. The lists in
   `tests/unit/classic-pack.test.ts` are the only thing holding the arcade values to
-  `AGENTS.md`'s verified/provisional rule, so a new value goes in one of them.
+  `AGENTS.md`'s verified/provisional rule, so a new value goes in one of them. An
+  arcade value that is **presentation** cannot be in a pack at all — the starfield's
+  byte-to-pixels conversion is in `src/render/starfield.ts` — so `provenance` cannot
+  reach it and a `check:count` counter reading the module is what holds the state
+  document to it instead.
 - The game boots into **attract mode**, not into play: `src/ui/flow.ts` is the
   one state machine — attract, playing, the between-stage challenge card, game
   over, results and high-score entry <!-- check:count flow.phases 6 --> — and
