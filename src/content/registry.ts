@@ -118,8 +118,8 @@ const EMPTY_TABLE: SequenceTable = { rows: [], repeatLast: 1 };
  * pack into a game with no roles, no formation and no stage sequence. Each field
  * is therefore layered on its own terms:
  *
- * - **`roles`, `formations` and `sounds` merge per key**, later winning — the
- *   same rule the content maps follow, and for the same reason.
+ * - **`roles`, `formations`, `sounds` and `effects` merge per key**, later
+ *   winning — the same rule the content maps follow, and for the same reason.
  * - **`palette` is a union**, in layering order. It is a *permission list*:
  *   `src/render/sprites.ts` checks membership in it and never indexes it, so an
  *   overlay adding two colours must not have to restate the base's fourteen.
@@ -162,6 +162,7 @@ export function composeManifest(packs: readonly LoadedPack[]): PackManifest {
     roles: mergeRecords(packs, (manifest) => manifest.roles),
     formations: mergeRecords(packs, (manifest) => manifest.formations),
     sounds: mergeRecords(packs, (manifest) => manifest.sounds),
+    effects: mergeRecords(packs, (manifest) => manifest.effects),
     stageBadges: lastStated(
       packs,
       (manifest) => manifest.stageBadges,

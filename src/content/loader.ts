@@ -348,6 +348,12 @@ export function loadPack(source: PackSource): LoadResult {
     requireRef(MANIFEST_FILE, `sounds.${event}`, 'sounds', sound);
   }
 
+  // The event → effect bindings the renderer reads, on the same terms: a misspelt
+  // sprite id is a load failure rather than a death that draws nothing.
+  for (const [event, effect] of Object.entries(manifest.effects)) {
+    requireRef(MANIFEST_FILE, `effects.${event}.sprite`, 'sprites', effect.sprite);
+  }
+
   for (const [key, formation] of formations) {
     if (formation.slots.length === 0 && stages.size > 0) {
       errors.push({

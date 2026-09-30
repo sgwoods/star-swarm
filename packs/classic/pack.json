@@ -283,6 +283,7 @@
     "enemy-fired": "enemy-fire",
     "target-destroyed": "enemy-hit",
     "player-hit": "player-death",
+    "dual-half-lost": "player-death",
     "extra-life": "extra-life",
     "game-over": "game-over",
     "enemy-dived": "dive",
@@ -293,6 +294,10 @@
     "challenge-bonus": "challenge-bonus",
     "challenge-perfect": "challenge-perfect",
     "target-hit": "enemy-hit"
+  },
+  "effects": {
+    "player-hit": { "sprite": "explosion-player", "offsetX": -8, "offsetY": -8 },
+    "dual-half-lost": { "sprite": "explosion-player", "offsetX": -8, "offsetY": -8 }
   },
   "stageBadges": [
     { "value": 50, "sprite": "badge-50" },

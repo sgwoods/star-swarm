@@ -81,12 +81,20 @@ rather than a sprite of its own name, because that is what it is.
   holds none of its own and refuses to build a sheet from a colour that is not
   here.
 - **`sprites/`** — the original 16×16 cast (`player`, `player-captured`, the
-  three roles, `warden-hit` for the boss's second colour, both explosions) and
+  three roles, `warden-hit` for the boss's second colour, `explosion-alien`) and
   the 8×8 HUD art (`shot-player`, `shot-alien`, the six stage badges). Drawn for
   this project: `docs/DESIGN.md` section 2 rules out the original's art, so these
   take the style and none of the pixels. Wings flap over two frames and
-  explosions run over four, per section 5. `npm run sprite-sheet` renders the
-  whole set as a contact sheet.
+  explosions run over four, per section 5. The one sprite outside the 16×16 cast
+  is **`explosion-player` at 32×32**: it is drawn over the fighter it replaces,
+  and an explosion the same size as the thing that died reads as a sprite swap
+  rather than a destruction. `npm run sprite-sheet` renders the whole set as a
+  contact sheet.
+- **the `effects` map in `pack.json`** — which simulation event plays which of
+  those animations, and where it sits relative to the event. `player-hit` and
+  `dual-half-lost` both play `explosion-player` at `-8, -8`, which is half the
+  difference between a 32 px explosion and the 16 px fighter whose anchor the
+  event reports. The renderer names none of this.
 - **`sounds/`** and the `sounds` map in `pack.json` — the Classic SFX set, and
   which simulation event plays each one.
 

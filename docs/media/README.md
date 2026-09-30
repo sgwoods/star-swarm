@@ -122,6 +122,20 @@ The clips are screen recordings of the dev build.
   are untouched. At `fps=8` and `max_colors=24` rather than the usual 10 and 64:
   the frame is two playfields wide and two starfields defeat a GIF's inter-frame
   compression, so the usual settings came out at 6 MB.
+- `m3-death.gif` — losing a fighter, drawn: one live death from the shipped
+  cabinet, three and a half seconds around the hit. A drone rams the fighter
+  during stage 1's entry waves and the four frames play out over it — the white
+  flash, the fireball, the shell breaking into eight, the embers — followed by the
+  gap of empty sky the respawn leaves before the next fighter arrives. Nothing
+  else on screen stops: the waves keep flying in behind it, which is the
+  simulation carrying on exactly as it would have.
+- `m3-death-before-after.gif` — the same death twice, side by side and **step for
+  step**: the build with the pack's `effects` map emptied on the left, the build as
+  it ships on the right. The two panels are one run, not two — the seed is fixed
+  and an autoplay persona is flying, so both takes reach the same hit at the same
+  simulation step and every alien is in the same place in both. That is the point
+  of the pairing: the only difference on screen is the thing the change added. On
+  the left the fighter is simply not there any more.
 - `arch-lab.gif` — the `/lab` previewer: an entry path playing, then scrubbed
   frame by frame with the readout following, then the same path mirrored, then a
   dive path flown from the slot marker.
