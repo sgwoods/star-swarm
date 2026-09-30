@@ -125,7 +125,19 @@ test('the settings menu opens, changes the difficulty and survives a reload', as
   await press(page, 'Escape', () => window.starSwarm?.phase === 'settings');
 
   const labels = (await rows(page)).map((row) => row.split('=')[0]);
-  expect(labels).toEqual(['GAME', 'DIFFICULTY', 'VOLUME', 'SOUND', 'CONTROLS', 'CRT', 'PACKS']);
+  // `AUTOPLAY` sits beside `DIFFICULTY` because it is the same kind of setting —
+  // how the run is framed, not how it looks — and it is shown because the Classic
+  // game declares personas. A variant that declares none has no such row.
+  expect(labels).toEqual([
+    'GAME',
+    'DIFFICULTY',
+    'AUTOPLAY',
+    'VOLUME',
+    'SOUND',
+    'CONTROLS',
+    'CRT',
+    'PACKS',
+  ]);
   // The pack row counts them; the list itself is the note under the card.
   expect(await rows(page)).toContain('PACKS=1');
 

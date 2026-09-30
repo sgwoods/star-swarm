@@ -36,6 +36,11 @@ const HOST_GLOBALS = [
   'performance',
 ];
 
+/** Why the autoplay pilot may not read a clock. See the rule block below. */
+const DETERMINISM =
+  'The autoplay pilot must stay reproducible: its only clock is the simulation step ' +
+  'count on the view it is handed (docs/ARCHITECTURE.md section 7).';
+
 /** `Math.random()` is banned in sim and engine alike: seed an Rng instead. */
 const NO_MATH_RANDOM = {
   'no-restricted-properties': [
@@ -87,10 +92,26 @@ export default tseslint.config(
     extends: [tseslint.configs.disableTypeChecked],
   },
 
-  // Determinism applies to the whole deterministic half of the codebase.
+  // Determinism applies to the whole deterministic half of the codebase — and to
+  // the autoplay pilot, which is not in that half but must behave as if it were.
+  // A persona that consulted `Math.random` or the wall clock would break "same
+  // seed, same persona, same run", which is the one property the autoplay tests
+  // and the goldens both rest on. It draws from a seeded Rng and its only clock is
+  // the simulation's own step count.
   {
-    files: ['src/sim/**/*.ts', 'src/engine/**/*.ts'],
+    files: ['src/sim/**/*.ts', 'src/engine/**/*.ts', 'src/ui/autoplay.ts'],
     rules: NO_MATH_RANDOM,
+  },
+
+  {
+    files: ['src/ui/autoplay.ts'],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        { name: 'Date', message: DETERMINISM },
+        { name: 'performance', message: DETERMINISM },
+      ],
+    },
   },
 
   /**

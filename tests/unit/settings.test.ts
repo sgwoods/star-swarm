@@ -44,10 +44,11 @@ const hostile: WebStorageLike = {
 
 describe('the settings shape', () => {
   it('holds nothing the simulation steps', () => {
-    // The guard that keeps layer 3 out of layer 1. `difficulty` is a preset id and
-    // the only other values are presentation, controls and ids. A number added
-    // here that a rule reads would fail this list.
+    // The guard that keeps layer 3 out of layer 1. `difficulty` and `autoplay`
+    // are ids and the only other values are presentation, controls and ids. A
+    // number added here that a rule reads would fail this list.
     expect(Object.keys(DEFAULT_SETTINGS).sort()).toEqual([
+      'autoplay',
       'controls',
       'crt',
       'difficulty',
@@ -57,11 +58,17 @@ describe('the settings shape', () => {
       'volume',
     ]);
     expect(typeof DEFAULT_SETTINGS.difficulty).not.toBe('number');
+    // An autoplay persona is a document's id, not a skill number: a scalar here
+    // would be a difficulty multiplier wearing a different label.
+    expect(typeof DEFAULT_SETTINGS.autoplay).not.toBe('number');
   });
 
   it('starts with nothing chosen, so the first boot takes every default', () => {
     expect(DEFAULT_SETTINGS.variant).toBeUndefined();
     expect(DEFAULT_SETTINGS.difficulty).toBeUndefined();
+    // Autoplay is off out of the box: a cabinet nobody asked to watch itself
+    // must boot into the hands of whoever is standing at it.
+    expect(DEFAULT_SETTINGS.autoplay).toBeUndefined();
     expect(DEFAULT_SETTINGS.packs).toEqual({});
   });
 

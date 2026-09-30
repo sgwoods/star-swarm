@@ -880,21 +880,28 @@ configuration layers: engine rules, content packs, and the player's settings. Th
 third is in, as `src/ui/settings.ts` and the menu in `src/ui/menus.ts`, and the
 whole of what is interesting about it is the boundary with the first.
 
-**Nothing in the settings is a number the simulation steps.** The seven values are
-the chosen variant, the difficulty **preset id**, volume, mute, the CRT option, the
-control scheme, and a per-variant pack-list override. Where each one arrives:
+**Nothing in the settings is a number the simulation steps.** The eight values are
+the chosen variant, the difficulty **preset id**, the autoplay **persona id**,
+volume, mute, the CRT option, the control scheme, and a per-variant pack-list
+override. Where each one arrives:
 
-| Setting      | Applied by                                                                 |
-| ------------ | -------------------------------------------------------------------------- |
-| `variant`    | which game `src/ui/flow.ts` builds every world from                        |
-| `difficulty` | a preset id → a rank → the rules layer's own tables                        |
-| `volume`     | `Synth.setVolume`                                                          |
-| `muted`      | `Synth.setMuted`                                                           |
-| `controls`   | the keyboard map handed to `createKeyboardInput`, one of three schemes     |
-| `crt`        | stored and reported; no filter reads it yet                                |
-| `packs`      | an override of a variant's pack list, honoured on load, written by nothing |
+| Setting      | Applied by                                                                  |
+| ------------ | --------------------------------------------------------------------------- |
+| `variant`    | which game `src/ui/flow.ts` builds every world from                         |
+| `difficulty` | a preset id → a rank → the rules layer's own tables                         |
+| `autoplay`   | a persona id → the pilot the flow hands the controls to ([§7](#7-autoplay)) |
+| `volume`     | `Synth.setVolume`                                                           |
+| `muted`      | `Synth.setMuted`                                                            |
+| `controls`   | the keyboard map handed to `createKeyboardInput`, one of three schemes      |
+| `crt`        | stored and reported; no filter reads it yet                                 |
+| `packs`      | an override of a variant's pack list, honoured on load, written by nothing  |
 
 <!-- check:count ui.controlSchemes 3 -->
+
+The menu shows at most one row per setting, and two of them are shown only when
+there is something to choose: `GAME` needs more than one variant, and `AUTOPLAY`
+needs a variant that declares personas.
+<!-- check:count ui.settingsRows 8 -->
 
 **The difficulty preset does exactly one thing: it chooses the rank.** It is not a
 multiplier and there is nowhere in the shape to make it one. A preset is an id, a
@@ -931,6 +938,114 @@ DOM like everything else in `src/ui/`.
 
 ---
 
+## 7. Autoplay
+
+The cabinet can play itself, as one of several named **personas**, so that the game
+can be watched rather than played. `beginner`, `normal`, `expert` and `astronaut`
+ship with the Classic game.
+<!-- check:count autoplay.personas 4 -->
+
+**Attract mode is the wrong shape for this, and that is why autoplay is not built
+on it.** The demo in `src/ui/attract.ts` is the real simulation driven by a
+**recorded input log** — a recording, which cannot adapt to a game that fights
+back differently, so four personas would be four recordings of four different runs
+rather than four ways of playing one. The scripted pilots in
+`scripts/record-replay.ts` are the right shape: something that reads the world and
+decides. `src/ui/autoplay.ts` is that, made into data.
+
+### A persona plays; it does not cheat
+
+The pilot is handed a `PilotView` — **a freshly built plain value holding what is
+on the screen** — and never a `World`. It cannot read the difficulty row, a bomb
+timer, a launch frame or the generator, and it cannot write anything at all,
+because `viewOfWorld` copies numbers out and leaves no reference to reach back
+through. What it returns is one `InputFrame` carrying the same three bits a
+keyboard carries: left, right and fire.
+
+That is asserted rather than described. `tests/unit/autoplay.test.ts` fingerprints
+a world, samples the pilot against it 1,200 times, and requires the fingerprint to
+be unchanged; it holds the view's field list to what a player can see, checks the
+sightings are the ones `src/render/scene.ts` draws, and checks that no frame ever
+carries `start`, `menu`, `pause`, `exit`, or left and right at once.
+
+The view does carry three numbers that come from the rules — the fighter's
+vulnerable depth and width, and its rocket speed. They are there because they are
+properties of the player's own ship, learned in one life and visible in every shot
+ever fired, and because without the rocket speed the pilot cannot **lead** a
+moving target: a rocket takes about thirty steps to reach the formation, so firing
+at where something _is_ misses everything that moves.
+
+### Eight axes, and each one is a document's
+
+A persona is eight numbers and a flag, all in `variants/<id>.json`, all in the
+game's own units — pixels of the playfield and **simulation steps**, never seconds
+and never a normalised "skill".
+<!-- check:count autoplay.axes 8 -->
+
+| Axis             | What it bounds                                                      |
+| ---------------- | ------------------------------------------------------------------- |
+| `reactionSteps`  | how stale the view it decides from is                               |
+| `aimTolerance`   | how far off the intercept it will still pull the trigger            |
+| `threatHorizon`  | how far up the screen it notices something coming                   |
+| `dodgeMargin`    | the clearance it keeps, on top of the fighter's own vulnerable band |
+| `shotDiscipline` | how reliably it keeps one of its two rockets back                   |
+| `panic`          | how often a pressing threat provokes a wasted reversal              |
+| `engage`         | how often it goes under a diver to shoot it rather than stay put    |
+| `rescue`         | whether it takes the risk of going for the dual fighter             |
+
+`src/content/personas.ts` holds the schema and is the only place a persona is
+interpreted. There is no `if persona ===` anywhere: every field is read by name and
+applied identically, so a fifth persona is a fifth entry in a document and nothing
+else. A persona is validated the way a pack and a variant are — the schema first,
+strictly, then the references — and a failure names the document and the field
+(`variants/classic.json` · `autoplay.personas[1].id`).
+
+**The names are a claim about outcomes, and it is tested.**
+`tests/sim/autoplay-personas.test.ts` plays every persona over 32 seeds and
+requires the mean score, the median score and the average survival to increase at
+every step up the ladder, and the whole ladder to span at least half again from end
+to end. One seed says nothing — a bad dive ends an astronaut's run and a lucky one
+carries a beginner's — so the claim is only ever made over a block of them.
+
+### The way in
+
+The `AUTOPLAY` row on the settings screen, which lists OFF and then each persona
+the active variant declares. Choosing one and leaving the menu is the whole of
+starting: attract has no timer to move it on, so the flow pushes `start` there
+itself and the persona flies the game that begins.
+
+**A human taking the controls always wins, immediately.** `left`, `right` or `fire`
+pressed while a game is live — or `start` pressed at the attract screen — clears the
+setting on that frame, so the fighter is the person's from that step and nothing
+takes it back without being asked again. The rule is deliberately no wider than
+that: every other phase belongs to a _cursor_, and reading a press there as a
+takeover meant that choosing a persona with `fire`, answering the exit card, or
+skipping a seven-second results screen all silently ended the watch session.
+
+`menu`, `pause` and `exit` are never takeovers. **A watched run pauses like any
+other** — which is exactly what a watcher wants when a persona gets itself into
+something worth looking at — and `exit` discards the run without disarming
+autoplay, so the cabinet goes back to watching the next one.
+
+One consequence worth stating because it is a real edge: with autoplay armed, the
+attract screen lasts a single step, so the settings screen cannot be reached from
+it. Changing persona means taking the controls first, which is one keypress and is
+the same gesture as stopping.
+
+![Beginner on the left, astronaut on the right, both playing themselves](media/m3-autoplay.gif)
+
+### Determinism survives
+
+Same seed, same persona, same run. The pilot's only clock is the step count on the
+view it is handed, and its only source of chance is a seeded `Rng` of **its own** —
+never the world's, so how much a persona dithers cannot change what the simulation
+computes. `eslint.config.js` puts `src/ui/autoplay.ts` under the same `Math.random`
+ban `src/sim/` and `src/engine/` are under and bans `Date` and `performance` in it
+besides, and `tests/unit/autoplay.test.ts` replays a recorded list of views through
+two pilots on one seed and requires every frame to agree.
+
+---
+
 ## Where to read next
 
 | You want                             | Read                                                                  |
@@ -943,3 +1058,4 @@ DOM like everything else in `src/ui/`.
 | A directory's own rules              | The `README.md` in each of `src/*/`, `packs/` and `packs/classic/`    |
 | How the clips were captured          | [`docs/media/README.md`](media/README.md)                             |
 | The sharp edges, and the doc rules   | [`AGENTS.md`](../AGENTS.md)                                           |
+| What a persona may say               | `src/content/personas.ts` — the schema is the documentation           |

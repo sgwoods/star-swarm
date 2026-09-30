@@ -528,6 +528,26 @@ Three consequences when working here:
   `tests/e2e/smoke.spec.ts` is for — and every phase timer counts **simulation
   steps**, never the wall clock. The attract demo is the real simulation played
   through `src/engine/replay.ts`, so it cannot drift from the game.
+- **An autoplay persona is data, and the pilot may only see what is drawn.**
+  `variants/<id>.json` declares the personas; `src/content/personas.ts` is the only
+  place one is interpreted and nothing under `src/` names one. The pilot in
+  `src/ui/autoplay.ts` is handed a `PilotView` built by `viewOfWorld` and **never a
+  `World`** — that is what makes "it does not cheat" checkable, and
+  `tests/unit/autoplay.test.ts` checks it by fingerprinting a world either side of
+  a thousand samples and by holding the view's field list to what a player can see.
+  Adding a field to that view is adding something a persona knows, so it belongs in
+  the same review as the axis that wanted it. The pilot is also under the
+  `Math.random`, `Date` and `performance` bans in `eslint.config.js` even though it
+  is not in `src/sim/`: same seed, same persona, same run is what
+  `tests/sim/autoplay-personas.test.ts` rests on, and that test also holds the four
+  names to being an _ordering_ — edit a persona's numbers and it is the thing that
+  fails.
+- **A takeover is the fighter's controls in a live game, and nothing else.**
+  `humanTookOver` in `src/ui/flow.ts` is deliberately narrow: `left`, `right` or
+  `fire` while `playing`, plus `start` in attract. Widening it looks harmless and
+  is not — every other phase belongs to a cursor, so a wider rule disarmed autoplay
+  when somebody chose a persona with `fire`, answered the exit card, or skipped the
+  results screen. `menu`, `pause` and `exit` are never takeovers.
 - **Pausing is a phase, not a flag, and the simulation never hears about it.**
   `paused` is a phase the world is simply not stepped in, and the frame that
   carried the press was stepped before the phase changed — so the sim sees exactly

@@ -75,15 +75,25 @@
  *   a sim that did.
  */
 
+import type { Persona } from '../content/personas.js';
+import { personaOf } from '../content/personas.js';
 import type { Rules } from '../content/schema.js';
 import type { StageSource } from '../content/stages.js';
 import type { DifficultyPreset } from '../content/variants.js';
 import { rankFor } from '../content/variants.js';
-import { type InputFrame, wasPressed } from '../engine/input.js';
+import {
+  type Action,
+  ACTION_BIT,
+  EMPTY_FRAME,
+  type InputFrame,
+  isDown,
+  wasPressed,
+} from '../engine/input.js';
 import { STEP_HZ } from '../engine/loop.js';
 import type { SimEvent } from '../sim/events.js';
 import { createWorld, stepWorld, type World } from '../sim/world.js';
 import { type AttractDemo, createAttractDemo } from './attract.js';
+import { createAutopilot, type Pilot, viewOfWorld } from './autoplay.js';
 import {
   createHighScoreBoard,
   createInitialsEntry,
@@ -129,6 +139,13 @@ export interface FlowVariant {
   readonly rules: Rules;
   readonly presets: readonly DifficultyPreset[];
   readonly defaultPreset: DifficultyPreset;
+  /**
+   * The autoplay personas this game offers, in menu order. Empty means this game
+   * cannot be watched playing itself, and the `AUTOPLAY` row is not drawn.
+   */
+  readonly personas: readonly Persona[];
+  /** Which persona the row lands on first, if the document named one. */
+  readonly defaultPersona?: Persona | undefined;
   /**
    * What plays as each stage at a rank. The rank is a parameter because rank
    * reaches stage resolution as well as the difficulty tables (section 6), so a
@@ -242,6 +259,13 @@ export interface GameFlow {
   readonly variant: FlowVariant;
   /** The difficulty rank the next game will run at — the preset, resolved. */
   readonly rank: string;
+  /**
+   * The persona now flying, or `undefined` when a human is.
+   *
+   * Resolved from the settings against the active variant on every read, so a
+   * persona the current game does not offer reads as off rather than as stale.
+   */
+  readonly autoplay: Persona | undefined;
   /** The player's settings, as they stand. */
   readonly settings: Settings;
   /** The start-up list, present only during `variant-select`. */
@@ -279,6 +303,9 @@ function variantOfRules(rules: Rules, stages: StageSource | undefined): FlowVari
     name: rules.name ?? rules.id,
     demonstration: false,
     packs: [],
+    // Bare rules declare no personas: a persona is a variant document's, and a
+    // flow built from rules alone has no document behind it.
+    personas: [],
     rules,
     presets: presets.length > 0 ? presets : [fallback],
     defaultPreset:
@@ -373,11 +400,59 @@ export function createGameFlow(options: FlowOptions): GameFlow {
   let entryRank: number | undefined;
   let lastRank: number | undefined;
   let previous: InputFrame = 0;
+  /**
+   * The previous frame **as the human produced it**, kept beside `previous`.
+   *
+   * `previous` is the frame the machine acted on, which under autoplay is the
+   * pilot's. Telling "a human just pressed fire" from "the pilot is holding fire"
+   * needs the other history, and conflating the two is how autoplay would be
+   * impossible to stop.
+   */
+  let previousHuman: InputFrame = 0;
   let variantMenu: VariantMenu<FlowVariant> | undefined;
   let settingsMenu: SettingsMenu | undefined;
   let confirm: ExitConfirm | undefined;
   /** Where the settings screen returns to. */
   let settingsFrom: GamePhase = 'attract';
+
+  /* -- autoplay ----------------------------------------------------------- */
+
+  /**
+   * The persona now flying, resolved from the settings against the active
+   * variant. `undefined` is a human at the controls, and an id this variant does
+   * not offer resolves to `undefined` rather than to the first persona
+   * (`personaOf`): watching the cabinet play itself as somebody else is worse
+   * than not watching.
+   */
+  const personaNow = (): Persona | undefined => personaOf(variant, settingsValue().autoplay);
+
+  /**
+   * The pilot, and the persona it was built for.
+   *
+   * Rebuilt when the persona changes and when a game starts — the second so that
+   * every game gets its own seeded stream, which is what makes "same seed, same
+   * persona, same run" a property of a *game* rather than of a whole session.
+   */
+  let pilot: Pilot | undefined;
+  let pilotPersona: string | undefined;
+
+  const pilotFor = (persona: Persona | undefined): Pilot | undefined => {
+    if (persona === undefined) {
+      pilot = undefined;
+      pilotPersona = undefined;
+      return undefined;
+    }
+    if (pilot === undefined || pilotPersona !== persona.id) {
+      pilot = createAutopilot({
+        persona,
+        // The pilot's own stream, never the world's: which way a persona dithers
+        // must not change what the simulation computes.
+        seed: `${seed}:autoplay:${persona.id}:${String(games)}`,
+      });
+      pilotPersona = persona.id;
+    }
+    return pilot;
+  };
 
   const enter = (next: GamePhase): void => {
     phase = next;
@@ -400,6 +475,10 @@ export function createGameFlow(options: FlowOptions): GameFlow {
   /** Start a game. Its opening events are this step's events. */
   const startGame = (): readonly SimEvent[] => {
     games += 1;
+    // A fresh pilot per game, so its seed carries the game index and one run's
+    // dithering cannot lean into the next.
+    pilot = undefined;
+    pilotPersona = undefined;
     const world = createWorld({
       seed: `${seed}:game-${String(games)}`,
       rules: variant.rules,
@@ -433,6 +512,85 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     entry = undefined;
     entryRank = undefined;
     enter('attract');
+  };
+
+  /**
+   * Has a human taken the controls?
+   *
+   * **The fighter's own controls, in the phase where the fighter is live** — and
+   * `start` from attract, which unambiguously means "my game now". That is the whole
+   * of it, and the narrowness is the point: every other phase is a *cursor's*, and a
+   * press there addresses a card rather than a ship.
+   *
+   * Three near-misses, each of which was a real bug in a draft of this:
+   *
+   * - On the settings screen `fire` moves the cursor and the directions change a
+   *   row, so a wider rule disarmed autoplay while somebody was choosing a persona
+   *   with it.
+   * - On the exit card `fire` commits a choice, so a wider rule threw the run away
+   *   *and* stopped the watch session with one press.
+   * - On the results and game-over cards any button skips ahead, so a watcher
+   *   impatient with a seven-second screen lost their session for tapping it.
+   *
+   * `menu`, `pause` and `exit` never count anywhere. They hold or leave a run; they
+   * do not fly a fighter, and pausing to look at what a persona has got itself into
+   * is precisely what a watcher wants.
+   */
+  const humanTookOver = (human: InputFrame): boolean => {
+    const pressed = (action: Action): boolean => wasPressed(previousHuman, human, action);
+    if (phase === 'playing') return pressed('left') || pressed('right') || pressed('fire');
+    if (phase === 'attract') return pressed('start');
+    return false;
+  };
+
+  /**
+   * The frame autoplay produces for this step, given the phase.
+   *
+   * Three cases, and the shape of them is the whole of what autoplay is allowed to
+   * do:
+   *
+   * - **`playing`: the pilot's frame replaces the human's.** This is the only phase
+   *   a persona drives. It is handed a *projection* of the world and never the world
+   *   itself (`./autoplay.ts`), which is what makes "a persona sees only what a
+   *   player sees" a fact about the types rather than a promise in a comment. The
+   *   human's own bits are folded in, but by the time control reaches here a human
+   *   pressing one of them has already disarmed autoplay.
+   * - **`attract` and `high-score-entry`: a `start` is *added* to whatever the human
+   *   is doing.** The pilot plays; it does not press buttons on screens, because a
+   *   screen is a phase and phases are this file's. These two are the only screens
+   *   that would otherwise leave a watcher staring at a still card — attract has no
+   *   timer to move it on, and entry's is thirty seconds. `game-over`, `results` and
+   *   `challenge-results` run their own timers out, because a watcher wants to read
+   *   the score.
+   * - **Everywhere else: the human's frame, untouched.** The menus in particular.
+   *   Returning only the `menu` bit here was a real bug and a complete one: with
+   *   autoplay armed, `fire` and the directions never reached the settings cursor, so
+   *   the `AUTOPLAY` row could be opened and then not operated.
+   */
+  const autoplayFrame = (human: InputFrame, persona: Persona): InputFrame => {
+    // A hand reaching for the menu button gets the step to itself. Without this the
+    // `start` autoplay pushes in attract arrived on the same frame and won, because
+    // the attract case reads `start` first — so the one button that stops a watch
+    // session could not be pressed while one was running.
+    if (isDown(human, 'menu')) return human;
+
+    switch (phase) {
+      case 'playing': {
+        const world = game;
+        if (world === undefined) return human;
+        return (pilotFor(persona)?.sample(viewOfWorld(world)) ?? EMPTY_FRAME) | human;
+      }
+      case 'attract':
+      case 'high-score-entry':
+        // **A pulse, not a hold.** Every screen reads `wasPressed`, so a button held
+        // down across a transition is a button the next screen never sees go down:
+        // holding `start` started one game and then left the cabinet sitting in
+        // attract for ever, because the step that submitted the high score carried
+        // `start` into the step that was supposed to press it again.
+        return (isDown(previous, 'start') ? EMPTY_FRAME : ACTION_BIT.start) | human;
+      default:
+        return human;
+    }
   };
 
   /** Any button: what skips a screen a player has finished reading. */
@@ -543,6 +701,9 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     get rank(): string {
       return rankOf();
     },
+    get autoplay(): Persona | undefined {
+      return personaNow();
+    },
     get settings(): Settings {
       return settingsValue();
     },
@@ -558,9 +719,26 @@ export function createGameFlow(options: FlowOptions): GameFlow {
 
     resultRows: () => resultRowsFor(stats),
 
-    step(frame: InputFrame): FlowStep {
+    step(human: InputFrame): FlowStep {
       const previousPhase = phase;
       let events: readonly SimEvent[] = [];
+
+      // A human taking the controls always wins, immediately and for good: the
+      // setting is cleared, so nothing takes the stick back without being asked
+      // again. A watcher who wants to keep watching uses the menu button.
+      const persona = personaNow();
+      if (persona !== undefined && humanTookOver(human)) {
+        writeSettings({ autoplay: undefined });
+        pilot = undefined;
+        pilotPersona = undefined;
+      }
+      // The frame the machine acts on. Under autoplay it is the pilot's, and the
+      // pilot is handed a *projection* of the world and never the world itself
+      // (`./autoplay.ts`), which is what makes "a persona sees only what a player
+      // sees" a fact about the types rather than a promise in a comment.
+      // Re-read rather than reuse `persona`: the line above may just have cleared it.
+      const flying = personaNow();
+      const frame = flying === undefined ? human : autoplayFrame(human, flying);
 
       switch (phase) {
         case 'variant-select': {
@@ -726,6 +904,7 @@ export function createGameFlow(options: FlowOptions): GameFlow {
       }
 
       previous = frame;
+      previousHuman = human;
       steps += 1;
       // A phase that changed this step starts its own count at zero; one that
       // did not gets the step it just spent.

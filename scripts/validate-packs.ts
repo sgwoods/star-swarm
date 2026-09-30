@@ -11,8 +11,9 @@
  *      paths, aliens, formations, stages in a sequence, roles.
  *   4. **Variants** — every `variants/*.json` against its own schema, then against
  *      the packs that loaded: the packs it names must be installed, it must have
- *      rules to run on, and every difficulty preset must name a rank those rules
- *      declare.
+ *      rules to run on, every difficulty preset must name a rank those rules
+ *      declare, and every autoplay persona must have its own id and be the one a
+ *      `defaultPersona` names.
  *
  * Passes 2 and 3 are `loadPack` itself and pass 4 is `loadVariants`, so the script
  * and the game agree by construction rather than by two implementations staying in
@@ -167,6 +168,13 @@ function validateVariants(): void {
       `${String(variant.packs.length)} pack(s): ${variant.packs.join(' + ')}`,
       `${String(variant.presets.length)} preset(s)`,
       `default ${variant.defaultPreset.id} -> rank ${variant.defaultPreset.rank}`,
+      // Only when there are any: most games will ship none, and a line reading
+      // "0 persona(s)" on every variant is noise rather than a report.
+      ...(variant.personas.length > 0
+        ? [
+            `${String(variant.personas.length)} persona(s): ${variant.personas.map((persona) => persona.id).join(', ')}`,
+          ]
+        : []),
       ...(variant.demonstration ? ['demonstration'] : []),
     ];
     notes.push(`variants/${variant.file}: OK — ${marks.join(', ')}`);

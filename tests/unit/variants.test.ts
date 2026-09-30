@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { listPackDirs, readPackSource, readVariantSources } from '../../src/content/fs.js';
 import type { LoadedPack } from '../../src/content/loader.js';
 import { loadPackOrThrow, packSourceFromRecord } from '../../src/content/loader.js';
+import { personaOf, personaSchema } from '../../src/content/personas.js';
 import { resolveDifficultyRow } from '../../src/content/rules.js';
 import type { Rules } from '../../src/content/schema.js';
 import type { ResolvedVariant, VariantSource } from '../../src/content/variants.js';
@@ -355,6 +356,112 @@ describe('the difficulty preset', () => {
     for (const preset of variant().presets) {
       expect(Object.keys(preset).sort()).toEqual(['id', 'label', 'rank']);
     }
+  });
+});
+
+describe('autoplay personas', () => {
+  /** A complete persona, so a test can vary one field and mean it. */
+  const persona = (id: string, over: Record<string, unknown> = {}) => ({
+    id,
+    label: id.toUpperCase(),
+    reactionSteps: 4,
+    aimTolerance: 4,
+    threatHorizon: 200,
+    dodgeMargin: 16,
+    shotDiscipline: 0.5,
+    panic: 0.1,
+    engage: 0.5,
+    ...over,
+  });
+
+  const withPersonas = (personas: unknown[], defaultPersona?: string) => ({
+    id: 'x',
+    name: 'X',
+    packs: ['classic'],
+    autoplay: defaultPersona === undefined ? { personas } : { personas, defaultPersona },
+  });
+
+  it('offers none by default, which is a game that cannot be watched', () => {
+    // The `GAME` row's rule, applied to autoplay: a variant that declares no
+    // personas shows no `AUTOPLAY` row, and there is deliberately nothing to derive
+    // a default set *from* — a rank is a table the rules already declare, and how
+    // well this game should be played is written down nowhere.
+    const variant = loadOne({ id: 'x', name: 'X', packs: ['classic'] });
+    expect(variant.personas).toEqual([]);
+    expect(variant.defaultPersona).toBeUndefined();
+  });
+
+  it('resolves the personas a document declares, in document order', () => {
+    const variant = loadOne(withPersonas([persona('a'), persona('b')], 'b'));
+    expect(variant.personas.map((one) => one.id)).toEqual(['a', 'b']);
+    expect(variant.defaultPersona?.id).toBe('b');
+  });
+
+  it('defaults `rescue` to false and requires every number', () => {
+    expect(personaSchema.parse(persona('a')).rescue).toBe(false);
+    // Every axis is required: a persona whose interesting numbers came from a
+    // default would be a persona tuned in a source file rather than a document,
+    // which is the failure `src/sim/` avoids by holding no constants.
+    const { aimTolerance: _dropped, ...short } = persona('a');
+    expect(personaSchema.safeParse(short).success).toBe(false);
+  });
+
+  it('rejects a misspelt field rather than ignoring it', () => {
+    const errors = refuse(withPersonas([persona('a', { panick: 1 })]));
+    expect(errors.some((error) => /unrecognized|unknown/i.test(error.message))).toBe(true);
+    expect(errors[0]?.field).toMatch(/^autoplay\.personas\[0\]/);
+  });
+
+  it('rejects a probability outside nought to one', () => {
+    expect(refuse(withPersonas([persona('a', { panic: 1.5 })]))[0]?.field).toBe(
+      'autoplay.personas[0].panic',
+    );
+  });
+
+  it('rejects two personas with the same id, naming the second one', () => {
+    const errors = refuse(withPersonas([persona('a'), persona('a')]));
+    expect(errors[0]).toMatchObject({
+      pack: 'variants',
+      file: 'x.json',
+      field: 'autoplay.personas[1].id',
+    });
+    expect(errors[0]?.message).toContain('duplicate persona id "a"');
+  });
+
+  it('rejects a default that names no persona, listing the ones it could have', () => {
+    const errors = refuse(withPersonas([persona('a')], 'nobody'));
+    expect(errors[0]?.field).toBe('autoplay.defaultPersona');
+    expect(errors[0]?.message).toContain('"nobody"');
+    expect(errors[0]?.message).toContain('a');
+  });
+
+  it('holds a persona to describing a player and never the game', () => {
+    // The boundary this shape exists to keep, from the same side
+    // `tests/unit/settings.test.ts` guards the settings shape: a rules field, a
+    // difficulty row or a score multiplier here would be a difficulty setting with
+    // a misleading name.
+    expect(Object.keys(personaSchema.parse(persona('a'))).sort()).toEqual([
+      'aimTolerance',
+      'dodgeMargin',
+      'engage',
+      'id',
+      'label',
+      'panic',
+      'reactionSteps',
+      'rescue',
+      'shotDiscipline',
+      'threatHorizon',
+    ]);
+  });
+
+  it('resolves a setting to a persona, and an unknown one to autoplay off', () => {
+    const variant = loadOne(withPersonas([persona('a'), persona('b')]));
+    expect(personaOf(variant, 'b')?.id).toBe('b');
+    expect(personaOf(variant, undefined)).toBeUndefined();
+    // Not the first persona: a settings document outlives the build it was written
+    // against, and watching the cabinet play itself as somebody else is worse than
+    // not watching.
+    expect(personaOf(variant, 'gone')).toBeUndefined();
   });
 });
 

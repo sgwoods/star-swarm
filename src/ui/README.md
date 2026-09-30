@@ -4,9 +4,9 @@
 `highscores.ts`, `menus.ts` (the start-up variant selector and the settings menu),
 `pause.ts` (the pause card and the one that asks before a run is thrown away),
 `settings.ts` (what the player has chosen), `storage.ts` (where it is kept),
-`panel.ts` (the plate every card sits on), `build-info.ts` and `build-stamp.ts`
-(which build is this, and is a newer one being served), and `lab/` (the `/lab`
-preview harness).
+`panel.ts` (the plate every card sits on), `autoplay.ts` (the pilot that plays the
+game as a persona), `build-info.ts` and `build-stamp.ts` (which build is this, and
+is a newer one being served), and `lab/` (the `/lab` preview harness).
 
 Like `src/render/`, this layer is a **subscriber** — it reads simulation state
 and events and draws; it never writes back, and `src/sim/` never imports it.
@@ -114,6 +114,30 @@ And then the pause, which is two more phases and no simulation change at all:
   and the card says the score, and the place it would have taken, so nothing is
   discarded silently. Home is attract in both cabinets, because the selector is a
   boot-time screen that a one-variant build never enters.
+
+And the autoplay pilot, which is a subscriber like everything else here:
+
+- **`autoplay.ts` takes a view, never a world.** `createAutopilot` is handed a
+  `PilotView` — a freshly built plain value holding what is on the screen — and
+  returns one `InputFrame` carrying the same three bits a keyboard carries. It
+  cannot read the difficulty row, a bomb timer or the generator, and it cannot
+  write anything at all, because `viewOfWorld` copies numbers out and leaves no
+  reference to reach back through. That is the whole of "a persona plays; it does
+  not cheat", and it is a property of the seam rather than of a comment:
+  `tests/unit/autoplay.test.ts` fingerprints a world either side of 1,200 samples.
+- **A persona is eight numbers in a variant document**, and nothing here names one.
+  Every field is read by name and applied identically, so a fifth persona is a
+  fifth entry in a document. `src/content/personas.ts` is the schema.
+- **Its only clock is the step count on the view, and its only chance is a seeded
+  `Rng` of its own** — never the world's, so how much a persona dithers cannot
+  change what the simulation computes. `eslint.config.js` bans `Math.random`,
+  `Date` and `performance` in this one file for that reason.
+- **The flow decides _when_ it flies, and the pilot never presses a screen's
+  buttons.** A persona drives `playing`; the `start` that begins a game out of
+  attract is the flow's own, as is the one that gets past high-score entry. A
+  human's `left`, `right` or `fire` in a live game clears the setting on that
+  frame — and `menu`, `pause` and `exit` deliberately do not, so a watched run can
+  be paused and looked at without ending the demonstration.
 
 Seams left for the tasks that follow, so they attach without editing a screen:
 

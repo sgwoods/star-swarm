@@ -25,6 +25,8 @@
  *   variant documents and the presets they declare.
  */
 
+import type { Persona } from '../content/personas.js';
+import { personaOf } from '../content/personas.js';
 import type { DifficultyPreset } from '../content/variants.js';
 import { presetOf } from '../content/variants.js';
 import { drawText, measureText } from '../render/text.js';
@@ -52,6 +54,14 @@ export interface MenuVariant {
   readonly packs: readonly string[];
   readonly presets: readonly DifficultyPreset[];
   readonly defaultPreset: DifficultyPreset;
+  /**
+   * The autoplay personas this game offers. **Empty is the normal case** and
+   * means the `AUTOPLAY` row is not shown, the same rule the `GAME` row follows
+   * on a one-variant cabinet: a row whose only value is OFF is a row nobody needs.
+   */
+  readonly personas: readonly Persona[];
+  /** Which persona the row lands on first, if the document named one. */
+  readonly defaultPersona?: Persona | undefined;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -124,6 +134,7 @@ export function createVariantMenu<T extends MenuVariant>(
 export const SETTINGS_ROW_IDS = [
   'game',
   'difficulty',
+  'autoplay',
   'volume',
   'sound',
   'controls',
@@ -236,6 +247,19 @@ export function createSettingsMenu(options: SettingsMenuOptions): SettingsMenu {
       note: preset.description ?? `RANK ${preset.rank}`,
     });
 
+    // Only when this game declares personas. A cabinet whose variant ships none
+    // must not grow a row that can only say OFF.
+    if (variant.personas.length > 0) {
+      const persona = personaOf(variant, settings.autoplay);
+      rows.push({
+        id: 'autoplay',
+        label: 'AUTOPLAY',
+        value: persona?.label ?? MENU_TEXT.autoplayOff,
+        editable: true,
+        note: persona?.description ?? MENU_TEXT.autoplayOffNote,
+      });
+    }
+
     rows.push({
       id: 'volume',
       label: 'VOLUME',
@@ -297,6 +321,17 @@ export function createSettingsMenu(options: SettingsMenuOptions): SettingsMenu {
         const at = presets.findIndex((preset) => preset.id === current.id);
         const next = presets[cycle(Math.max(0, at), delta, presets.length)];
         if (next !== undefined) write({ difficulty: next.id });
+        break;
+      }
+      case 'autoplay': {
+        // One list: off, then every persona in menu order. Off is a place in the
+        // cycle rather than a special case, so left from the first persona and
+        // right from the last both land on it.
+        const choices: readonly (Persona | undefined)[] = [undefined, ...variant.personas];
+        const current = personaOf(variant, settings.autoplay);
+        const at = choices.findIndex((choice) => choice?.id === current?.id);
+        const next = choices[cycle(Math.max(0, at), delta, choices.length)];
+        write({ autoplay: next?.id });
         break;
       }
       case 'volume': {
@@ -376,6 +411,9 @@ export const MENU_TEXT = Object.freeze({
   settingsHeading: 'SETTINGS',
   settingsKeys: 'FIRE NEXT   L/R CHANGE',
   settingsDone: 'START OR ESC  DONE',
+  /** What the `AUTOPLAY` row reads when a human is flying, and the line under it. */
+  autoplayOff: 'OFF',
+  autoplayOffNote: 'WATCH IT PLAY ITSELF',
   sessionOnly: 'THIS SESSION ONLY',
 });
 

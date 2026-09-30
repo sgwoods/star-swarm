@@ -48,7 +48,7 @@ import {
   drawInitialsEntry,
   HIGH_SCORE_STORAGE_KEY,
 } from './ui/highscores.js';
-import { badgesForStage, drawHud } from './ui/hud.js';
+import { badgesForStage, drawAutoplayLine, drawHud } from './ui/hud.js';
 import { drawSettings, drawVariantSelect, SELECT_CARD_TOP, SETTINGS_CARD_TOP } from './ui/menus.js';
 import { CARD_TOP } from './ui/panel.js';
 import { drawExitConfirm, drawPaused, EXIT_CARD_TOP, PAUSE_CARD_TOP } from './ui/pause.js';
@@ -281,6 +281,13 @@ const loop = createLoop({
     // is answerable without leaving the game.
     drawBuildStamp(ctx, { build: BUILD, comparison: updates.comparison, steps: flow.steps });
 
+    // Who is flying, when it is not the person in front of the cabinet. Off the two
+    // menu screens, which have a row that says it already and a card in the way.
+    const persona = flow.autoplay;
+    if (persona !== undefined && flow.phase !== 'settings' && flow.phase !== 'variant-select') {
+      drawAutoplayLine(ctx, persona.label);
+    }
+
     switch (flow.phase) {
       case 'attract':
         drawAttract(ctx, {
@@ -429,6 +436,13 @@ declare global {
       readonly variants: readonly string[];
       readonly rank: string;
       readonly difficulty: string;
+      /**
+       * The autoplay persona flying, or `''` for a human — and the personas this
+       * variant offers. `tests/e2e/autoplay.spec.ts` drives the real page through
+       * the real keyboard path and needs to be able to see which.
+       */
+      readonly autoplay: string;
+      readonly personas: readonly string[];
       /** The player's settings, as the menu has them. */
       readonly settings: Settings;
       readonly settingsPersistent: boolean;
@@ -547,6 +561,12 @@ window.starSwarm = {
   },
   get rank(): string {
     return flow.rank;
+  },
+  get autoplay(): string {
+    return flow.autoplay?.id ?? '';
+  },
+  get personas(): readonly string[] {
+    return flow.variant.personas.map((persona) => persona.id);
   },
   get difficulty(): string {
     return flow.settings.difficulty ?? flow.variant.defaultPreset.id;
