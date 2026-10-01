@@ -28,6 +28,7 @@ import { createKeyboardInput, type InputFrame } from './engine/input.js';
 import { createLoop, STEP_HZ } from './engine/loop.js';
 import { createRng } from './engine/rng.js';
 import { createDisplay, LOGICAL_HEIGHT, LOGICAL_WIDTH } from './render/canvas.js';
+import { createEffects, type Effects } from './render/effects.js';
 import { drawScene } from './render/scene.js';
 import { createSpriteSheet, type SpriteSheet } from './render/sprites.js';
 import { createStarfield } from './render/starfield.js';
@@ -156,7 +157,8 @@ const synth = createSynth({
 /**
  * Everything derived from pack data, built when a variant comes into force and
  * never per frame: the sheet rasterises every sprite frame up front
- * (`src/render/README.md`), and the effect map is the variant's own `sounds`.
+ * (`src/render/README.md`), and the sound and explosion maps are the variant's
+ * own `sounds` and `effects`.
  *
  * These are `let` rather than `const` because a variant is chosen at run time. A
  * variant change is the *only* thing that rebuilds them — nothing here is per
@@ -170,6 +172,10 @@ let sfx: Sfx = createSfx({
   player: synth,
   sounds: variant.registry.sounds,
   bindings: variant.registry.manifest.sounds,
+});
+let effects: Effects = createEffects({
+  bindings: variant.registry.manifest.effects,
+  sprites: variant.registry.sprites,
 });
 
 /**
@@ -190,6 +196,10 @@ function applyVariant(chosen: FlowVariant): void {
     player: synth,
     sounds: variant.registry.sounds,
     bindings: variant.registry.manifest.sounds,
+  });
+  effects = createEffects({
+    bindings: variant.registry.manifest.effects,
+    sprites: variant.registry.sprites,
   });
 }
 
@@ -239,12 +249,18 @@ for (const gesture of ['keydown', 'pointerdown'] as const) {
 function applyEvents(events: readonly SimEvent[]): void {
   sfx.handle(events);
   starfield.handle(events);
+  effects.handle(events);
 }
 
 const loop = createLoop({
   update() {
     // Exactly one input sample per simulation step (docs/DESIGN.md pillar 4).
     const frame: InputFrame = input.sample();
+    // Once per simulation step, and *before* the step runs, so an explosion
+    // raised this step is drawn at its first frame on the step that raised it.
+    // Inside `update` rather than `render` because an effect's length is written
+    // in simulation frames, so it must not depend on the display's rate.
+    effects.advance();
     applyEvents(flow.step(frame).events);
     // The menu writes settings; this is where they reach the things outside the
     // flow. Cheap and idempotent, so it runs every step rather than needing a
@@ -268,6 +284,9 @@ const loop = createLoop({
 
     const world = flow.world;
     drawScene(ctx, world, { sheet: sprites });
+    // Over the playfield and under the HUD: an explosion is the last thing that
+    // happened in front of the player, and it must not cover the score.
+    effects.draw(ctx, sprites);
     drawHud(ctx, {
       score: world.score,
       highScore: Math.max(flow.highScores.best(), world.score),

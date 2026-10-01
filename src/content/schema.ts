@@ -209,6 +209,42 @@ export const spriteSchema = z
 export type Sprite = z.infer<typeof spriteSchema>;
 
 /* -------------------------------------------------------------------------- */
+/* 7.4 Effect — a sprite animation a simulation event plays                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A one-shot sprite animation played where a simulation event happened.
+ *
+ * The presentation counterpart of a `Sound`, and deliberately the same shape of
+ * idea: an event name maps to one of these in the pack manifest, so *what a
+ * death looks like* is pack data exactly as *what it sounds like* already was.
+ * The renderer subscribes to the event and plays the animation; the simulation
+ * learns nothing and no drawing code names an explosion.
+ *
+ * The animation's **frames and its timing are the sprite's own** — `frames` and
+ * `frameDuration` on the referenced {@link Sprite} — because that is where every
+ * other animation in the pack already keeps them, and one home means an
+ * explosion cannot have two different lengths. So an effect adds only the two
+ * things a sprite cannot know: which event plays it, and where it sits relative
+ * to the event.
+ *
+ * The offset is data because the alignment is: an event reports the sprite anchor
+ * of the thing that died, and an explosion wider than that thing has to be pulled
+ * back by half the difference to sit over it. A 32 px explosion over a 16 px
+ * fighter is `-8, -8`, and a pack whose explosion is the same size as its ships
+ * states nothing at all.
+ */
+export const effectSchema = z.strictObject({
+  sprite: refSchema,
+  /** Added to the event's x before drawing. Pixels, positive right. */
+  offsetX: z.number().int().default(0),
+  /** Added to the event's y before drawing. Pixels, positive down. */
+  offsetY: z.number().int().default(0),
+});
+
+export type Effect = z.infer<typeof effectSchema>;
+
+/* -------------------------------------------------------------------------- */
 /* 7.4 Sound                                                                    */
 /* -------------------------------------------------------------------------- */
 
@@ -694,6 +730,17 @@ export const packManifestSchema = z.strictObject({
    * game, not to the platform.
    */
   sounds: z.record(z.string(), refSchema).default({}),
+  /**
+   * Simulation event name → effect: what the game *looks* like at a moment, as
+   * data, on exactly the terms `sounds` above already sets.
+   *
+   * `src/render/effects.ts` subscribes to the same events `src/audio/sfx.ts`
+   * does and looks the name up here, so a pack decides that losing a fighter
+   * blooms into a 32 px explosion and a sibling game in the lineage decides
+   * something else — neither of them by editing the renderer. Open-keyed for the
+   * same reason `sounds` is: the event vocabulary belongs to the game.
+   */
+  effects: z.record(z.string(), effectSchema).default({}),
   /**
    * The badges that add up to the stage number, each with the sprite that draws
    * it (`docs/DESIGN.md` section 4: "denominations 1, 5, 10, 20, 30, 50").

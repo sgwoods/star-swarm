@@ -32,6 +32,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
 import { personaSchema } from '../../../src/content/personas.js';
+import type { Sprite } from '../../../src/content/schema.js';
 import { ABILITY_TYPES, STAGE_KINDS } from '../../../src/content/schema.js';
 import {
   REVERSE_PIXELS_PER_FRAME,
@@ -564,6 +565,17 @@ function shippedPersonas(): readonly { readonly id: string }[] {
   return shippedVariants().flatMap((variant) => variant.personas);
 }
 
+/** The sprite the shipped pack plays when the fighter in play is destroyed. */
+function deathSprite(): Sprite {
+  const pack = classicPack();
+  const bound = pack.manifest.effects['player-hit'];
+  const sprite = bound === undefined ? undefined : pack.sprites.get(bound.sprite);
+  if (sprite === undefined) {
+    throw new Error('the Classic pack no longer binds an effect to `player-hit`');
+  }
+  return sprite;
+}
+
 export function counters(root = REPO_ROOT): ReadonlyMap<string, () => number> {
   const read = (path: string): string => readFileSync(join(root, path), 'utf8');
   const stagesOfKind = (kind: string): number =>
@@ -662,6 +674,28 @@ export function counters(root = REPO_ROOT): ReadonlyMap<string, () => number> {
       'classic.sequence.challenge',
       () => classicPack().manifest.stageSequence.challenge.rows.length,
     ],
+    /**
+     * What losing a fighter looks like, derived from the pack rather than stated.
+     *
+     * The death animation is pack data twice over — which event plays it is the
+     * manifest's `effects` map, and how long it runs is the referenced sprite's
+     * own `frames` × `frameDuration` — so a document that quoted either number by
+     * hand would be quoting something two files could move independently. These
+     * resolve the binding exactly as `src/render/effects.ts` does, and throw
+     * rather than return 0 if the pack stops shipping one, because a silent zero
+     * would let a document keep claiming an animation that had gone.
+     */
+    ['classic.effects', () => Object.keys(classicPack().manifest.effects).length],
+    ['classic.death.frames', () => deathSprite().frames.length],
+    [
+      'classic.death.steps',
+      () => {
+        const sprite = deathSprite();
+        return sprite.frames.length * (sprite.frameDuration ?? 0);
+      },
+    ],
+    ['rules.respawnFrames', () => classicRules().player.respawnFrames],
+
     ['classic.formation.slots', () => classicFormation().slots.length],
     ['classic.formation.captiveSlots', () => classicFormation().captiveSlots.length],
     [

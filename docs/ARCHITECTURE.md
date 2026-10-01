@@ -289,6 +289,55 @@ and is never entered at all when one variant is installed, so it cannot be what
 leaving a game means; attract is already where a finished game ends up, and the
 way back to the list is the settings screen's `GAME` row.
 
+### Losing a fighter
+
+The moment a player sees most often, so it is drawn rather than left to a sprite
+that stops being there. Losing the fighter in play raises `player-hit`, the
+manifest's `effects` map binds that name to a sprite, and `src/render/effects.ts`
+plays it where the event says — the same subscription `src/audio/sfx.ts` already
+makes for the `player-death` sound, and the same one-way traffic. Two events are
+bound: `player-hit`, and `dual-half-lost` for a rescued second ship being shot
+away.
+<!-- check:count classic.effects 2 -->
+
+The animation is four frames held twelve simulation steps each — 48 steps, four
+fifths of a second — against a respawn the rules put at 90 steps. That gap is the
+design and not a leftover: the bang finishes, roughly four tenths of a second of
+empty sky follows, and then the fighter comes back. **The explosion is fitted to
+the rules, never the other way round**; `tests/unit/effects.test.ts` asserts it
+finishes inside the respawn with room to spare, so an animation that outgrew the
+window would fail rather than tempt anyone to move a verified-or-provisional
+arcade number.
+<!-- check:count classic.death.frames 4 classic.death.steps 48 rules.respawnFrames 90 -->
+
+Three decisions worth recording, because none of them is forced:
+
+- **The explosion is bigger than the fighter** — 32×32 over a 16×16 ship, pulled
+  back by `-8, -8` so the two share a centre. An explosion the size of the thing
+  that died reads as a sprite being swapped; one that overflows it reads as a
+  destruction. It is the only sprite in the Classic pack outside the 16×16 cast.
+- **Nothing else stops.** Enemies keep flying, the formation keeps breathing and
+  the starfield keeps scrolling through a death. That is not a preference so much
+  as a consequence: presentation may not reach into the simulation, so anything
+  that "held" the world for the animation would be the simulation hearing about
+  the renderer — the same shape [pausing](#pause-and-the-way-out) refuses.
+- **The reserve indicator drops on the frame of the hit**, not when the animation
+  ends. The HUD reads `world.lives.reserve` directly and a lagging copy would be a
+  second source of truth about how many fighters are left; the cost reading at the
+  same instant as the flash is also what ties the two together.
+
+**The arcade sources do not settle what its own death animation looked like.**
+Neither the frame count, nor its timing, nor whether the game holds still around
+it appears in [the reference](reference/arcade-reference.md) or in the rules and
+scoring investigation behind it — the reference's section 11 lists two open
+questions and this is not one of them, because nobody has looked. So the four
+frames come from `docs/DESIGN.md` section 5, the timing is ours, and none of it is
+marked verified anywhere. It is presentation, so it is not in `rules.json` and
+`provenance` cannot reach it; the counters above are what hold this page to it
+instead, exactly as they do for [the starfield](#the-backdrop)'s byte arithmetic.
+
+![A fighter's death: flash, fireball, shell, embers](media/m3-death.gif)
+
 ### The backdrop
 
 The starfield behind all of that is the arcade's routine rather than a scroll of
@@ -451,14 +500,14 @@ make the simulation bit-identical, and nothing here claims it does.
 
 ### The layers one at a time
 
-| Layer          | What it is                                                                                                                                                 |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/engine/`  | The fixed-step loop, the seeded RNG, abstract input, and input recording/replay. Knows nothing about this game or any game.                                |
-| `src/sim/`     | The world and one step of it: player, shots, collisions, lives, enemies, formation, the path interpreter, dives, enemy fire, challenge stages and capture. |
-| `src/content/` | The content platform: the Zod schemas, the loader, the registry, the module that interprets a rules document, and stage resolution.                        |
-| `src/render/`  | The 224×288 backbuffer presented at a whole-number scale, sprite rasterisation, the pixel font, the starfield, and scene composition.                      |
-| `src/audio/`   | A parametric synth over Web Audio, and the mapping from simulation events to sounds.                                                                       |
-| `src/ui/`      | The game-flow state machine, attract mode, the HUD, the results card, the high-score table — and the dev-only `/lab`.                                      |
+| Layer          | What it is                                                                                                                                                        |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/engine/`  | The fixed-step loop, the seeded RNG, abstract input, and input recording/replay. Knows nothing about this game or any game.                                       |
+| `src/sim/`     | The world and one step of it: player, shots, collisions, lives, enemies, formation, the path interpreter, dives, enemy fire, challenge stages and capture.        |
+| `src/content/` | The content platform: the Zod schemas, the loader, the registry, the module that interprets a rules document, and stage resolution.                               |
+| `src/render/`  | The 224×288 backbuffer presented at a whole-number scale, sprite rasterisation, the pixel font, the starfield, one-shot effect animations, and scene composition. |
+| `src/audio/`   | A parametric synth over Web Audio, and the mapping from simulation events to sounds.                                                                              |
+| `src/ui/`      | The game-flow state machine, attract mode, the HUD, the results card, the high-score table — and the dev-only `/lab`.                                             |
 
 Four properties worth knowing, because each one is load-bearing:
 
@@ -481,7 +530,9 @@ Four properties worth knowing, because each one is load-bearing:
   gesture unlocks one, and every call into Web Audio is wrapped, so a browser
   that blocks audio leaves the game running correctly in silence. Which event
   plays which sound is the pack's `sounds` map; `src/audio/sfx.ts` names no
-  effect of its own.
+  effect of its own. **The picture works the same way**: the manifest's `effects`
+  map says which event plays which sprite animation, and `src/render/effects.ts`
+  names no explosion of its own either.
 
 ---
 

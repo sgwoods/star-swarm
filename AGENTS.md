@@ -420,7 +420,7 @@ that graph imports the lab, and the URL is wired up by a plugin declaring
 
 ## Rendering: rasterise once, and no colours in the renderer
 
-`src/render/` is a subscriber and holds no art of its own. Two contracts that
+`src/render/` is a subscriber and holds no art of its own. Three contracts that
 are easy to break and cheap to keep — `src/render/README.md` has the detail:
 
 - Anything derived from pack data is built when the pack loads, not per frame.
@@ -429,6 +429,15 @@ are easy to break and cheap to keep — `src/render/README.md` has the detail:
   colour. Treat what comes back as read-only.
 - The palette is pack data. A sprite colour the pack's `palette` does not declare
   is a load-time throw from `createSpriteSheet`, never a silent black pixel.
+- **A one-shot animation is bound to an event by the pack, exactly as a sound
+  is.** The manifest's `effects` map names a sprite and an offset per event name;
+  `src/render/effects.ts` subscribes and plays it, knows no event name of its own,
+  and takes the animation's length from the sprite's `frames` × `frameDuration` in
+  **simulation steps** — so it plays once, ends by construction, and freezes with
+  a paused game. Presentation is fitted to the rules window it sits in and never
+  the other way round: the death explosion is shorter than `player.respawnFrames`
+  because `tests/unit/effects.test.ts` requires it, and an animation that wanted
+  longer is a redraw, not a rules edit.
 
 Rasterising is split from drawing so both are testable on Node: pixels are pure,
 and turning a bitmap into something `drawImage` takes is an injectable

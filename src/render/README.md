@@ -12,6 +12,7 @@ enforce that, which is what makes the headless tests and replays possible
 | `sprites.ts`   | Pack sprite data → cached bitmaps, and the helpers that draw them    |
 | `text.ts`      | The original 8×8 pixel font, and one cached strip per ink colour     |
 | `starfield.ts` | The scrolling background: the ROM's accumulator, reverse and twinkle |
+| `effects.ts`   | One-shot animations an event plays — a fighter's death above all     |
 | `scene.ts`     | Composes one frame out of the above                                  |
 
 `crt.ts`, the optional scanline filter, is still to come.
@@ -21,13 +22,21 @@ the rasterised sheet when it is given one and falls back to flat shapes when it
 is not, which is what lets a test — or a build before the pack has loaded — draw
 a frame with no art at all.
 
-## Two rules the whole directory follows
+## Three rules the whole directory follows
 
 **Rasterise once.** A stage draws 40 aliens plus shots and effects at 60 fps
 (`docs/DESIGN.md` section 11), so anything derived from pack data — sprite
 frames, tinted font strips — is built when the pack loads and handed back by
 reference afterwards. `SpriteSheet.bitmap` returns the _same_ object every call;
 treat what comes back as read-only.
+
+**An event plays it, and the pack chose it.** `effects.ts` subscribes to
+simulation events exactly as `src/audio/sfx.ts` does and looks each name up in
+the manifest's `effects` map, so what a death looks like is a sprite id and an
+offset in `packs/<name>/pack.json` — not drawing code here. The animation's
+length is its sprite's own `frames` × `frameDuration`, counted in **simulation
+steps**, so it plays once, ends by construction, and freezes with the rest of the
+screen when the flow stops stepping the world.
 
 **No colours live here.** The palette is pack data (`docs/DESIGN.md` section 5:
 saturated arcade colours on black, one global palette per pack). A sprite that

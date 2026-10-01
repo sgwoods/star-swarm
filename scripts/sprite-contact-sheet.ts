@@ -33,6 +33,8 @@ const MARGIN = 6;
 const LABEL_COLUMN = 140;
 const ROW_PITCH = 20;
 const FRAME_PITCH = 20;
+/** Clear space around a frame wider than {@link FRAME_PITCH} allows for. */
+const FRAME_GAP = 4;
 
 const INK = '#ffffff';
 const DIM = '#7d8aa8';
@@ -243,6 +245,38 @@ function main(): void {
   const ink = rasteriseFontStrip(INK);
   const dim = rasteriseFontStrip(DIM);
 
+  /**
+   * Where one sprite's row of frames goes.
+   *
+   * Laid out per sprite rather than on a fixed grid, because a pack may ship art
+   * bigger than the 16 px cast — a death explosion has to be wider than the thing
+   * that died to read as one. A row that still fits beside its label keeps the
+   * old layout exactly; one that does not puts its label on its own line and the
+   * frames underneath, which is the only way to stay the width of the playfield
+   * and so keep the scale honest.
+   */
+  const layoutOf = (
+    id: string,
+  ): { readonly pitch: number; readonly height: number; readonly beside: boolean } => {
+    const frames = sheet.frameCount(id);
+    let widest = 0;
+    let tallest = 0;
+    for (let frame = 0; frame < frames; frame += 1) {
+      const bitmap = sheet.bitmap(id, frame);
+      widest = Math.max(widest, bitmap.width);
+      tallest = Math.max(tallest, bitmap.height);
+    }
+    const pitch = Math.max(FRAME_PITCH, widest + FRAME_GAP);
+    const beside = LABEL_COLUMN + frames * pitch <= WIDTH - MARGIN;
+    return {
+      pitch,
+      height: beside
+        ? Math.max(ROW_PITCH, tallest + FRAME_GAP)
+        : CELL + tallest + FRAME_GAP + FRAME_GAP / 2,
+      beside,
+    };
+  };
+
   const faceRows = Math.ceil((LAST_CODE - FIRST_CODE + 1) / 16);
   const height =
     MARGIN * 2 +
@@ -250,7 +284,7 @@ function main(): void {
     CELL * 2 + // palette heading
     12 +
     CELL * 2 + // sprite heading
-    ids.length * ROW_PITCH +
+    ids.reduce((total, id) => total + layoutOf(id).height, 0) +
     CELL * 2 + // font heading
     faceRows * CELL +
     CELL +
@@ -278,17 +312,20 @@ function main(): void {
   text(surface, dim, 'SPRITES', MARGIN, y);
   y += CELL;
   for (const id of ids) {
-    text(surface, ink, id, MARGIN, y + (ROW_PITCH - CELL) / 2);
+    const { pitch, height: rowHeight, beside } = layoutOf(id);
+    const left = beside ? LABEL_COLUMN : MARGIN;
+    const top = beside ? y : y + CELL;
+    text(surface, ink, id, MARGIN, beside ? y + (rowHeight - CELL) / 2 : y);
     for (let frame = 0; frame < sheet.frameCount(id); frame += 1) {
       const bitmap = sheet.bitmap(id, frame);
       blit(
         surface,
         bitmap,
-        LABEL_COLUMN + frame * FRAME_PITCH + (16 - bitmap.width) / 2,
-        y + (ROW_PITCH - bitmap.height) / 2,
+        left + frame * pitch + (pitch - FRAME_GAP - bitmap.width) / 2,
+        top + (rowHeight - (beside ? 0 : CELL) - bitmap.height) / 2,
       );
     }
-    y += ROW_PITCH;
+    y += rowHeight;
   }
 
   y += CELL;
