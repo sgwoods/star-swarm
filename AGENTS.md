@@ -249,6 +249,39 @@ catches on every path so that blocked site data degrades to defaults instead of
 throwing. The menu in `src/ui/menus.ts` **applies nothing**: a row writes a patch
 and `src/main.ts` is the one place a setting has consequences.
 
+## A pack may be forged, and refusing is half of what the forge does
+
+`/forge` (`.claude/skills/forge/SKILL.md`) turns one sentence into a pack. The
+skill is a procedure and names no field; `docs/content-guide.md` is the state
+document it reads for what a document may say and — the part no schema shows —
+what the engine will actually honour. Neither copies `src/content/schema.ts`.
+
+Four things to know before touching either, because each is a trap the forge was
+built around:
+
+- **Four schema fields validate and are read by nothing**: `alien.abilities`,
+  `alien.sounds`, `stage.diveRules` and `stage.modifiers`. That is why a prompt the
+  engine cannot satisfy has to be **refused** rather than approximated — nothing
+  downstream can tell the difference. `tests/unit/forge-guard.test.ts` pins each
+  one as an identity between a world that states it and a world that does not, so
+  the day one starts working, that test is what says so.
+- **The rules layer couples a pack to numbers it cannot change.** A role no
+  difficulty row names never attacks; a formation narrower than the breathe table
+  breathes lopsidedly; `continuousBombingAt` is an absolute enemy count, so a small
+  fleet gets nasty early; and a formation with no `captiveSlots` silently disables
+  capture. `docs/content-guide.md` section 7 is the list.
+- **"Validated" is not "playable".** `npm run validate-packs` runs no simulation,
+  so a forged pack is flown by an autoplay persona instead —
+  `tests/sim/forged-pack.test.ts` is the shape to copy, and the five things it
+  measures are what a forge report has to carry. Building that into the validator
+  is the Milestone 3 task, not something to half-do in a test.
+- **Section 2 is enforced on generated content**, by the scan in
+  `tests/unit/forge-guard.test.ts` rather than by the generator's good behaviour,
+  so a prompt cannot argue its way to the original's names.
+
+`packs/deep-sea/` is the pack it produced, and its README keeps the sentence, the
+measurements and what the forge got wrong first.
+
 ## Enemies address the formation; the formation is sixteen numbers
 
 A formation is `N` column X coordinates and `M` row Y coordinates —

@@ -1,0 +1,9 @@
+{
+  "id": "lanternfish",
+  "role": "drone",
+  "hp": 1,
+  "sprite": "lanternfish",
+  "score": { "base": 60 },
+  "fire": { "pattern": "aimed", "shotsPerDive": 1, "cooldownFrames": 60 },
+  "dive": { "paths": ["dive-drift"], "weight": 1 }
+}

@@ -1,0 +1,139 @@
+{
+  "id": "reef-1",
+  "kind": "normal",
+  "formation": "trench26",
+  "waves": [
+    {
+      "at": 0,
+      "entryPath": "entry-trench",
+      "spacing": 14,
+      "slots": [
+        {
+          "alien": "angler",
+          "mirror": false
+        },
+        {
+          "alien": "angler",
+          "mirror": true
+        },
+        {
+          "alien": "angler",
+          "mirror": false
+        },
+        {
+          "alien": "angler",
+          "mirror": true
+        },
+        {
+          "alien": "angler",
+          "mirror": false
+        },
+        {
+          "alien": "angler",
+          "mirror": true
+        }
+      ]
+    },
+    {
+      "at": 190,
+      "entryPath": "entry-undertow",
+      "spacing": 12,
+      "slots": [
+        {
+          "alien": "lanternfish",
+          "mirror": false
+        },
+        {
+          "alien": "lanternfish",
+          "mirror": true
+        },
+        {
+          "alien": "lanternfish",
+          "mirror": false
+        },
+        {
+          "alien": "lanternfish",
+          "mirror": true
+        },
+        {
+          "alien": "lanternfish",
+          "mirror": false
+        },
+        {
+          "alien": "lanternfish",
+          "mirror": true
+        },
+        {
+          "alien": "lanternfish",
+          "mirror": false
+        },
+        {
+          "alien": "lanternfish",
+          "mirror": true
+        }
+      ]
+    },
+    {
+      "at": 400,
+      "entryPath": "entry-undertow",
+      "spacing": 11,
+      "slots": [
+        {
+          "alien": "lanternfish",
+          "mirror": false
+        },
+        {
+          "alien": "lanternfish",
+          "mirror": true
+        },
+        {
+          "alien": "lanternfish",
+          "mirror": false
+        },
+        {
+          "alien": "lanternfish",
+          "mirror": true
+        },
+        {
+          "alien": "lanternfish",
+          "mirror": false
+        },
+        {
+          "alien": "lanternfish",
+          "mirror": true
+        },
+        {
+          "alien": "lanternfish",
+          "mirror": false
+        },
+        {
+          "alien": "lanternfish",
+          "mirror": true
+        },
+        {
+          "alien": "lanternfish",
+          "mirror": false
+        },
+        {
+          "alien": "lanternfish",
+          "mirror": true
+        }
+      ]
+    },
+    {
+      "at": 620,
+      "entryPath": "entry-trench",
+      "spacing": 16,
+      "slots": [
+        {
+          "alien": "gulper",
+          "mirror": false
+        },
+        {
+          "alien": "gulper",
+          "mirror": true
+        }
+      ]
+    }
+  ]
+}

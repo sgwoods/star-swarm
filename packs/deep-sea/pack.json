@@ -1,0 +1,183 @@
+{
+  "id": "deep-sea",
+  "name": "Deep Sea",
+  "version": "0.1.0",
+  "description": "Forged from one sentence. An overlay on Classic: three aliens, four paths, three stages, a twenty-six-slot trench formation and one palette colour. The rules, the roles, the badges and the challenge half of the stage sequence are inherited.",
+  "palette": ["#00ffc8"],
+  "roles": {
+    "drone": {
+      "label": "Lanternfish"
+    },
+    "wing": {
+      "label": "Angler"
+    },
+    "warden": {
+      "label": "Gulper"
+    }
+  },
+  "formations": {
+    "trench26": {
+      "id": "trench26",
+      "grid": {
+        "originX": 32,
+        "originY": 60,
+        "columnSpacing": 8,
+        "rowSpacing": 5
+      },
+      "slots": [
+        {
+          "row": 0,
+          "column": 8,
+          "role": "warden"
+        },
+        {
+          "row": 0,
+          "column": 10,
+          "role": "warden"
+        },
+        {
+          "row": 4,
+          "column": 4,
+          "role": "wing"
+        },
+        {
+          "row": 4,
+          "column": 6,
+          "role": "wing"
+        },
+        {
+          "row": 4,
+          "column": 8,
+          "role": "wing"
+        },
+        {
+          "row": 4,
+          "column": 10,
+          "role": "wing"
+        },
+        {
+          "row": 4,
+          "column": 12,
+          "role": "wing"
+        },
+        {
+          "row": 4,
+          "column": 14,
+          "role": "wing"
+        },
+        {
+          "row": 8,
+          "column": 2,
+          "role": "drone"
+        },
+        {
+          "row": 8,
+          "column": 4,
+          "role": "drone"
+        },
+        {
+          "row": 8,
+          "column": 6,
+          "role": "drone"
+        },
+        {
+          "row": 8,
+          "column": 8,
+          "role": "drone"
+        },
+        {
+          "row": 8,
+          "column": 10,
+          "role": "drone"
+        },
+        {
+          "row": 8,
+          "column": 12,
+          "role": "drone"
+        },
+        {
+          "row": 8,
+          "column": 14,
+          "role": "drone"
+        },
+        {
+          "row": 8,
+          "column": 16,
+          "role": "drone"
+        },
+        {
+          "row": 12,
+          "column": 0,
+          "role": "drone"
+        },
+        {
+          "row": 12,
+          "column": 2,
+          "role": "drone"
+        },
+        {
+          "row": 12,
+          "column": 4,
+          "role": "drone"
+        },
+        {
+          "row": 12,
+          "column": 6,
+          "role": "drone"
+        },
+        {
+          "row": 12,
+          "column": 8,
+          "role": "drone"
+        },
+        {
+          "row": 12,
+          "column": 10,
+          "role": "drone"
+        },
+        {
+          "row": 12,
+          "column": 12,
+          "role": "drone"
+        },
+        {
+          "row": 12,
+          "column": 14,
+          "role": "drone"
+        },
+        {
+          "row": 12,
+          "column": 16,
+          "role": "drone"
+        },
+        {
+          "row": 12,
+          "column": 18,
+          "role": "drone"
+        }
+      ],
+      "captiveSlots": [
+        {
+          "row": -4,
+          "column": 8,
+          "captor": 0
+        },
+        {
+          "row": -4,
+          "column": 10,
+          "captor": 1
+        }
+      ]
+    }
+  },
+  "sounds": {
+    "enemy-dived": "lure",
+    "target-destroyed": "gulp"
+  },
+  "stageSequence": {
+    "normal": {
+      "rows": ["reef-1", "reef-2", "reef-3"],
+      "repeatLast": 2
+    }
+  }
+}

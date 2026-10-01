@@ -89,7 +89,7 @@ The clips are screen recordings of the dev build.
   again and letting the page's own poll find the difference — which is the hosted
   update path end to end rather than a mock of it.
 - `m3-variants.gif` — the start-up selector and the settings menu: the two games
-  this build offers with the cursor moving between them, Star Swarm chosen into
+  the build offered when this was recorded, with the cursor moving between them, Star Swarm chosen into
   attract, the settings card opened with **Esc**, the difficulty preset taken up
   through the ranks (the note under the list changing with it), the volume taken
   down, and then the `GAME` row moved across to the demonstration variant and a
@@ -136,6 +136,17 @@ The clips are screen recordings of the dev build.
   simulation step and every alien is in the same place in both. That is the point
   of the pairing: the only difference on screen is the thing the change added. On
   the left the fighter is simply not there any more.
+- `m4-forge.gif` — the forged pack, played: one unedited take from live play, at
+  the shipped dev build. The start-up selector with three games on it and the
+  cursor moved onto `DEEP SEA`, the settings card opened with **Esc** and the
+  `AUTOPLAY` row taken across to `ASTRONAUT`, then start — and from that moment the
+  controls are untouched. What plays is the forged content: lanternfish rising from
+  below the playfield on `entry-undertow`, anglers and a pair of gulpers arriving
+  over the top on `entry-trench`, the twenty-six-slot trench formation settling and
+  breathing, and the cabinet clearing it. Thirty seconds of play, which on this
+  seed is stage 1 cleared and most of stage 2 fought. At `max_colors=48`: the selector and
+  the settings card put text and plate colours on screen that a playfield alone
+  does not, and 64 bought nothing visible here.
 - `arch-lab.gif` — the `/lab` previewer: an entry path playing, then scrubbed
   frame by frame with the readout following, then the same path mirrored, then a
   dive path flown from the slot marker.

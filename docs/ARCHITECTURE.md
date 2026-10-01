@@ -46,8 +46,9 @@ one game on the platform, declared as a document under
 [`variants/`](../variants/): a display name, the packs it layers, and the
 difficulty presets a player may pick from. Star Swarm is `variants/classic.json`
 and is the first entry in that list rather than a case the others work around.
-Two variants ship, one of them marked as a demonstration.
-<!-- check:count variants.count 2 variants.demonstrations 1 -->
+Three variants ship: the arcade game, a demonstration overlay, and the forged
+Deep Sea game ([§4.6](#46-the-forge)).
+<!-- check:count variants.count 3 variants.demonstrations 1 -->
 
 That split is the whole architecture, and it is enforced rather than trusted —
 see [§3](#3-the-layers).
@@ -81,8 +82,8 @@ Then press **Enter** (or **1**) to start a game, **←/→** or **A/D** to move,
 cabinet: hold it down, and a shot leaves whenever the two-shot cap frees a slot.
 **Esc** (or **M**) opens the settings menu from attract mode. **P** pauses a game
 and **X** leaves one, after asking. The game boots into the start-up selector —
-two games ship — and then into _attract mode_, so nothing responds to the arrows
-until you have pressed start.
+more than one game ships — and then into _attract mode_, so nothing responds to the
+arrows until you have pressed start.
 
 ### Supported Node versions
 
@@ -540,7 +541,7 @@ Four properties worth knowing, because each one is load-bearing:
 
 ### 4.1 The content pipeline
 
-A pack is authored — by hand today, by a `/forge` prompt in Milestone 4 — as
+A pack is authored — by hand, or by the `/forge` skill ([§4.6](#46-the-forge)) — as
 plain JSON under `packs/<name>/`. Nothing else reads those files: everything goes
 through one `loadPack`, and the same function serves the browser, the tests and
 the validation gate, so the game and the gate cannot disagree about what a pack
@@ -548,7 +549,7 @@ contains.
 
 ```mermaid
 flowchart LR
-    author["An author, or a prompt<br/>(Milestone 4: /forge)"]
+    author["An author, or a prompt<br/>(.claude/skills/forge)"]
     docs["packs/&lt;name&gt;/<br/>pack.json · rules.json<br/>aliens · paths · stages<br/>sprites · sounds"]
     fs["content/fs.ts<br/>node:fs"]
     bundle["content/bundle.ts<br/>import.meta.glob"]
@@ -805,6 +806,62 @@ rank selects whole data tables instead. A variant that wants different numbers
 ships a pack with a `rules.json` that has them — which is also exactly what
 [§4.4](#44-where-a-second-game-plugs-in) says a sibling game does.
 
+### 4.6 The forge
+
+`docs/DESIGN.md` pillar 3 is that a single sentence becomes a validated content
+pack you can play in minutes. Three things make that true today, and one of them is
+a refusal:
+
+| What                             | Where                                                                 |
+| -------------------------------- | --------------------------------------------------------------------- |
+| the procedure                    | `.claude/skills/forge/SKILL.md`                                       |
+| what a pack may say, and may not | [`docs/content-guide.md`](content-guide.md)                           |
+| the pack it produced             | [`packs/deep-sea/`](../packs/deep-sea/) plus `variants/deep-sea.json` |
+
+The split is the usual one here: the skill is a procedure and names no field, the
+guide is a state document whose claims are checked, and neither copies
+`src/content/schema.ts`. A schema pasted into a skill is the failure this project
+has already fixed in a README, a plan, this document and a pack README.
+
+**`packs/deep-sea/` is the end-to-end proof, and it was proved by playing.** Three
+aliens, four flight paths, three stages, four sprites, two sounds and a
+twenty-six-slot formation of its own, layered over Classic for the rules, the
+roles, the badges and the challenge half of the stage sequence. Its own README
+carries the sentence it came from, the measurements, and the two things the forge
+got wrong before it got them right.
+<!-- check:count deepSea.aliens 3 deepSea.paths 4 deepSea.stages 3 deepSea.sprites 4 deepSea.sounds 2 deepSea.formationSlots 26 -->
+
+![The forged Deep Sea game: chosen from the start-up selector, then played by an autoplay persona](media/m4-forge.gif)
+
+**Two gaps shape what a forge can promise**, and both are measured rather than
+described:
+
+- **No ability can be composed.** `src/content/schema.ts` reserves seven ability
+  ids and `src/sim/abilities/` holds no modules, so an alien cannot _do_ anything
+  beyond moving, firing its configured pattern, taking hits and being worth points
+  ([§5](#5-what-is-not-here-yet)).
+  <!-- check:count schema.abilityIds 7 sim.abilities.modules 0 -->
+- **Passing the validator does not mean the stage is playable.**
+  `npm run validate-packs` runs schemas and references and never starts the
+  simulation; the four playability checks `docs/DESIGN.md` section 8 step 2 asks for
+  are not written. So the forge's last step is to fly the content with an autoplay
+  persona and report the outcomes, which is what `tests/sim/forged-pack.test.ts`
+  does: every enemy reaching its slot, every dive staying on screen from every slot
+  its alien can occupy, the stage being clearable, no run stalling, and one seed
+  giving one world.
+
+**Refusing is a feature of the skill, not a failure of it** — `docs/DESIGN.md`
+section 7.5 asks for it — and the reason it has to happen at generation time is
+machine-checked. `tests/unit/forge-guard.test.ts` asserts that a world plays
+_identically_ whether or not an alien declares an ability, whether or not a stage
+states `modifiers` or `diveRules`, and that an alien in a role no difficulty row
+names never launches. Each of those validates, passes the gate, and does nothing —
+so a pack that improvised around a missing capability would be indistinguishable
+from one that worked until somebody played it. The same file holds every pack and
+every variant to `docs/DESIGN.md` section 2: a scan for the original's name and for
+the arcade's own enemy-type words as ids, which is what makes "original by rule"
+something a prompt cannot argue with.
+
 ---
 
 ## 5. What is not here yet
@@ -835,7 +892,10 @@ describing as deliberately absent something that shipped two merges ago.
   `src/sim/capture.ts`, which matches on the `captureBeam` id a path's `trigger`
   segment names ([§4.4](#44-where-a-second-game-plugs-in)); splitting the registry
   out, and the six other ids `src/content/schema.ts` already reserves, is
-  Milestone 3.
+  Milestone 3. The consequence for generated content is that an alien cannot _do_
+  anything: `abilities` validates with any reserved id and is read by nothing, so
+  `/forge` **refuses** a prompt that needs one rather than producing something
+  adjacent ([§4.6](#46-the-forge)).
   <!-- check:count sim.abilities.modules 0 schema.abilityIds 7 -->
 - **The optional CRT filter, music** and the validator's playability checks are
   named in the design plan and are not written yet. The CRT **option** is in: the
@@ -870,6 +930,11 @@ describing as deliberately absent something that shipped two merges ago.
   ([§4.5](#45-variants-the-games-this-build-offers)). It can replace a
   self-contained document and nothing more, because the loader's reference pass
   runs within one pack.
+- **A variant cannot reference another variant's autoplay personas.** Each document
+  declares its own, and the forged game's `astronaut` is therefore the same eight
+  numbers as the Classic game's rather than a reference to them — the one piece of
+  duplication the variant schema has no way to avoid. It is small and visible, and
+  a shared-persona mechanism has never been specified.
 
 Two arcade questions are also still open rather than decided, and the game is
 built to one reading of each. Both are written down in
@@ -993,8 +1058,10 @@ DOM like everything else in `src/ui/`.
 
 The cabinet can play itself, as one of several named **personas**, so that the game
 can be watched rather than played. `beginner`, `normal`, `expert` and `astronaut`
-ship with the Classic game.
-<!-- check:count autoplay.personas 4 -->
+ship with the Classic game, and the forged Deep Sea game declares two of its own —
+six across the build, because a persona belongs to the variant it plays and there
+is no way for one document to reference another's.
+<!-- check:count autoplay.classicPersonas 4 autoplay.forgedPersonas 2 autoplay.personas 6 -->
 
 **Attract mode is the wrong shape for this, and that is why autoplay is not built
 on it.** The demo in `src/ui/attract.ts` is the real simulation driven by a

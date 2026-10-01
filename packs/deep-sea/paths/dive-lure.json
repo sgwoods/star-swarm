@@ -1,0 +1,10 @@
+{
+  "id": "dive-lure",
+  "mirror": true,
+  "segments": [
+    { "type": "arc", "radius": 20, "degrees": 36, "dir": "cw", "speed": 1.9 },
+    { "type": "loop", "radius": 24, "turns": 1, "dir": "ccw", "speed": 1.9 },
+    { "type": "aimAtPlayer", "speed": 1.9, "duration": 42 },
+    { "type": "exitBottom", "speed": 1.9 }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "id": "lure",
+  "wave": "triangle",
+  "freq": [660, 180],
+  "vibrato": { "rate": 11, "depth": 0.35 },
+  "envelope": [0.02, 0.22, 0.18],
+  "volume": 0.3
+}
