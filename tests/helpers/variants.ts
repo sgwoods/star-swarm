@@ -46,3 +46,22 @@ export function shippedVariants(): readonly ResolvedVariant[] {
   cachedVariants = loadVariantsOrThrow(sources, installedPacks());
   return cachedVariants;
 }
+
+/**
+ * One installed pack by id, through the same loader {@link installedPacks} uses.
+ *
+ * Exists so a document's counters can be derived from a pack the fixtures in
+ * `./rules.ts` know nothing about: those read the Classic pack directly because
+ * almost every test needs it, and a second named fixture per forged pack would be
+ * one edit per pack. Throws rather than returning `undefined`, because a counter
+ * that quietly returned 0 would let a document keep claiming a pack that had gone.
+ */
+export function installedPack(id: string): LoadedPack {
+  const pack = installedPacks().get(id);
+  if (pack === undefined) {
+    throw new Error(
+      `no installed pack "${id}" — packs/ holds ${[...installedPacks().keys()].join(', ')}`,
+    );
+  }
+  return pack;
+}

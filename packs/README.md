@@ -32,6 +32,12 @@ _within_ a pack: an overlay may replace a self-contained document (a sprite, a
 sound, a path naming no sound) and may **not** add one that references the base
 pack's content, such as a stage naming another pack's aliens.
 
+**A pack need not be written by hand.** `.claude/skills/forge/SKILL.md` turns one
+sentence into a pack, reading [`docs/content-guide.md`](../docs/content-guide.md)
+for what a document may say and what the engine will actually honour;
+[`deep-sea/`](deep-sea/) is the one it produced. A forged pack is an ordinary pack
+and gets no exemption from anything on this page.
+
 `npm run validate-packs` schema-checks then reference-checks every pack, then every
 variant, and must pass in CI; a pack that fails validation never loads. It succeeds
 on an empty tree and on a pack whose content directories are still empty.

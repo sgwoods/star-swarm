@@ -65,23 +65,35 @@ _Exit check:_ a player can change the rules from inside the game, a forged pack
 fails validation for being unplayable rather than merely malformed, and a pack
 with a new ability plays without an engine change.
 
-## Then: Milestone 4 — prompt forge
+## Now: Milestone 4 — prompt forge
 
-- **Ship: the `/forge` skill + `docs/content-guide.md`** — the guide Claude reads
-  when generating content. `.claude/skills/forge/` will hold the skill.
-  <!-- check:absent docs/content-guide.md .claude/skills/forge -->
+The skill, the guide it reads and the first forged pack have landed, so they have
+moved to [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#46-the-forge), which is where a
+thing that exists is described. What the milestone still owes:
+
 - **Ship: `/lab` for aliens, stages and sounds**, plus GIF capture for pull
   requests. `/lab` previews movement paths today and nothing else; what the
   capture half would be is set out in
   [Capturing gameplay video](#capturing-gameplay-video) below.
-- **Ship: the first forged pack** as the end-to-end proof — the plan's example is
-  "Deep Sea": three aliens, four paths, three stages on a theme, generated and
-  validated rather than hand-authored.
 - **Ship: `audio/music.ts`** — the jingles the plan's section 5 asks for, as pack
   data like every other sound. <!-- check:absent src/audio/music.ts -->
 
+Two things the forge **found** rather than built, both of which belong to Milestone
+3's validator work and are now written down for whoever takes it:
+
+- The playability checks have a worked specification. What a forged pack has to be
+  flown through to be believed — every enemy reaching its slot, every dive staying
+  on screen from every slot its alien can occupy, the stage being clearable, no run
+  stalling, one seed giving one world — exists as a test over one pack and would
+  become the validator pass.
+- The rules layer couples a pack to numbers it cannot change: which roles may
+  attack at all, how wide a formation has to be for the breathe table it will run
+  under, and the absolute enemy count at which bombing turns continuous. A pack
+  manager that let a player mix packs freely would meet all three.
+
 _Exit check:_ one sentence becomes a validated, playable pack with a preview clip
-attached to its own pull request.
+attached to its own pull request — met for `packs/deep-sea/`, and the remaining
+work above is what makes the clip a command rather than a recipe.
 
 ### Capturing gameplay video
 

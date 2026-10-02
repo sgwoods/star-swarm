@@ -65,6 +65,22 @@ async function rows(page: Page): Promise<readonly string[]> {
   return page.evaluate(() => window.starSwarm?.settingsRows ?? []);
 }
 
+/**
+ * Walk the selector's cursor onto one named variant.
+ *
+ * Named rather than "the one after `classic`": the list is `variants/`'s, sorted
+ * by each document's `order`, so a new game landing between two others silently
+ * changes what one press to the right reaches. A test about the demonstration
+ * variant has to ask for the demonstration variant.
+ */
+async function selectVariant(page: Page, id: string): Promise<void> {
+  for (let i = 0; i < 8; i += 1) {
+    if ((await page.evaluate(() => window.starSwarm?.selecting)) === id) return;
+    await tap(page, 'ArrowRight');
+  }
+  throw new Error(`the selector never reached "${id}"`);
+}
+
 test('the page boots into the selector with the bundled variants on it', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
@@ -219,7 +235,7 @@ test('a variant chosen on the selector is remembered for the next session', asyn
 test('a game plays on the demonstration variant it was started on', async ({ page }) => {
   // The honest end of the demonstration: the overlay pack reaches a real run.
   await booted(page);
-  await press(page, 'ArrowRight', () => window.starSwarm?.selecting !== 'classic');
+  await selectVariant(page, 'swarm-remix');
   await press(page, 'Enter', () => window.starSwarm?.phase === 'playing');
 
   expect(await page.evaluate(() => window.starSwarm?.variant)).toBe('swarm-remix');
@@ -233,11 +249,13 @@ test('the pack row shows the packs the chosen variant actually layers', async ({
   // reaching the screen. The demonstration layers two, so the row and its note
   // have something to disagree about if the wiring is wrong.
   await booted(page);
-  await press(page, 'ArrowRight', () => window.starSwarm?.selecting !== 'classic');
+  await selectVariant(page, 'swarm-remix');
   await press(page, 'Space', () => window.starSwarm?.phase === 'attract');
   await press(page, 'Escape', () => window.starSwarm?.phase === 'settings');
 
-  // Walk down to the pack row, naming each one on the way.
+  // Walk down to the pack row, naming each one on the way. The rows are the
+  // chosen variant's: this one declares no autoplay personas, so there is no
+  // AUTOPLAY row between CRT and PACKS.
   for (const row of ['difficulty', 'volume', 'sound', 'controls', 'crt', 'packs']) {
     await pressToRow(page, row);
   }

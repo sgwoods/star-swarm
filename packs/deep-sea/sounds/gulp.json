@@ -1,0 +1,7 @@
+{
+  "id": "gulp",
+  "wave": "noise",
+  "freq": [1200, 140],
+  "envelope": [0.004, 0.04, 0.2],
+  "volume": 0.42
+}

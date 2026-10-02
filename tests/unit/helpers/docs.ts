@@ -32,8 +32,14 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
 import { personaSchema } from '../../../src/content/personas.js';
-import type { Sprite } from '../../../src/content/schema.js';
-import { ABILITY_TYPES, STAGE_KINDS } from '../../../src/content/schema.js';
+import type { Formation, Sprite, StageSequence } from '../../../src/content/schema.js';
+import {
+  ABILITY_TYPES,
+  CONTENT_DIRS,
+  formationAxes,
+  pathSegmentSchema,
+  STAGE_KINDS,
+} from '../../../src/content/schema.js';
 import {
   REVERSE_PIXELS_PER_FRAME,
   SPEED_BYTE_UNIT,
@@ -44,7 +50,7 @@ import {
 import { SETTINGS_ROW_IDS } from '../../../src/ui/menus.js';
 import { CONTROL_SCHEMES } from '../../../src/ui/settings.js';
 import { classicFormation, classicPack, classicRules } from '../../helpers/rules.js';
-import { shippedVariants } from '../../helpers/variants.js';
+import { installedPack, shippedVariants } from '../../helpers/variants.js';
 
 /* -------------------------------------------------------------------------- */
 /* What a document may declare                                                 */
@@ -565,6 +571,20 @@ function shippedPersonas(): readonly { readonly id: string }[] {
   return shippedVariants().flatMap((variant) => variant.personas);
 }
 
+/**
+ * The personas of one variant.
+ *
+ * Separate from {@link shippedPersonas} since a second game started declaring its
+ * own: "four personas ship with the Classic game" and "the build offers six" are
+ * different claims, and one counter answering both would make whichever document
+ * stated the other one wrong.
+ */
+function personasOf(id: string): readonly { readonly id: string }[] {
+  const variant = shippedVariants().find((candidate) => candidate.id === id);
+  if (variant === undefined) throw new Error(`no variant "${id}" ships`);
+  return variant.personas;
+}
+
 /** The sprite the shipped pack plays when the fighter in play is destroyed. */
 function deathSprite(): Sprite {
   const pack = classicPack();
@@ -574,6 +594,29 @@ function deathSprite(): Sprite {
     throw new Error('the Classic pack no longer binds an effect to `player-hit`');
   }
   return sprite;
+}
+
+/** The forged pack's own formation, by the id its manifest declares. */
+function forgedFormation(): Formation {
+  const formations = [...installedPack('deep-sea').formations.values()];
+  const formation = formations[0];
+  if (formation === undefined || formations.length !== 1) {
+    throw new Error(
+      `packs/deep-sea declares ${String(formations.length)} formations, expected one`,
+    );
+  }
+  return formation;
+}
+
+/**
+ * The forged pack's own stage sequence.
+ *
+ * Read off the pack's manifest rather than the composed variant's, because the
+ * claim its README makes is about what the pack *states* — the challenge half it
+ * leaves empty on purpose is the point of the claim.
+ */
+function forgedSequence(): StageSequence {
+  return installedPack('deep-sea').manifest.stageSequence;
 }
 
 export function counters(root = REPO_ROOT): ReadonlyMap<string, () => number> {
@@ -626,6 +669,8 @@ export function counters(root = REPO_ROOT): ReadonlyMap<string, () => number> {
     /* What the schema reserves, as against what a pack uses. */
     ['schema.abilityIds', () => ABILITY_TYPES.length],
     ['schema.stageKinds', () => STAGE_KINDS.length],
+    ['schema.contentDirs', () => CONTENT_DIRS.length],
+    ['schema.pathSegments', () => pathSegmentSchema.options.length],
 
     /**
      * The games this build offers, through the real readers and the real loader.
@@ -654,6 +699,8 @@ export function counters(root = REPO_ROOT): ReadonlyMap<string, () => number> {
      * make it false.
      */
     ['autoplay.personas', () => shippedPersonas().length],
+    ['autoplay.classicPersonas', () => personasOf('classic').length],
+    ['autoplay.forgedPersonas', () => personasOf('deep-sea').length],
     [
       'autoplay.axes',
       () => Object.keys(personaSchema.shape).filter((key) => !PERSONA_LABELLING.has(key)).length,
@@ -757,8 +804,50 @@ export function counters(root = REPO_ROOT): ReadonlyMap<string, () => number> {
     ['starfield.banks', () => STAR_BANKS],
     ['starfield.twinkleFrames', () => TWINKLE_FRAMES],
 
+    /**
+     * The forged pack, read through the real loader exactly as the Classic
+     * counters are.
+     *
+     * A forged pack's README is a state document like any other, so the numbers in
+     * it are derived rather than typed — and derived from the *loaded* pack, so a
+     * document that stopped loading cannot keep claiming its contents.
+     */
+    ['deepSea.aliens', () => installedPack('deep-sea').aliens.size],
+    ['deepSea.paths', () => installedPack('deep-sea').paths.size],
+    ['deepSea.stages', () => installedPack('deep-sea').stages.size],
+    ['deepSea.sprites', () => installedPack('deep-sea').sprites.size],
+    ['deepSea.sounds', () => installedPack('deep-sea').sounds.size],
+    ['deepSea.palette', () => installedPack('deep-sea').manifest.palette.length],
+    ['deepSea.sequenceNormal', () => forgedSequence().normal.rows.length],
+    ['deepSea.sequenceChallenge', () => forgedSequence().challenge.rows.length],
+    ['deepSea.formationSlots', () => forgedFormation().slots.length],
+    ['deepSea.formationCaptiveSlots', () => forgedFormation().captiveSlots.length],
+    ['deepSea.formationColumns', () => formationAxes(forgedFormation()).columns.length],
+    ['deepSea.formationRows', () => formationAxes(forgedFormation()).rows.length],
+
     /* The rules layer. */
     ['rules.ranks', () => Object.keys(classicRules().difficulty.ranks).length],
+    /**
+     * How many roles can attack at all under the Classic rules.
+     *
+     * `resolveLaunchCredit` returns nothing for a role a difficulty row does not
+     * name, so this is the vocabulary a pack layered over these rules has to use if
+     * its aliens are to dive — a claim `docs/content-guide.md` makes and a forged
+     * pack depends on. Unioned across every rank's every row rather than read off
+     * one, because a role that appeared in only one rank would still be a role that
+     * can attack.
+     */
+    [
+      'rules.launchRoles',
+      () =>
+        new Set(
+          Object.values(classicRules().difficulty.ranks).flatMap((rank) =>
+            rank.stageTable.rows.flatMap((row) => Object.keys(row.launchRates)),
+          ),
+        ).size,
+    ],
+    ['rules.breatheColumns', () => classicRules().formation.breathe?.columns.length ?? 0],
+    ['rules.breatheRows', () => classicRules().formation.breathe?.rows.length ?? 0],
     [
       'rules.difficultyRows',
       () => {

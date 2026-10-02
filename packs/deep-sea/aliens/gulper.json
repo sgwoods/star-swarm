@@ -1,0 +1,11 @@
+{
+  "id": "gulper",
+  "role": "warden",
+  "hp": 2,
+  "sprite": "gulper",
+  "hitSprites": ["gulper-hit"],
+  "hitPadding": { "x": 1, "y": 0 },
+  "score": { "base": 170 },
+  "fire": { "pattern": "aimed", "shotsPerDive": 2, "cooldownFrames": 48 },
+  "dive": { "paths": ["dive-lure"], "weight": 1 }
+}

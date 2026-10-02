@@ -1,0 +1,14 @@
+{
+  "id": "angler",
+  "role": "wing",
+  "hp": 1,
+  "sprite": "angler",
+  "score": { "base": 90 },
+  "fire": {
+    "pattern": "spread",
+    "shotsPerDive": 1,
+    "cooldownFrames": 72,
+    "spreadOffsets": [-9, 9]
+  },
+  "dive": { "paths": ["dive-lure"], "weight": 1 }
+}
