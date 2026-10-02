@@ -22,6 +22,13 @@ the rasterised sheet when it is given one and falls back to flat shapes when it
 is not, which is what lets a test — or a build before the pack has loaded — draw
 a frame with no art at all.
 
+That fallback is for **no sheet**, and nothing else. A sheet that is present and
+does not hold an enemy's sprite is a sheet built from a different variant than the
+world being drawn — an enemy's sprite id is its own pack's and `loadPack` has
+already proved it resolves — so `scene.ts` throws `SceneSheetMismatchError` there
+rather than drawing a placeholder. The two conditions shared one branch once, and
+the whole Deep Sea fleet drew as squares behind the ambiguity.
+
 ## Three rules the whole directory follows
 
 **Rasterise once.** A stage draws 40 aliens plus shots and effects at 60 fps
