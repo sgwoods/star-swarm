@@ -16,6 +16,7 @@ import {
   SETTINGS_CARD_TOP,
   SETTINGS_ROW_IDS,
   settingsLines,
+  settingsNotes,
   type SettingsMenu,
   variantSelectLines,
   volumeBar,
@@ -517,5 +518,51 @@ describe('everything these cards draw is in the pixel font', () => {
         expect(missing(preset.description ?? '')).toEqual([]);
       }
     }
+  });
+});
+
+describe('the settings card says how to work it, whatever the browser allows', () => {
+  /**
+   * The same fault as the exit card's, found looking for it: when `KeyedStorage`
+   * is blocked the card used to swap **both** control lines for `THIS SESSION
+   * ONLY`, so a player in a browser that refuses site data got a menu with no
+   * statement of which key changes a row or which one leaves. Degrading to
+   * defaults is right (`src/ui/storage.ts`); degrading to an unanswerable screen
+   * is not.
+   */
+  const help = (persistent: boolean): string[] =>
+    settingsNotes('A NOTE', persistent)
+      .filter((line) => line.tone === 'help')
+      .map((line) => line.text);
+
+  it('names its keys whether or not the settings are being kept', () => {
+    for (const persistent of [true, false]) {
+      expect(help(persistent)).toContain(MENU_TEXT.settingsKeys);
+      expect(help(persistent)).toContain(MENU_TEXT.settingsDone);
+    }
+  });
+
+  it('still says when the settings are going nowhere', () => {
+    expect(help(false)).toContain(MENU_TEXT.sessionOnly);
+    expect(help(true)).not.toContain(MENU_TEXT.sessionOnly);
+  });
+
+  it('leads with the live row’s note, so the card reads top down', () => {
+    const [first] = settingsNotes('A NOTE', false);
+    expect(first).toEqual({ text: 'A NOTE', tone: 'note' });
+  });
+
+  it('counts the lines from the lines, so the plate cannot be too short', () => {
+    for (const persistent of [true, false]) {
+      expect(settingsLines(persistent)).toBe(settingsNotes('', persistent).length);
+    }
+  });
+});
+
+describe('the selector says how to work it too', () => {
+  it('names the keys that pick a game and the one that starts it', () => {
+    expect(MENU_TEXT.selectKeys).toContain('L/R');
+    expect(MENU_TEXT.selectKeys).toContain('FIRE');
+    expect(MENU_TEXT.selectStart).toContain('START');
   });
 });

@@ -279,6 +279,24 @@ pause lands — so there is one way to resume and not two. The cursor opens on
 `RESUME`, the exit key is also the cancel, and only `fire` commits, so no single
 stray press can end a run.
 
+**The card says all of that on itself**, in two dim lines under the question:
+`L/R PICK   FIRE CHOOSE`, and then that the exit key cancels and is not the way
+out. The second line is the one the arrangement needs, and it is written as a
+negative: the pause card this one opens from says `X EXITS`, which is true of the
+pause and false here, so a player who takes that promise at face value presses the
+key, lands back on the pause card reading `X EXITS` again, and has seen nothing
+happen twice. `src/ui/pause.ts` builds the lines under the choice row as a list
+and `drawExitConfirm` draws exactly that list, so the card's height is counted
+from its contents and `tests/unit/pause.test.ts` can check what it says without a
+DOM — there is none on either Vitest project.
+<!-- check:count ui.exitCardHelpLines 2 -->
+
+The settings card is built the same way and for the same reason: its two control
+lines are drawn whatever the browser allows, where an earlier draft swapped both
+of them for `THIS SESSION ONLY` when `KeyedStorage` was blocked and left that
+screen saying nothing about which key changes a row or which one leaves.
+<!-- check:count ui.settingsHelpLines 2 -->
+
 ![Pause, resume, and the exit confirmation answered both ways](media/m3-pause-exit.gif)
 
 **Confirming discards the run.** The score does not reach the high-score table:

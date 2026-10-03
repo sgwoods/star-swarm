@@ -99,14 +99,18 @@ The clips are screen recordings of the dev build.
   play: a game running, **P** holding it dead still — card up, stars stopped,
   nothing on the field moving — **P** letting it go again from exactly where it
   stopped, then **X** stopping the game _first_ and asking over a playfield that
-  is already still, the fire button taking the default (`RESUME`, which is where
-  the cursor opens) back to the pause, and finally the cursor moved across to
-  `EXIT` and committed, landing home in attract with the score gone and the
-  high-score table untouched. The browser's stored table was seeded to a modest
-  one before the page loaded, and nothing else about the run is arranged: the exit
-  card only draws the line naming the place a score would have taken when it would
-  have taken one, and reaching that against the shipped defaults is half a minute
-  of play the clip does not otherwise need.
+  is already still. The question is then answered three ways in a row: **X**,
+  which cancels back to the pause rather than leaving; the fire button taking the
+  default (`RESUME`, which is where the cursor opens); and finally the cursor
+  moved across to `EXIT` and committed, landing home in attract with the score
+  gone and the high-score table untouched. The card's own two dim lines —
+  `L/R PICK   FIRE CHOOSE` and the one saying the exit key cancels — are on
+  screen throughout, which is the thing the clip is evidence of: the first answer
+  is the one a player used to have to guess. The browser's stored table was
+  seeded to a modest one before the page loaded, and nothing else about the run is
+  arranged: the exit card only draws the line naming the place a score would have
+  taken when it would have taken one, and reaching that against the shipped
+  defaults is half a minute of play the clip does not otherwise need.
 - `m3-autoplay.gif` — the cabinet playing itself, two personas side by side and
   thirty unedited seconds of each: **beginner on the left, astronaut on the
   right**, both labelled on screen by the game's own `AUTO <PERSONA>` line. Two

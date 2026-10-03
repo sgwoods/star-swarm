@@ -47,7 +47,8 @@ import {
   STAR_BANKS,
   TWINKLE_FRAMES,
 } from '../../../src/render/starfield.js';
-import { SETTINGS_ROW_IDS } from '../../../src/ui/menus.js';
+import { SETTINGS_ROW_IDS, settingsNotes } from '../../../src/ui/menus.js';
+import { exitConfirmUnderLines } from '../../../src/ui/pause.js';
 import { CONTROL_SCHEMES } from '../../../src/ui/settings.js';
 import { classicFormation, classicPack, classicRules } from '../../helpers/rules.js';
 import { installedPack, shippedVariants } from '../../helpers/variants.js';
@@ -686,6 +687,23 @@ export function counters(root = REPO_ROOT): ReadonlyMap<string, () => number> {
     ],
     ['ui.controlSchemes', () => CONTROL_SCHEMES.length],
     ['ui.settingsRows', () => SETTINGS_ROW_IDS.length],
+
+    /**
+     * The dim lines a card draws to say which key does what.
+     *
+     * Counted off the list each draw function iterates, so a document claiming a
+     * card tells the player how to answer it is held to the card rather than to
+     * somebody's memory of it — and a card that quietly loses one, as the
+     * settings card did when storage was blocked, fails here.
+     */
+    [
+      'ui.exitCardHelpLines',
+      () => exitConfirmUnderLines(0).filter((line) => line.tone === 'help').length,
+    ],
+    [
+      'ui.settingsHelpLines',
+      () => settingsNotes('', true).filter((line) => line.tone === 'help').length,
+    ],
 
     /**
      * Autoplay: the personas the shipped game offers, and the axes one declares.

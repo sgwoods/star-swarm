@@ -88,8 +88,20 @@ export const PAUSE_TEXT = Object.freeze({
   lost: 'THIS RUN IS LOST',
   /** Prefix of the line drawn when the score would have taken a place. */
   wouldRank: 'IT WOULD HAVE RANKED',
-  exitKeys: 'L/R PICK   FIRE OK',
-  exitBack: 'X GOES BACK',
+  /** The same wording as the selector's, because it is the same mechanic. */
+  exitKeys: 'L/R PICK   FIRE CHOOSE',
+  /**
+   * What the exit key does **here**, said as a negative on purpose.
+   *
+   * The pause card this one opens from says `X EXITS`, and that is true of the
+   * pause: the key raises this question. On this card it answers nothing — it
+   * cancels — so a player who takes the earlier promise at face value presses it,
+   * lands back on the pause card, and reads `X EXITS` again. That loop is what
+   * "I pressed X twice and nothing happened" is, and a line saying only that the
+   * key goes back does not break it: the thing that has to be contradicted is the
+   * expectation that this key is the way out.
+   */
+  exitCancel: 'X CANCELS, NOT AN EXIT',
 });
 
 const HEADING_COLOUR = '#ff2b2b';
@@ -119,9 +131,54 @@ const CARD_CELLS = 24;
 export const PAUSE_CARD_TOP = CARD_TOP + 16;
 export const EXIT_CARD_TOP = CARD_TOP;
 
-/** Lines under the choice row: the warning, the rank line if any, and two keys. */
+/**
+ * How a line under the choice row is inked.
+ *
+ * A tone rather than a colour so that {@link exitConfirmUnderLines} stays a pure
+ * value a Node test can read — the palette belongs to the draw function, and the
+ * rule that matters here is that help is dimmer than the question.
+ */
+export type ExitLineTone = 'value' | 'warning' | 'help';
+
+/** One line under the choice row. */
+export interface ExitConfirmLine {
+  readonly text: string;
+  readonly tone: ExitLineTone;
+}
+
+/**
+ * Every line under the choice row, in the order they are drawn.
+ *
+ * {@link drawExitConfirm} draws exactly this and nothing else, so a test over
+ * the list is a test over the card — which is the only way to check on the Node
+ * environment that the card still says how to answer it. The score, the warning
+ * and the rank line come first because they are the question; the two `help`
+ * lines are the answer sheet and are drawn dim.
+ */
+export function exitConfirmUnderLines(score: number, rank?: number): readonly ExitConfirmLine[] {
+  const lines: ExitConfirmLine[] = [
+    { text: `SCORE ${String(score)}`, tone: 'value' },
+    { text: PAUSE_TEXT.lost, tone: 'warning' },
+  ];
+  if (rank !== undefined) {
+    lines.push({ text: `${PAUSE_TEXT.wouldRank} ${String(rank)}`, tone: 'warning' });
+  }
+  lines.push({ text: PAUSE_TEXT.exitKeys, tone: 'help' });
+  lines.push({ text: PAUSE_TEXT.exitCancel, tone: 'help' });
+  return lines;
+}
+
+/**
+ * Lines under the choice row, which the card's height depends on.
+ *
+ * Derived from {@link exitConfirmUnderLines} rather than written down, so a line
+ * added to the card cannot leave the plate too short for it. The plate is what
+ * keeps a card legible over a live game, and a line past its bottom edge is drawn
+ * over the playfield with nothing to say so — which is the failure
+ * `tests/unit/pause.test.ts` does the arithmetic against.
+ */
 export function exitConfirmLines(qualifies: boolean): number {
-  return qualifies ? 5 : 4;
+  return exitConfirmUnderLines(0, qualifies ? 1 : undefined).length;
 }
 
 export interface PausedCardOptions {
@@ -166,6 +223,13 @@ export interface ExitConfirmCardOptions {
 /** How far either word sits from the card's centre, in logical pixels. */
 const CHOICE_OFFSET = 48;
 
+/** The ink each tone is drawn in. Help is the dim one, by the rule above. */
+const EXIT_INK: Record<ExitLineTone, string> = {
+  value: VALUE_COLOUR,
+  warning: WARNING_COLOUR,
+  help: DIM_COLOUR,
+};
+
 /**
  * Draw the exit confirmation.
  *
@@ -198,14 +262,8 @@ export function drawExitConfirm(
   });
 
   let line = choiceY + ROW_PITCH + 4;
-  const under = (text: string, colour: string): void => {
-    drawText(ctx, fitText(text, CARD_CELLS), x, line, { colour, align: 'center' });
+  for (const { text, tone } of exitConfirmUnderLines(score, rank)) {
+    drawText(ctx, fitText(text, CARD_CELLS), x, line, { colour: EXIT_INK[tone], align: 'center' });
     line += ROW_PITCH;
-  };
-
-  under(`SCORE ${String(score)}`, VALUE_COLOUR);
-  under(PAUSE_TEXT.lost, WARNING_COLOUR);
-  if (qualifies) under(`${PAUSE_TEXT.wouldRank} ${String(rank)}`, WARNING_COLOUR);
-  under(PAUSE_TEXT.exitKeys, DIM_COLOUR);
-  under(PAUSE_TEXT.exitBack, DIM_COLOUR);
+  }
 }

@@ -446,6 +446,17 @@ the loader checks every id, and `src/audio/sfx.ts` names no effect of its own.
 short README saying what lands there and when, updated as each milestone fills
 it in.
 
+**A card that waits on a keypress names its keys, from a list the draw function
+iterates** — `exitConfirmUnderLines` in `src/ui/pause.ts`, `settingsNotes` in
+`src/ui/menus.ts`. Neither Vitest project has a DOM, so that list is the only way
+to test what a card tells the player, and the card's height is counted from it so
+a line added cannot be drawn off the plate. Help is the dim ink and goes last,
+under the question. The two shapes this exists to prevent are both shipped bugs:
+a control line that is conditional (the settings card dropped both of its when
+storage was blocked) and one that names a key without saying what it does **on
+this card** (`X` opens the exit from the pause and cancels on the card that
+follows, and a line reading only "goes back" left that loop unreadable).
+
 `/lab` (`src/ui/lab/`, entry document `lab.html`) is a **dev-only** route, kept
 that way three ways at once: Vite's only build input is `index.html`, nothing on
 that graph imports the lab, and the URL is wired up by a plugin declaring

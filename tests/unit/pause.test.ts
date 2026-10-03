@@ -9,6 +9,7 @@ import {
   EXIT_CARD_TOP,
   EXIT_CHOICES,
   exitConfirmLines,
+  exitConfirmUnderLines,
   PAUSE_CARD_TOP,
   PAUSE_TEXT,
 } from '../../src/ui/pause.js';
@@ -102,5 +103,58 @@ describe('everything these cards draw is in the pixel font', () => {
     // in PAUSE_TEXT, and both are digits.
     expect(missing(`SCORE ${String(1234567)}`)).toEqual([]);
     expect(missing(`${PAUSE_TEXT.wouldRank} ${String(10)}`)).toEqual([]);
+  });
+});
+
+describe('the card says how to answer it', () => {
+  /**
+   * The complaint this is written from: the card was answered by pressing the
+   * exit key twice, which cancels, and from the player's seat nothing happened —
+   * the pause card came back saying `X EXITS` again. The behaviour is deliberate
+   * (`docs/ARCHITECTURE.md` §4.5) and did not change; what was missing is the
+   * card saying that **here** that key cancels.
+   *
+   * `drawExitConfirm` draws {@link exitConfirmUnderLines} and nothing else, so
+   * these are assertions about the card and not about a list beside it. There is
+   * no DOM on either Vitest project, which is why the lines are a value.
+   */
+  const help = (rank?: number): string[] =>
+    exitConfirmUnderLines(0, rank)
+      .filter((line) => line.tone === 'help')
+      .map((line) => line.text);
+
+  it('names the direction keys and the key that commits, on both shapes of card', () => {
+    for (const rank of [undefined, 1]) {
+      expect(help(rank)).toContain(PAUSE_TEXT.exitKeys);
+      expect(PAUSE_TEXT.exitKeys).toContain('L/R');
+      expect(PAUSE_TEXT.exitKeys).toContain('FIRE');
+    }
+  });
+
+  it('says the exit key cancels, which is the thing a player cannot guess', () => {
+    for (const rank of [undefined, 1]) {
+      expect(help(rank)).toContain(PAUSE_TEXT.exitCancel);
+    }
+    expect(PAUSE_TEXT.exitCancel.startsWith('X ')).toBe(true);
+    expect(PAUSE_TEXT.exitCancel).toContain('CANCELS');
+  });
+
+  it('draws the help under the question and dimmer than it', () => {
+    // Help is last, so the score and the warning are what the eye lands on, and
+    // it is the only tone drawn in the dim ink.
+    const tones = exitConfirmUnderLines(0, 1).map((line) => line.tone);
+    expect(tones).toEqual(['value', 'warning', 'warning', 'help', 'help']);
+  });
+
+  it('fits the card, so no help line is cut off mid-word', () => {
+    // `fitText` trims to the card's 24 cells and says nothing when it does.
+    for (const { text } of exitConfirmUnderLines(1_234_567, 1)) {
+      expect(text.length).toBeLessThanOrEqual(24);
+    }
+  });
+
+  it('counts the lines from the lines, so the plate cannot be too short', () => {
+    expect(exitConfirmLines(false)).toBe(exitConfirmUnderLines(0).length);
+    expect(exitConfirmLines(true)).toBe(exitConfirmUnderLines(0, 1).length);
   });
 });

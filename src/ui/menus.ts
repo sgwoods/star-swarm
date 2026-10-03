@@ -489,8 +489,39 @@ export function variantSelectLines(demonstrations: boolean): number {
   return demonstrations ? 4 : 3;
 }
 
+/**
+ * How a line under the settings list is inked. See `./pause.ts` for why the
+ * lines are a tone rather than a colour.
+ */
+export type MenuLineTone = 'note' | 'help';
+
+/** One line under the settings list. */
+export interface MenuLine {
+  readonly text: string;
+  readonly tone: MenuLineTone;
+}
+
+/**
+ * Every line under the settings list, in the order they are drawn.
+ *
+ * {@link drawSettings} draws exactly this, so a test over the list is a test
+ * over the card. **The control lines are not conditional**: an earlier draft
+ * swapped both of them for `THIS SESSION ONLY` when storage was blocked, which
+ * left a player whose browser refuses site data looking at a menu that said
+ * nothing about which key changes a row or which one leaves. The storage note is
+ * a line about the rows, so it goes with the row note, above the keys.
+ */
+export function settingsNotes(note: string, persistent: boolean): readonly MenuLine[] {
+  const lines: MenuLine[] = [{ text: note, tone: 'note' }];
+  if (!persistent) lines.push({ text: MENU_TEXT.sessionOnly, tone: 'help' });
+  lines.push({ text: MENU_TEXT.settingsKeys, tone: 'help' });
+  lines.push({ text: MENU_TEXT.settingsDone, tone: 'help' });
+  return lines;
+}
+
+/** Lines under the list, which the card's height depends on. Derived, not stated. */
 export function settingsLines(persistent: boolean): number {
-  return persistent ? 3 : 2;
+  return settingsNotes('', persistent).length;
 }
 
 export interface VariantSelectOptions {
@@ -555,6 +586,9 @@ export interface SettingsScreenOptions {
 
 const SETTINGS_CARD_WIDTH = 216;
 
+/** The ink each tone is drawn in. Help is the dim one, as on the pause cards. */
+const MENU_INK: Record<MenuLineTone, string> = { note: NOTE_COLOUR, help: DIM_COLOUR };
+
 /**
  * Draw the settings screen.
  *
@@ -566,8 +600,8 @@ const SETTINGS_CARD_WIDTH = 216;
 export function drawSettings(ctx: CanvasRenderingContext2D, options: SettingsScreenOptions): void {
   const { menu, steps, x, y, persistent = true } = options;
   const rows = menu.rows;
-  // The live row's note, then the two control lines — or the one line that says
-  // these settings are going nowhere.
+  // The live row's note, the line that says these settings are going nowhere if
+  // they are, and then the two control lines.
   const lines = settingsLines(persistent);
 
   drawCentredPanel(ctx, x, y - 6, SETTINGS_CARD_WIDTH, cardHeight(rows.length, lines));
@@ -592,16 +626,8 @@ export function drawSettings(ctx: CanvasRenderingContext2D, options: SettingsScr
   });
 
   let line = y + HEADING_GAP + 8 + rows.length * ROW_PITCH;
-  const under = (text: string, colour: string): void => {
-    drawText(ctx, fitText(text, noteCells), x, line, { colour, align: 'center' });
+  for (const { text, tone } of settingsNotes(menu.row.note ?? '', persistent)) {
+    drawText(ctx, fitText(text, noteCells), x, line, { colour: MENU_INK[tone], align: 'center' });
     line += ROW_PITCH;
-  };
-
-  under(menu.row.note ?? '', NOTE_COLOUR);
-  if (persistent) {
-    under(MENU_TEXT.settingsKeys, DIM_COLOUR);
-    under(MENU_TEXT.settingsDone, DIM_COLOUR);
-  } else {
-    under(MENU_TEXT.sessionOnly, DIM_COLOUR);
   }
 }
