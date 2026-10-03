@@ -471,6 +471,17 @@ are easy to break and cheap to keep — `src/render/README.md` has the detail:
   the other way round: the death explosion is shorter than `player.respawnFrames`
   because `tests/unit/effects.test.ts` requires it, and an animation that wanted
   longer is a redraw, not a rules edit.
+- **The sheet and the world must be the same variant's, and only `src/main.ts`
+  can get that wrong.** The flow boots on the **remembered** variant, not
+  `variants[0]`, and `onVariantChange` reports a _change_ — which starting on one
+  is not. So `applyVariant(flow.variant)` runs once at boot and `applyVariant` is
+  the only builder; seeding the sheet from the first variant drew the whole Deep
+  Sea fleet as squares after a refresh. `scene.ts` no longer hides that: no sheet
+  at all is the art-free fallback, a sheet _without_ the enemy's sprite throws
+  `SceneSheetMismatchError`. And a state assertion cannot see this class of bug —
+  the page knew which variant it was running the whole time — so
+  `tests/e2e/variants.spec.ts` reads the canvas for `scene.ts`'s placeholder
+  colours instead. Reach for a pixel assertion when the fault is what is _drawn_.
 
 Rasterising is split from drawing so both are testable on Node: pixels are pure,
 and turning a bitmap into something `drawImage` takes is an injectable

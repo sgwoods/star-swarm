@@ -1050,6 +1050,29 @@ keyboard and the sprite sheet, which is `src/main.ts`. So there is one place a
 setting has consequences, and the menu is testable on the Node environment with no
 DOM like everything else in `src/ui/`.
 
+**And `src/main.ts` asks which game is in force rather than assuming.** The flow
+starts on the _remembered_ variant, which is not the first one in the list, and
+`onVariantChange` reports a **change** — which starting on one is not. So the
+presentation is built by calling `applyVariant(flow.variant)` once at boot and
+again from that callback, and `applyVariant` is the only thing that may build one:
+a second builder is a second answer to which game this is. Two answers is exactly
+what shipped — a refresh onto Deep Sea ran a Deep Sea world under Classic's sheet,
+and every enemy drew as a flat placeholder square.
+
+That failure was invisible to a suite that asks the page what it thinks, because
+the page thought correctly about all of it. Two things close it. `src/render/scene.ts`
+no longer treats "no sheet" and "a sheet without this sprite" as one case: the
+first is the documented art-free fallback, the second can only be a sheet and a
+world from different variants and throws `SceneSheetMismatchError`. And
+`tests/e2e/variants.spec.ts` reads the **canvas** after a reload onto a remembered
+variant and requires none of `scene.ts`'s three placeholder colours on it — a
+pixel assertion rather than a state one, which is what this suite was missing.
+`tests/unit/scene.test.ts` holds both halves, including that no shipped pack
+palette declares a placeholder colour, so the pixel test cannot quietly stop
+meaning anything.
+
+![The same Deep Sea run after a refresh: placeholder squares, then the pack's own art](media/deep-sea-remembered-variant.gif)
+
 ![The start-up selector, then the settings menu changing the difficulty preset](media/m3-variants.gif)
 
 ---

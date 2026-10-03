@@ -1,5 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
 
+import { PLACEHOLDER_COLOURS } from '../../src/render/scene.js';
 import { booted, reachAttract } from './harness.js';
 
 /**
@@ -263,4 +264,69 @@ test('the pack row shows the packs the chosen variant actually layers', async ({
   expect(await page.evaluate(() => window.starSwarm?.settingsMenuNote)).toBe(
     'classic + swarm-remix',
   );
+});
+
+/**
+ * The art a remembered variant is drawn with, read off the canvas.
+ *
+ * This is the one the suite did not have. Every other test here asks the page
+ * what it *thinks* — which variant, which rank, which packs — and the page was
+ * right about all of it while drawing the Deep Sea fleet as flat squares for a
+ * whole release. The flow boots on the remembered variant and `onVariantChange`
+ * fires on a *change*, which starting on one is not, so `src/main.ts` held the
+ * sheet of whatever came first in the list. Only the pixels show that.
+ *
+ * Deep Sea by name, like the `swarm-remix` tests above: this has to be a variant
+ * that brings its **own** aliens, or a Classic sheet would draw it correctly and
+ * the test would prove nothing.
+ */
+test('a remembered variant is drawn with its own art after a reload', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+
+  // Choose it the way a player does, so what is remembered is remembered the
+  // ordinary way, and then come back to the cabinet.
+  await booted(page);
+  await selectVariant(page, 'deep-sea');
+  await press(page, 'Space', () => window.starSwarm?.phase === 'attract');
+  await page.reload();
+  await page.waitForFunction(() => (window.starSwarm?.step ?? 0) > 0);
+  expect(await page.evaluate(() => window.starSwarm?.variant)).toBe('deep-sea');
+
+  await press(page, 'Enter', () => window.starSwarm?.phase === 'playing');
+  // A fleet actually on the screen: with none launched there is nothing to draw
+  // either way, and the count is the trench formation's rather than Classic's.
+  await page.waitForFunction(() => (window.starSwarm?.enemiesHome ?? 0) > 4);
+  expect(await page.evaluate(() => window.starSwarm?.enemiesAlive)).toBe(26);
+
+  // `src/render/scene.ts` draws these three and only these three, and only for an
+  // enemy it has no sprite for; `tests/unit/scene.test.ts` holds no shipped pack
+  // palette to any of them, so a hit here is a placeholder and nothing else.
+  const placeholderPixels = await page.evaluate((colours) => {
+    const canvas = document.querySelector('canvas#screen');
+    if (!(canvas instanceof HTMLCanvasElement)) return -1;
+    const ctx = canvas.getContext('2d');
+    if (ctx === null) return -1;
+    const wanted = colours.map((colour) => [
+      Number.parseInt(colour.slice(1, 3), 16),
+      Number.parseInt(colour.slice(3, 5), 16),
+      Number.parseInt(colour.slice(5, 7), 16),
+    ]);
+    const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    let hits = 0;
+    for (let at = 0; at < data.length; at += 4) {
+      if (data[at + 3] === 0) continue;
+      for (const [r, g, b] of wanted) {
+        if (data[at] === r && data[at + 1] === g && data[at + 2] === b) hits += 1;
+      }
+    }
+    return hits;
+  }, PLACEHOLDER_COLOURS as string[]);
+
+  expect(placeholderPixels).toBe(0);
+  // And the mismatch check in `scene.ts` did not have to fire to get there.
+  expect(errors).toEqual([]);
 });

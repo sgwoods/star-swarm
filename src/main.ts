@@ -96,8 +96,17 @@ if (firstVariant === undefined) {
 }
 const byId = new Map(variants.map((entry) => [entry.id, entry]));
 
-/** The variant in force. Replaced when the flow reports the player chose another. */
-let variant: ResolvedVariant = firstVariant;
+/**
+ * The variant in force. Assigned only by {@link applyVariant}, which the flow
+ * drives — this file never decides which game is running.
+ *
+ * Declared without a value on purpose. Seeding it with `variants[0]` is the bug
+ * that drew the Deep Sea fleet as placeholder squares after a refresh: the flow
+ * starts on the *remembered* variant, which is not the first one, so the two
+ * disagreed from the first frame and only a variant *change* ever reconciled
+ * them.
+ */
+let variant: ResolvedVariant;
 
 // Seeded from a constant so a session is reproducible and a recorded replay
 // means something. The flow derives each game's seed, and the attract demo's,
@@ -160,34 +169,35 @@ const synth = createSynth({
  * (`src/render/README.md`), and the sound and explosion maps are the variant's
  * own `sounds` and `effects`.
  *
- * These are `let` rather than `const` because a variant is chosen at run time. A
- * variant change is the *only* thing that rebuilds them — nothing here is per
- * frame, which is the contract `src/render/README.md` states.
+ * These are `let` rather than `const` because a variant is chosen at run time,
+ * and they have no initialiser because {@link applyVariant} is the only thing
+ * that may build one — a second builder is a second answer to "which game is
+ * this?", and two answers is what put Classic's sheet under a Deep Sea world.
+ * Nothing here is per frame, which is the contract `src/render/README.md`
+ * states.
  */
-let sprites: SpriteSheet = createSpriteSheet({
-  sprites: variant.registry.sprites.values(),
-  palette: variant.registry.manifest.palette,
-});
-let sfx: Sfx = createSfx({
-  player: synth,
-  sounds: variant.registry.sounds,
-  bindings: variant.registry.manifest.sounds,
-});
-let effects: Effects = createEffects({
-  bindings: variant.registry.manifest.effects,
-  sprites: variant.registry.sprites,
-});
+let sprites: SpriteSheet;
+let sfx: Sfx;
+let effects: Effects;
 
 /**
- * Take on the variant the flow says is now in force.
+ * Take on the variant the flow says is in force.
  *
  * The flow rebuilds the rules, the stage source and the attract demo itself; this
  * is the other half — the things a variant decides that live on this side of the
- * boundary. Called from `onVariantChange` and nowhere else, so there is one place
- * a variant's presentation is assembled.
+ * boundary. The one place a variant's presentation is assembled, called once at
+ * boot with whatever the flow started on and again from `onVariantChange`.
  */
 function applyVariant(chosen: FlowVariant): void {
-  variant = byId.get(chosen.id) ?? variant;
+  // `byId` is built from the very list the flow was handed, so this always
+  // lands. It is checked rather than defaulted because a silent fallback here is
+  // precisely the failure being fixed: carrying on with the wrong variant's
+  // presentation is how a fleet ends up drawn as squares.
+  const chosenVariant = byId.get(chosen.id);
+  if (chosenVariant === undefined) {
+    throw new Error(`the flow is running a variant this page did not load: ${chosen.id}`);
+  }
+  variant = chosenVariant;
   sprites = createSpriteSheet({
     sprites: variant.registry.sprites.values(),
     palette: variant.registry.manifest.palette,
@@ -222,7 +232,7 @@ let controls = settings.value.controls;
 
 // The flow builds every world the game runs — the attract demo's and each game's —
 // so the variants go to it rather than to a world this file keeps. It owns which
-// game is in force; this file hears about a change and rebuilds what it owns.
+// game is in force; this file asks it and rebuilds what it owns.
 const flow = createGameFlow({
   variants,
   seed: SEED,
@@ -230,6 +240,13 @@ const flow = createGameFlow({
   settings,
   onVariantChange: applyVariant,
 });
+
+// Ask, rather than assume the list starts where the flow does. The flow boots on
+// the variant the player last chose (`src/ui/flow.ts`), so on every refresh after
+// a Deep Sea game that is Deep Sea — and `onVariantChange` fires on a *change*,
+// which starting on one is not. Guessing here left the fleet drawn from Classic's
+// sheet, and a sprite id that sheet has never heard of draws as a square.
+applyVariant(flow.variant);
 
 applySettings(settings.value);
 

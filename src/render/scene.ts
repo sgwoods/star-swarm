@@ -10,6 +10,16 @@
  * The sheet is optional. A caller without one — a test, or a build before the
  * pack has loaded — gets flat shapes: enough to see where everything is,
  * deliberately not enough to be mistaken for finished art.
+ *
+ * **"No sheet" and "a sheet that has never heard of this sprite" are not the
+ * same thing**, and treating them as one is how a wiring bug became art. An
+ * enemy's sprite id is its own pack's, and `loadPack` has already proved that
+ * reference resolves, so a sheet built from that pack cannot be missing it: an
+ * absent id means the sheet and the world came from *different* variants, which
+ * is a bug and not a pack without art. That case throws (see
+ * {@link SceneSheetMismatchError}) rather than drawing a placeholder, because a
+ * placeholder is indistinguishable from a deliberate one and the whole Deep Sea
+ * fleet drew as squares for a release behind exactly that ambiguity.
  */
 
 import { beamCaptor, beamWindow } from '../sim/capture.js';
@@ -25,22 +35,61 @@ const BULLET_COLOR = '#ff5a5a';
 const BEAM_COLOR = '#7de3ff';
 const BEAM_EDGE_COLOR = '#ffffff';
 
-/** Placeholder colours, used only when no sprite sheet was supplied. */
-const ROLE_COLORS: Readonly<Record<string, string>> = Object.freeze({
+/**
+ * Placeholder colours, used only when no sprite sheet was supplied.
+ *
+ * Exported because they are the signature a test looks for: a placeholder on a
+ * screen that should be showing art is the symptom this module's mismatch check
+ * exists to stop, and `tests/e2e/variants.spec.ts` proves it from the pixels. No
+ * shipped pack declares one — `tests/unit/scene.test.ts` holds that true, so the
+ * signature cannot quietly stop being one.
+ */
+export const ROLE_COLORS: Readonly<Record<string, string>> = Object.freeze({
   drone: '#4fc3f7',
   wing: '#ff7043',
   warden: '#66bb6a',
 });
 
+/** Every colour that only ever reaches the screen as a placeholder enemy. */
+export const PLACEHOLDER_COLOURS: readonly string[] = Object.freeze(Object.values(ROLE_COLORS));
+
 /** The fighter's sprite id. A pack-facing name would be a rules field; it is not one yet. */
 const PLAYER_SPRITE = 'player';
+
+/**
+ * A sheet was supplied and does not hold a sprite the world asked for.
+ *
+ * Its own type so the one thing a caller can do about it — say which sheet is
+ * under which world — is in the message rather than guessed from a string.
+ */
+export class SceneSheetMismatchError extends Error {
+  readonly sprite: string;
+  readonly available: readonly string[];
+
+  constructor(sprite: string, available: readonly string[]) {
+    super(
+      `the sprite sheet has no "${sprite}": it was built from a different pack than the world ` +
+        `being drawn. The sheet holds: ${available.join(', ')}`,
+    );
+    this.name = 'SceneSheetMismatchError';
+    this.sprite = sprite;
+    this.available = available;
+  }
+}
 
 export interface SceneOptions {
   /** The pack's rasterised sprites. Omitted draws placeholder shapes. */
   readonly sheet?: SpriteSheet;
 }
 
-/** The fighter, drawn from its anchor — two ships when it is a dual fighter. */
+/**
+ * The fighter, drawn from its anchor — two ships when it is a dual fighter.
+ *
+ * Unlike an enemy's, {@link PLAYER_SPRITE} is this file's own constant rather
+ * than something a pack declared and the loader checked, so a pack that ships no
+ * fighter art is a pack without that sprite — not a mismatched sheet. It gets the
+ * placeholder, and the enemies are the half that can tell the two apart.
+ */
 function drawPlayer(ctx: CanvasRenderingContext2D, world: World, sheet?: SpriteSheet): void {
   if (!world.player.alive) return;
   for (const { x, y } of shipAnchors(world.player, world.rules)) {
@@ -62,12 +111,16 @@ function drawPlayer(ctx: CanvasRenderingContext2D, world: World, sheet?: SpriteS
  * The fleet. A `standby` enemy has not launched and a `dead` one is off the
  * field — shot down, or flown away alive — so neither is drawn. The simulation's
  * own state is what decides that, not a flag here.
+ *
+ * Throws rather than falling back when a sheet is present without the id: see
+ * the module comment. With no sheet at all, every enemy is a flat shape.
  */
 function drawEnemies(ctx: CanvasRenderingContext2D, world: World, sheet?: SpriteSheet): void {
   for (const enemy of world.fleet.enemies) {
     if (enemy.state === 'standby' || enemy.state === 'dead') continue;
     const id = enemySprite(enemy);
-    if (sheet?.has(id) === true) {
+    if (sheet !== undefined) {
+      if (!sheet.has(id)) throw new SceneSheetMismatchError(id, sheet.ids);
       // The wing flap comes from the sprite's own `frameDuration`, so a pack sets
       // the animation speed and the renderer only supplies the clock.
       drawSprite(ctx, sheet, id, enemy.x, enemy.y, sheet.frameAt(id, world.step));
