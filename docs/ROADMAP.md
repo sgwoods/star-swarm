@@ -241,13 +241,13 @@ alternatives below.
 
 #### What is not known, and what would settle it
 
-1. **Whether a log recorded on one machine re-renders to the same run on
-   another.** `Math.sin`, `Math.cos` and `Math.atan2` are engine-defined and can
-   differ by one unit in the last place between CPU architectures. The goldens
-   quantise around that ([`docs/ARCHITECTURE.md`](ARCHITECTURE.md#3-the-layers)),
-   but quantisation hides a one-shot comparison; a re-render compounds the
-   difference over thousands of steps instead, so it is not covered. Settled by:
-   record one log, render it on arm64 and on x86-64, hash the frames and compare.
+1. **Whether a log recorded on one machine re-renders to the same frames on
+   another.** The run will be the same run —
+   [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#3-the-layers) records why the
+   simulation replays to the bit on either architecture — but the frames come out
+   of a canvas, and whether two machines rasterise the same state to the same
+   pixels is a separate question nobody has measured. Settled by: record one log,
+   render it on arm64 and on x86-64, hash the frames and compare.
 2. **What a frame costs.** Settled by timing several hundred backbuffer grabs
    through the devtools protocol against the same count taken in the page as
    image data, which also decides which of the two the command should use.
@@ -302,9 +302,8 @@ asked for it, which is why it is at the top of this page instead.
 
 ## Open questions this roadmap does not answer
 
-Three questions are open and none is settled here — two arcade observations
-nobody has made, and one decision that is the captain's. A document may record
-that they are open; none may pick a side.
+Two questions are open and neither is settled here — both arcade observations
+nobody has made. A document may record that they are open; none may pick a side.
 
 1. **Does a challenge stage's second wave keep four boss-class objects?** It
    changes what a perfect first challenge stage pays — the two readings differ by
@@ -320,13 +319,6 @@ that they are open; none may pick a side.
    built to the negative reading of both, so a ram cannot clear a stage. Changing
    it is `resolveBodyCollisions` in `src/sim/world.ts` and the golden replays it
    moves.
-3. **Cross-platform bit-identical simulation.** `Math.sin`, `Math.cos` and
-   `Math.atan2` are engine-defined and can differ by one unit in the last place
-   between CPU architectures. The golden replays quantise around it rather than
-   solve it, which is stated as a limit in
-   [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#3-the-layers) and in `AGENTS.md`.
-   Whether to make the simulation portable — a fixed-point or table-driven
-   trigonometry — is unscheduled.
 
 ---
 

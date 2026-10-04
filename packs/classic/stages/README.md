@@ -166,22 +166,16 @@ document.
 
 ## One hazard a stage author should know about
 
-Changing a stage document re-records every golden that reaches it, and a golden
-that flies **curved** geometry used not to reproduce on another machine.
-`src/sim/paths.ts` records that `Math.sin`, `Math.cos` and `Math.atan2` are
-engine-defined; they also land one ULP apart between CPU architectures. Re-recording
-`stage-dives` here once produced a final state one ULP from the one CI computed — a
-single dead enemy's frozen x, every other value in a 43-enemy fingerprint identical.
-Entry paths were never exposed, because a bezier is only multiplies and adds; dive
-paths are, because they are sampled with trig.
-
-`fingerprintWorld` now rounds every number it compares to six decimal places, which
-puts that noise well inside the mesh while staying far below anything drawable. So
-the practical advice is short: **re-record deliberately, let CI check it, and never
-bend stage data to preserve an old recording.** The deeper question — whether the
-simulation itself is bit-identical across machines — is still open; the rounding
-makes it irrelevant to the test suite rather than answering it. `AGENTS.md` has the
-numbers.
+Changing a stage document re-records every golden that reaches it. A golden that
+flies **curved** geometry used to carry a second hazard: `Math.sin`, `Math.cos` and
+`Math.atan2` are engine-defined and land one ULP apart between CPU architectures,
+and re-recording `stage-dives` here once produced a final state one ULP from the one
+CI computed — a single dead enemy's frozen x, every other value in a 43-enemy
+fingerprint identical. The simulation now takes its trigonometry from the tables in
+`src/engine/trig.ts` and is bit-identical across machines, so `fingerprintWorld`
+compares every number exactly and a golden recorded on one machine replays to the
+byte on another. The practical advice is short: **re-record deliberately, let CI
+check it, and never bend stage data to preserve an old recording.**
 
 ## Previewing
 

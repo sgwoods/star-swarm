@@ -158,21 +158,16 @@ Practical consequences:
 - `1/60` is not representable in binary floating point. `src/engine/loop.ts`
   accumulates in _steps_ and carries a tolerance for exactly this reason; naive
   millisecond subtraction silently loses a step per burst.
-- **The simulation is not bit-identical across machines, and the fingerprint is
-  rounded so that this does not reach the test suite.** `src/sim/paths.ts` notes
-  that `Math.sin`, `Math.cos` and `Math.atan2` are engine-defined; they can also
-  differ by one ULP between CPU architectures, and a golden re-recorded on an
-  arm64 Mac did fail CI on x86-64 Linux over a single bit in one enemy's frozen
-  position. `fingerprintWorld` therefore quantises every number it serialises to
-  six decimal places — 1.8e7 times the measured noise, and 5e5 times finer than
-  the half pixel that is the finest difference anyone could see. Entry paths were
-  never exposed (a bezier is multiplies and adds); dive paths are.
-  **What that does not do:** make the simulation portable, or remove the problem.
-  Rounding is discontinuous, so two values straddling a grid line still differ —
-  roughly 1e-5 odds across a whole fingerprint rather than the near-certainty it
-  replaced. Cross-platform bit-identical simulation is still open; this only makes
-  it irrelevant to the goldens. `tests/unit/world.test.ts` pins both edges of the
-  mesh, so loosening it further cannot pass unnoticed.
+- **The simulation is bit-identical across machines, and the fingerprint is
+  exact.** `Math.sin`, `Math.cos` and `Math.atan2` are engine-defined and differ
+  by one ULP between CPU architectures — a golden re-recorded on an arm64 Mac once
+  failed CI on x86-64 Linux over a single bit in one enemy's frozen position — so
+  the simulation takes every sine, cosine and heading from the fixed-point tables
+  in `src/engine/trig.ts` instead, and `fingerprintWorld` compares every number to
+  the last bit. The tables are part of the on-disk contract like the RNG stream:
+  `tests/unit/trig.test.ts` locks them, so changing one is as deliberate an act.
+  `tests/unit/world.test.ts` pins both edges of exact: a one-ULP difference is
+  caught, and the numbers compared carry no engine noise.
 - Golden replays live in `tests/sim/golden/`, written by
   `npx tsx scripts/record-replay.ts` and compared byte for byte (so the
   directory is in `.prettierignore`). A PR that changes one either meant to or
