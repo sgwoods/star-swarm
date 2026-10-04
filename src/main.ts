@@ -339,6 +339,7 @@ const loop = createLoop({
           steps: flow.phaseSteps,
           highScores: flow.highScores.entries(),
           persistent: flow.highScores.persistent,
+          controls: flow.settings.controls,
         });
         drawBuildLine(ctx, {
           build: BUILD,

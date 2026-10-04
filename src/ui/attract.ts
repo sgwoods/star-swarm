@@ -64,7 +64,9 @@ import type { SimEvent } from '../sim/events.js';
 import { createWorld, stepWorld, type World } from '../sim/world.js';
 import { createAutopilot, viewOfWorld } from './autoplay.js';
 import { drawHighScoreTable, type HighScoreEntry } from './highscores.js';
+import { fireKeyFor, KEY, keyLine } from './keys.js';
 import { CARD_TOP, drawCentredPanel } from './panel.js';
+import { type ControlScheme, DEFAULT_SETTINGS } from './settings.js';
 
 /** Seed the demo world runs on. Fixed, so the attract loop is reproducible. */
 export const DEMO_SEED = 'star-swarm-attract';
@@ -297,12 +299,43 @@ const HINT_COLOUR = '#7d8aa8';
  * formation is genuinely in the way.
  */
 const CARD_WIDTH = 200;
-/** Five hint rows at a 12-pixel pitch, plus the title and air at both ends. */
-const TITLE_CARD_HEIGHT = 88;
+/** Where the first line of keys sits under the card's top, and the pitch after it. */
+const KEYS_TOP = 30;
+const KEYS_PITCH = 12;
 const SCORES_CARD_WIDTH = 176;
 const SCORES_CARD_HEIGHT = 70;
-/** Row the "push start" prompt sits on, clear of the card and of the ship. */
+/** Row the start prompt sits on, clear of the card and of the ship. */
 const PROMPT_Y = 226;
+
+/**
+ * The prompt that blinks under both cards: the one thing to do next, in the voice
+ * every card's help is written in (`./keys.ts`). It is the only place this screen
+ * says how to start, so the title card does not say it a second time.
+ */
+export const ATTRACT_PROMPT = keyLine([KEY.ok, 'START']);
+
+/**
+ * The title card's keys, in the order they are drawn: playing first, then holding
+ * and leaving a game, then the settings — where difficulty and autoplay live, and
+ * the line that answers "how do I watch it play itself" from the persona tag below.
+ *
+ * Written with `keyLine` like every card's help, so this screen and the cards a
+ * player meets next name a key the same way. It is the one screen that names the
+ * fire key, because it is the one that teaches the game; it names the key the
+ * player's own control scheme binds.
+ */
+export function attractKeys(scheme: ControlScheme): readonly string[] {
+  return [
+    keyLine([KEY.values, 'MOVE'], [fireKeyFor(scheme), 'FIRE']),
+    keyLine([KEY.pause, 'PAUSE'], [KEY.exit, 'EXIT']),
+    keyLine([KEY.back, 'SETTINGS']),
+  ];
+}
+
+/** The title card's height: the title, its keys, and air below them. */
+export function titleCardHeight(scheme: ControlScheme): number {
+  return KEYS_TOP + attractKeys(scheme).length * KEYS_PITCH + 4;
+}
 
 export interface AttractOptions {
   /** Steps spent in attract mode, for the card cycle and the blink. */
@@ -311,6 +344,8 @@ export interface AttractOptions {
   /** False when the table is session-only, so the screen can say so. */
   readonly persistent?: boolean;
   readonly cardSteps?: number;
+  /** The control scheme in force, so the card names the fire key it binds. */
+  readonly controls?: ControlScheme;
 }
 
 /**
@@ -320,11 +355,17 @@ export interface AttractOptions {
  * cabinet's furniture on top of it.
  */
 export function drawAttract(ctx: CanvasRenderingContext2D, options: AttractOptions): void {
-  const { steps, highScores, persistent = true, cardSteps = CARD_STEPS } = options;
+  const {
+    steps,
+    highScores,
+    persistent = true,
+    cardSteps = CARD_STEPS,
+    controls = DEFAULT_SETTINGS.controls,
+  } = options;
   const centre = LOGICAL_WIDTH / 2;
 
   if (attractCard(steps, cardSteps) === 'title') {
-    drawCentredPanel(ctx, centre, CARD_TOP, CARD_WIDTH, TITLE_CARD_HEIGHT);
+    drawCentredPanel(ctx, centre, CARD_TOP, CARD_WIDTH, titleCardHeight(controls));
     // A one-pixel offset copy under the title: the cheapest arcade shadow, and
     // it keeps the letters legible whatever is behind them.
     drawText(ctx, 'STAR SWARM', centre + 1, CARD_TOP + 13, {
@@ -332,22 +373,16 @@ export function drawAttract(ctx: CanvasRenderingContext2D, options: AttractOptio
       align: 'center',
     });
     drawText(ctx, 'STAR SWARM', centre, CARD_TOP + 12, { colour: TITLE_COLOUR, align: 'center' });
-    drawText(ctx, 'ENTER  START', centre, CARD_TOP + 30, { colour: HINT_COLOUR, align: 'center' });
-    drawText(ctx, 'ARROWS  MOVE', centre, CARD_TOP + 42, { colour: HINT_COLOUR, align: 'center' });
-    drawText(ctx, 'SPACE  FIRE', centre, CARD_TOP + 54, { colour: HINT_COLOUR, align: 'center' });
-    // The fourth row is the one a cabinet has no key for. A control nobody can
-    // find is half-shipped, and the pause card can only name itself once you
-    // have already pressed the key that raises it.
-    drawText(ctx, 'P  PAUSE   X  EXIT', centre, CARD_TOP + 66, {
-      colour: HINT_COLOUR,
-      align: 'center',
-    });
-    // The settings screen is where autoplay, difficulty and the rest live, and
-    // nothing on this card said how to reach it — a feature that was asked for and
-    // then could not be found. `M` opens it as well; one key is enough to name.
-    drawText(ctx, 'ESC  SETTINGS', centre, CARD_TOP + 78, {
-      colour: HINT_COLOUR,
-      align: 'center',
+    // Pause and exit are the keys a cabinet has none of, and the settings are where
+    // autoplay, difficulty and the rest live: a control nobody can find is
+    // half-shipped, and the pause card can only name itself once you have already
+    // pressed the key that raises it. `M` opens the settings as well; one key is
+    // enough to name.
+    attractKeys(controls).forEach((line, index) => {
+      drawText(ctx, line, centre, CARD_TOP + KEYS_TOP + index * KEYS_PITCH, {
+        colour: HINT_COLOUR,
+        align: 'center',
+      });
     });
   } else {
     drawCentredPanel(ctx, centre, CARD_TOP, SCORES_CARD_WIDTH, SCORES_CARD_HEIGHT);
@@ -363,6 +398,6 @@ export function drawAttract(ctx: CanvasRenderingContext2D, options: AttractOptio
   }
 
   if (Math.floor(steps / PROMPT_BLINK_STEPS) % 2 === 0) {
-    drawText(ctx, 'PUSH START', centre, PROMPT_Y, { colour: PROMPT_COLOUR, align: 'center' });
+    drawText(ctx, ATTRACT_PROMPT, centre, PROMPT_Y, { colour: PROMPT_COLOUR, align: 'center' });
   }
 }

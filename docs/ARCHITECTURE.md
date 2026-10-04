@@ -1278,6 +1278,17 @@ spaces apart. `tests/unit/keys.test.ts` reads every card's list, requires each
 pair to start with a key from that vocabulary, refuses `FIRE`, `SPACE` or `START`
 on any of them, and fits each line to its card in characters the font has.
 
+**The attract screen speaks the same voice.** It is not a card — nothing on it has
+a cursor — but it is where a player first reads the keys, and three changes had
+each written to it in their own words. Its title card is now three `keyLine`s
+(`attractKeys` in `src/ui/attract.ts`): moving and firing, pausing and leaving,
+and the settings. The blinking prompt under both attract cards is
+`ENTER START`, the only place the screen says how to start. It is also the one
+screen that names the fire key, because it teaches the game rather than a card,
+so it names the key the player's own control scheme binds: `SPACE`, or `Z` on
+WASD. The persona tag in the bottom band is a caption and is spaced like the
+cards' captions, `AUTO NORMAL` beside `SCORE 2860`.
+
 ---
 
 ## 7. Autoplay

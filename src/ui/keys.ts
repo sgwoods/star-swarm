@@ -36,6 +36,7 @@
  */
 
 import { type InputFrame, wasPressed } from '../engine/input.js';
+import type { ControlScheme } from './settings.js';
 
 /**
  * The key names a card may print. Directions are named by axis rather than by
@@ -51,7 +52,21 @@ export const KEY = Object.freeze({
   exit: 'X',
 } as const);
 
-export type KeyName = (typeof KEY)[keyof typeof KEY];
+/**
+ * The fire key, named for the scheme in force.
+ *
+ * The one key a card's help never names, because it is Space in two schemes and Z
+ * in the third — and the one the attract screen must, because that screen teaches
+ * the game rather than a card. So it is named there and only there, and always
+ * as the key the player's own scheme binds (`./settings.ts`).
+ */
+export function fireKeyFor(scheme: ControlScheme): FireKeyName {
+  return scheme === 'wasd' ? 'Z' : 'SPACE';
+}
+
+export type FireKeyName = 'SPACE' | 'Z';
+
+export type KeyName = (typeof KEY)[keyof typeof KEY] | FireKeyName;
 
 /** What a pair in a help line is: a key, then what it does on this card. */
 export type KeyHint = readonly [key: KeyName, verb: string];

@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import { type Action, EMPTY_FRAME, frameOf } from '../../src/engine/input.js';
 import { GLYPH_CHARS } from '../../src/render/text.js';
+import { ATTRACT_PROMPT, attractKeys } from '../../src/ui/attract.js';
 import { createInitialsEntry, initialsEntryKeys } from '../../src/ui/highscores.js';
-import { cardPress, KEY, KEY_PAIR_GAP, keyLine } from '../../src/ui/keys.js';
+import { cardPress, fireKeyFor, KEY, KEY_PAIR_GAP, keyLine } from '../../src/ui/keys.js';
 import { MENU_TEXT, settingsNotes, variantSelectNotes } from '../../src/ui/menus.js';
 import { exitConfirmUnderLines, PAUSE_TEXT } from '../../src/ui/pause.js';
+import { CONTROL_SCHEMES } from '../../src/ui/settings.js';
 
 describe('one press, read the same way on every card', () => {
   const press = (...actions: readonly Action[]) => cardPress(EMPTY_FRAME, frameOf(...actions));
@@ -112,6 +114,45 @@ describe('every card says how to work it in one voice', () => {
     expect(all.filter((text) => text.includes('U/D')).length).toBeGreaterThanOrEqual(2);
     expect(all.filter((text) => text.includes('L/R')).length).toBeGreaterThanOrEqual(3);
     expect(MENU_TEXT.selectKeys.startsWith(KEY.rows)).toBe(true);
+  });
+});
+
+describe('the attract screen speaks the same voice', () => {
+  /**
+   * The screen three changes wrote to — the exit fix's settings line, the persona
+   * tag, and this scheme — held to being one layout: every line a `keyLine`, the
+   * start prompt said once, and the fire key the player's own scheme binds.
+   */
+  const keys: readonly string[] = Object.values(KEY);
+
+  it('writes every line as key-and-verb pairs, naming fire only as the scheme binds it', () => {
+    for (const scheme of CONTROL_SCHEMES) {
+      const allowed = [...keys, fireKeyFor(scheme)];
+      for (const text of [...attractKeys(scheme), ATTRACT_PROMPT]) {
+        for (const pair of text.split(KEY_PAIR_GAP)) {
+          expect(allowed, `${scheme}: "${text}"`).toContain(pair.slice(0, pair.indexOf(' ')));
+        }
+        // Width 200 holds 23 cells inside the padding.
+        expect(text.length).toBeLessThanOrEqual(23);
+        for (const char of text) expect(GLYPH_CHARS).toContain(char);
+      }
+    }
+  });
+
+  it('names the fire key the scheme in force binds', () => {
+    expect(attractKeys('both').join(' ')).toContain('SPACE FIRE');
+    expect(attractKeys('arrows').join(' ')).toContain('SPACE FIRE');
+    expect(attractKeys('wasd').join(' ')).toContain('Z FIRE');
+    expect(attractKeys('wasd').join(' ')).not.toContain('SPACE');
+  });
+
+  it('says how to start once, in the prompt, and how to reach the settings on the card', () => {
+    expect(ATTRACT_PROMPT).toBe('ENTER START');
+    for (const scheme of CONTROL_SCHEMES) {
+      const card = attractKeys(scheme);
+      expect(card.some((line) => line.includes(KEY.ok))).toBe(false);
+      expect(card).toContain(MENU_TEXT.selectBack);
+    }
   });
 });
 

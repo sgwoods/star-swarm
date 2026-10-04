@@ -81,7 +81,8 @@ The clips are screen recordings of the dev build.
   results card with its hit ratio, and back to attract.
 - `build-stamp.png` — the build stamp on the attract screen of a dev build: the
   date and `<commit>DEV` in the top-right of the HUD band, and the same identity
-  spelled out with its century under the "push start" prompt.
+  spelled out with its century under the start prompt, which read `PUSH START`
+  when this was captured.
 - `build-update-notice.png` — the same screen on a _hosted_ build after the site
   was re-published under it: `NEW BUILD` blinking in place of the commit, and
   `NEW BUILD - REFRESH` in place of the identity line. Captured by building
