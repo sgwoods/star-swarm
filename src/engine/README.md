@@ -32,10 +32,10 @@ instead, and lint bans the engine-defined functions in `src/sim/` and here. Ever
 golden is recorded through the tables, and `tests/unit/trig.test.ts` locks their
 contents.
 
-**An input source is the seam attract mode uses.** `createReplaySource` turns a
-recorded log into the same thing the keyboard produces, so the attract demo is the
-real simulation replaying a real log rather than an animation kept in step with
-the game (`src/ui/attract.ts`). Anything that produces `InputFrame`s can drive a
+**An input source is the seam the attract script uses.** `createReplaySource`
+turns a recorded log into the same thing the keyboard produces, so the demo of a
+game with no autoplay personas is the real simulation replaying a real log rather
+than an animation kept in step with the game (`src/ui/attract.ts`). Anything that produces `InputFrame`s can drive a
 world; nothing here may read one.
 
 `loop.ts` is the one file here that reaches for a host API — its default

@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
-import { badgesForStage, formatScore, type StageBadge } from '../../src/ui/hud.js';
+import { LOGICAL_HEIGHT, LOGICAL_WIDTH } from '../../src/render/canvas.js';
+import type { SpriteSheet } from '../../src/render/sprites.js';
+import { CELL } from '../../src/render/text.js';
+import {
+  BOTTOM_BAND_HEIGHT,
+  badgesForStage,
+  formatScore,
+  PERSONA_TAG_Y,
+  personaTag,
+  personaTagCells,
+  type StageBadge,
+} from '../../src/ui/hud.js';
+import { shippedVariants } from '../helpers/variants.js';
 import { classicPack } from '../helpers/rules.js';
 
 /**
@@ -74,5 +86,55 @@ describe('the score display', () => {
 
   it('shows a fresh game as 00 rather than 000000', () => {
     expect(formatScore(0)).toBe('    00');
+  });
+});
+
+describe('the persona tag', () => {
+  /** Never drawn from: `personaTagCells` only asks whether a sheet is there. */
+  const sheet = {} as SpriteSheet;
+  const labels = shippedVariants().flatMap((variant) => variant.personas.map((p) => p.label));
+
+  it('sits in the bottom band, which is the HUD’s and never the playfield’s', () => {
+    expect(PERSONA_TAG_Y).toBeGreaterThanOrEqual(LOGICAL_HEIGHT - BOTTOM_BAND_HEIGHT);
+    expect(PERSONA_TAG_Y + CELL).toBeLessThanOrEqual(LOGICAL_HEIGHT);
+  });
+
+  it('says AUTO and the whole label for every shipped persona on an opening stage', () => {
+    // Three fighters in reserve and one badge is the demo's opening screen.
+    const cells = personaTagCells({ lives: 3, stage: 1, badges, sheet });
+    for (const label of labels) expect(personaTag(label, cells)).toBe(`AUTO  ${label}`);
+  });
+
+  it('keeps clear of the reserve fighters and the badges as both rows grow', () => {
+    for (const lives of [0, 2, 5, 9]) {
+      for (const stage of [0, 1, 4, 9, 28, 99]) {
+        const cells = personaTagCells({ lives, stage, badges, sheet });
+        const half = (cells * CELL) / 2;
+        const shownLives = Math.min(lives, 5);
+        const livesRight = shownLives === 0 ? 0 : 2 + (shownLives - 1) * 14 + 12;
+        const shownBadges = Math.min(badgesForStage(stage, badges).length, 8);
+        const badgesLeft = shownBadges === 0 ? LOGICAL_WIDTH : LOGICAL_WIDTH - 2 - shownBadges * 10;
+        expect(LOGICAL_WIDTH / 2 - half).toBeGreaterThan(livesRight);
+        expect(LOGICAL_WIDTH / 2 + half).toBeLessThan(badgesLeft);
+      }
+    }
+  });
+
+  it('drops the prefix before the label, and cuts the label only when nothing else fits', () => {
+    expect(personaTag('ASTRONAUT', 15)).toBe('AUTO  ASTRONAUT');
+    expect(personaTag('ASTRONAUT', 14)).toBe('ASTRONAUT');
+    expect(personaTag('ASTRONAUT', 7)).toBe('ASTRONA');
+    expect(personaTag('ASTRONAUT', 0)).toBe('');
+  });
+
+  it('still says something true on the most crowded band there is', () => {
+    // Five reserve fighters and eight badges: the widest both rows ever get.
+    const cells = personaTagCells({ lives: 5, stage: 99, badges, sheet });
+    expect(cells).toBeGreaterThan(0);
+    for (const label of labels) {
+      const tag = personaTag(label, cells);
+      expect(tag.length).toBeGreaterThan(0);
+      expect(label.startsWith(tag)).toBe(true);
+    }
   });
 });

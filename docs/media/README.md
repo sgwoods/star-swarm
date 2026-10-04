@@ -111,6 +111,13 @@ The clips are screen recordings of the dev build.
   arranged: the exit card only draws the line naming the place a score would have
   taken when it would have taken one, and reaching that against the shipped
   defaults is half a minute of play the clip does not otherwise need.
+- `m3-attract-cycle.gif` — attract mode handing over from one persona to the next
+  with nobody touching anything: NORMAL loses its last fighter, and on the next step
+  EXPERT starts a fresh game on the same fleet. The tag naming the pilot is the
+  dim `AUTO <PERSONA>` line in the bottom band, between the reserve fighters and the
+  stage badge. Fourteen unedited seconds of the dev build, grabbed from the logical
+  224x288 backbuffer every third simulation step and scaled 2x nearest-neighbour,
+  starting seven seconds before the first handover of the Classic cycle.
 - `m3-autoplay.gif` — the cabinet playing itself, two personas side by side and
   thirty unedited seconds of each: **beginner on the left, astronaut on the
   right**, both labelled on screen by the game's own `AUTO <PERSONA>` line. Two

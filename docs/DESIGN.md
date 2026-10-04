@@ -113,7 +113,7 @@ The table is the output of a rule, and the **rule** is what to build: a base val
 - Stage-number badges shown bottom-right in denominations 1, 5, 10, 20, 30, 50.
 
 **Game flow**
-- Attract mode (demo play and scoring table), a 1-player start, "STAGE N" and "READY" interstitials, and a game-over results screen showing shots fired, hits and hit ratio.
+- Attract mode (demo play and scoring table), the demo played by the game's own autoplay personas in turn, each named out of the way of play; a 1-player start, "STAGE N" and "READY" interstitials, and a game-over results screen showing shots fired, hits and hit ratio.
 - High-score table with 3-letter initials, stored locally.
 
 ## 5. Look and sound

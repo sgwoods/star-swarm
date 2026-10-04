@@ -25,7 +25,7 @@ test('the cabinet reaches attract mode and runs the demo', async ({ page }) => {
   await reachAttract(page);
 
   // Nobody is playing, and the ship is still flying: the demo is the real
-  // simulation being driven by a recorded input log.
+  // simulation, flown here by one of the game's own personas.
   const first = await page.evaluate(() => window.starSwarm?.playerX ?? 0);
   await page.waitForFunction((x) => (window.starSwarm?.playerX ?? 0) !== x, first, {
     timeout: 10_000,

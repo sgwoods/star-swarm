@@ -50,7 +50,7 @@ import {
   drawInitialsEntry,
   HIGH_SCORE_STORAGE_KEY,
 } from './ui/highscores.js';
-import { badgesForStage, drawAutoplayLine, drawHud } from './ui/hud.js';
+import { badgesForStage, drawHud, drawPersonaTag } from './ui/hud.js';
 import { drawSettings, drawVariantSelect, SELECT_CARD_TOP, SETTINGS_CARD_TOP } from './ui/menus.js';
 import { CARD_TOP } from './ui/panel.js';
 import { drawExitConfirm, drawPaused, EXIT_CARD_TOP, PAUSE_CARD_TOP } from './ui/pause.js';
@@ -309,7 +309,7 @@ const loop = createLoop({
     // Over the playfield and under the HUD: an explosion is the last thing that
     // happened in front of the player, and it must not cover the score.
     effects.draw(ctx, sprites);
-    drawHud(ctx, {
+    const hud = {
       score: world.score,
       highScore: Math.max(flow.highScores.best(), world.score),
       lives: world.lives.reserve,
@@ -317,16 +317,20 @@ const loop = createLoop({
       // The badge denominations and their art are the pack's, not the HUD's.
       badges: variant.registry.manifest.stageBadges,
       sheet: sprites,
-    });
+    };
+    drawHud(ctx, hud);
     // The top HUD band, never the playfield. Every phase, so "what is running?"
     // is answerable without leaving the game.
     drawBuildStamp(ctx, { build: BUILD, comparison: updates.comparison, steps: flow.steps });
 
-    // Who is flying, when it is not the person in front of the cabinet. Off the two
-    // menu screens, which have a row that says it already and a card in the way.
-    const persona = flow.autoplay;
+    // Who is flying, when it is not the person in front of the cabinet: the attract
+    // demo's persona, or the watched game's. In the bottom band, clear of the
+    // reserve fighters and the badges it is measured against. Off the two menu
+    // screens, where the `AUTOPLAY` row is about the *next* game and a tag naming
+    // the demo's pilot under it would read as contradicting it.
+    const persona = flow.flying;
     if (persona !== undefined && flow.phase !== 'settings' && flow.phase !== 'variant-select') {
-      drawAutoplayLine(ctx, persona.label);
+      drawPersonaTag(ctx, persona.label, hud);
     }
 
     switch (flow.phase) {
@@ -484,6 +488,17 @@ declare global {
        */
       readonly autoplay: string;
       readonly personas: readonly string[];
+      /**
+       * Who is flying the world on screen — the attract demo's persona, or the
+       * autoplay one — or `''` for a human or the demo script. What
+       * `tests/e2e/attract.spec.ts` holds the drawn tag against.
+       */
+      readonly flying: string;
+      /**
+       * How many times the attract demo has handed over to its next leg: what a
+       * recording waits on to catch a handover, since the cycle is deterministic.
+       */
+      readonly demoLoops: number;
       /** The player's settings, as the menu has them. */
       readonly settings: Settings;
       readonly settingsPersistent: boolean;
@@ -617,6 +632,12 @@ window.starSwarm = {
   },
   get personas(): readonly string[] {
     return flow.variant.personas.map((persona) => persona.id);
+  },
+  get flying(): string {
+    return flow.flying?.id ?? '';
+  },
+  get demoLoops(): number {
+    return flow.demo.loops;
   },
   get difficulty(): string {
     return flow.settings.difficulty ?? flow.variant.defaultPreset.id;

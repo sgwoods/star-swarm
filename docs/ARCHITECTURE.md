@@ -244,7 +244,8 @@ variant selector, attract, the settings menu, playing, paused, the exit
 confirmation, the between-stage challenge card, game over, results and high-score
 entry. The cabinet boots into the selector when there is more than one game to
 choose and into attract when there is not; behind the cards the demo is the _real_
-simulation replaying a recorded input log; start begins a game; three fighters
+simulation, flown in turn by the game's own autoplay personas (§7) — or, for a game
+that declares none, replaying a hand-written input log; start begins a game; three fighters
 lost ends it into the game-over banner, the hit-ratio results card, and then
 either the high-score table or straight back to attract.
 <!-- check:count flow.phases 10 -->
@@ -530,9 +531,9 @@ scan is textual, which is why an identifier spelled exactly `window` fails insid
 both Vitest projects run on the **Node** environment with no DOM at all:
 `tests/sim/` runs whole games headlessly, and the golden replays in
 `tests/sim/golden/` re-run a recorded seed and input log and fail if the run no
-longer ends in the same state. Attract mode is the same mechanism pointed at the
-screen — it is the real game replaying a real input log, so the demo cannot drift
-from the game.
+longer ends in the same state. Attract mode is the real game pointed at the
+screen — flown by the same pilots a watched game uses, or replaying a real input
+log for a game with no personas — so the demo cannot drift from the game.
 <!-- check:count vitest.projects 2 -->
 
 **Determinism holds across machines, to the bit.** The specification lets an
@@ -1224,13 +1225,13 @@ six across the build, because a persona belongs to the variant it plays and ther
 is no way for one document to reference another's.
 <!-- check:count autoplay.classicPersonas 4 autoplay.forgedPersonas 2 autoplay.personas 6 -->
 
-**Attract mode is the wrong shape for this, and that is why autoplay is not built
-on it.** The demo in `src/ui/attract.ts` is the real simulation driven by a
-**recorded input log** — a recording, which cannot adapt to a game that fights
-back differently, so four personas would be four recordings of four different runs
-rather than four ways of playing one. The scripted pilots in
-`scripts/record-replay.ts` are the right shape: something that reads the world and
-decides. `src/ui/autoplay.ts` is that, made into data.
+**An input log was the wrong shape for this, which is why autoplay was not built on
+the attract demo — and why the attract demo is now built on autoplay.** A log
+cannot adapt to a game that fights back differently, so four personas would have
+been four recordings of four different runs rather than four ways of playing one.
+The scripted pilots in `scripts/record-replay.ts` are the right shape: something
+that reads the world and decides. `src/ui/autoplay.ts` is that, made into data,
+and attract mode is its other customer (below).
 
 ### A persona plays; it does not cheat
 
@@ -1312,6 +1313,44 @@ it. Changing persona means taking the controls first, which is one keypress and 
 the same gesture as stopping.
 
 ![Beginner on the left, astronaut on the right, both playing themselves](media/m3-autoplay.gif)
+
+### Attract mode is the personas, in turn
+
+Nobody has to choose anything to watch. When the cabinet is sitting in attract, the
+demo behind the cards is flown by the active game's own personas, one after
+another — the variant's `defaultPersona` first, then on through the list in menu
+order and round again. Which personas exist is read from the variant and nowhere
+else: Classic cycles four, Deep Sea two, and Swarm Remix, which declares none, is
+demonstrated by the hand-written input log in `src/ui/attract.ts` that every game
+used before. That log is not a leg of the cycle: between two personas it would be a
+fifth player with no name to show.
+
+**The cycle turns on a finished run.** Each persona plays one game from the start,
+and the next takes over on the step after its game over — so a persona holds the
+screen for as long as it stays alive, which on the Classic demo seed is between
+half a minute and a minute each. There is a ceiling of three minutes a turn, which
+no shipped persona reaches; it exists so a persona that never dies cannot keep the
+others off the screen.
+
+**It repeats exactly.** Every leg starts the same world from the same seed — the
+same fleet, flown by somebody else — at the rank in force, and each pilot draws
+from a seed of its own that the cycle never advances, so a leg plays identically
+each time it comes round and the whole cycle is a pure function of the variant.
+What the log had and the cycle does not is a length you can read off a file: how
+long a leg lasts is found out by playing it, and a change to the pilot changes the
+demo. `tests/unit/attract.test.ts` plays a cycle round twice and requires each leg
+to end in the same fingerprint both times.
+
+**Who is flying is named in the bottom band**, `AUTO` and the persona's label,
+centred between the reserve fighters and the stage badges in the dim ink the cards
+use for their hints. That band is the HUD's rather than the playfield's, so the tag
+can never sit over a diver, a bomb or the fighter, and its width is counted from
+the glyphs actually drawn either side of it, so a long run's badges push it down to
+the label alone rather than under it. A watched game names its persona the same
+way and in the same place. `tests/e2e/attract.spec.ts` reads the tag's pixels off
+the backbuffer.
+
+![The attract demo handing over from NORMAL to EXPERT](media/m3-attract-cycle.gif)
 
 ### Determinism survives
 

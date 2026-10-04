@@ -2,23 +2,55 @@
  * Attract mode: what the cabinet shows when nobody is playing
  * (docs/DESIGN.md section 4, "Game flow").
  *
- * The demo is **the real simulation**, driven through the replay mechanism in
- * `src/engine/replay.ts` — the same one the golden tests use. Nothing here
- * animates a ship: {@link DEMO_SCRIPT} is an input log, `createReplaySource`
- * hands it out one frame per step, and `stepWorld` decides what happens. So the
- * demo cannot drift from the game; if movement, the shot cap or a collision
- * changes, the attract screen changes with it, and a demo that looks wrong is a
- * bug in the game rather than a bug in the demo.
+ * The demo is **the real simulation**. Nothing here animates a ship: every step
+ * is one input frame handed to `stepWorld`, and `stepWorld` decides what happens.
+ * So the demo cannot drift from the game; if movement, the shot cap or a
+ * collision changes, the attract screen changes with it, and a demo that looks
+ * wrong is a bug in the game rather than a bug in the demo.
  *
- * The log is hand-authored rather than recorded for the same reason: a recorded
- * log is a file that must be regenerated whenever enemy behaviour changes, and
- * Milestone 2 changes it repeatedly. A written script stays legible, stays in
- * one place, and plays back through exactly the same code path.
+ * **Who produces that frame is the variant's to say, and it is usually a
+ * persona.** A variant that declares autoplay personas is demonstrated by them,
+ * one after another: the pilot in `./autoplay.ts`, handed a projection of the
+ * demo world exactly as it is in a watched game. A variant that declares none is
+ * demonstrated by {@link DEMO_SCRIPT}, a hand-authored input log played through
+ * `src/engine/replay.ts` — the mechanism the golden tests use.
+ *
+ * The script came first, and was hand-authored rather than recorded so that it
+ * would not need regenerating whenever enemy behaviour changed. It never did —
+ * but only because it never looked. A blind log plays the same sweeps whatever
+ * the fleet does, so when behaviour moves underneath it, it goes on "working"
+ * while getting worse to watch, and nothing fails. A pilot reads the screen and
+ * cannot go stale that way, and the pilots are already trusted further than the
+ * script ever was: `npm run validate-packs` flies them to prove a pack can be
+ * cleared. What the script had over them was legibility in one place, and a
+ * persona has that too — it is eight numbers in the variant's own document.
+ *
+ * The script stays for the case nothing else can fill. Swarm Remix declares no
+ * persona, and a flow built from bare rules has no document to declare one in,
+ * and there is nothing honest to fly either with: a made-up default persona is
+ * exactly what `src/content/personas.ts` refuses to derive. It is not a leg of
+ * the persona cycle, though. Between two personas it would be a fifth player with
+ * no name to put on the screen.
+ *
+ * **The cycle turns on a finished run.** Each persona plays one game from the
+ * start, and the next takes over on the step after its game over, so a persona
+ * holds the screen for as long as it stays alive — measured on the Classic demo
+ * seed, between half a minute and a minute each. {@link DEMO_TURN_STEPS} is a
+ * ceiling rather than a budget, and no shipped persona reaches it: it is there so
+ * a persona that never dies cannot keep the others off the screen.
+ *
+ * **Still reproducible.** Every leg starts the same world from the same seed —
+ * the same fleet, flown by somebody else — and each pilot draws from a seed of its
+ * own that the cycle never advances, so a leg plays identically every time it
+ * comes round and the whole cycle repeats exactly. What is given up is the
+ * script's fixed length: how long a leg lasts is found out by playing it, and a
+ * change to the pilot changes the demo, which is the point.
  */
 
+import type { Persona } from '../content/personas.js';
 import type { Rules } from '../content/schema.js';
 import type { StageSource } from '../content/stages.js';
-import { type Action, frameOf } from '../engine/input.js';
+import { type Action, frameOf, type InputFrame } from '../engine/input.js';
 import { STEP_HZ } from '../engine/loop.js';
 import {
   createReplaySource,
@@ -30,11 +62,21 @@ import { LOGICAL_WIDTH } from '../render/canvas.js';
 import { drawText } from '../render/text.js';
 import type { SimEvent } from '../sim/events.js';
 import { createWorld, stepWorld, type World } from '../sim/world.js';
+import { createAutopilot, viewOfWorld } from './autoplay.js';
 import { drawHighScoreTable, type HighScoreEntry } from './highscores.js';
 import { CARD_TOP, drawCentredPanel } from './panel.js';
 
 /** Seed the demo world runs on. Fixed, so the attract loop is reproducible. */
 export const DEMO_SEED = 'star-swarm-attract';
+
+/**
+ * The longest one persona may hold the screen, in simulation steps.
+ *
+ * Three minutes, which is three times the longest leg measured on the shipped
+ * content: a ceiling for a persona that does not die, never the ordinary way a
+ * turn ends.
+ */
+export const DEMO_TURN_STEPS = 3 * 60 * STEP_HZ;
 
 /** One entry of the script: hold these actions for this many steps. */
 function hold(steps: number, ...actions: readonly Action[]): FrameRun {
@@ -42,7 +84,7 @@ function hold(steps: number, ...actions: readonly Action[]): FrameRun {
 }
 
 /**
- * The demo pilot, as an input log.
+ * The demo pilot of a variant with no personas, as an input log.
  *
  * Written the way the game is actually played: the fire button goes down and
  * mostly stays down (the original has no edge detection, so there is no reason
@@ -77,7 +119,7 @@ export const DEMO_SCRIPT: readonly FrameRun[] = Object.freeze([
   hold(30, 'fire'),
 ]);
 
-/** Build the demo's {@link Replay}. A normal replay in every respect. */
+/** Build the script's {@link Replay}. A normal replay in every respect. */
 export function createAttractReplay(seed: string = DEMO_SEED): Replay {
   return {
     version: REPLAY_VERSION,
@@ -88,16 +130,34 @@ export function createAttractReplay(seed: string = DEMO_SEED): Replay {
   };
 }
 
+/**
+ * The order the personas take their turns in: the variant's default first, then
+ * on through the list in menu order, wrapping round.
+ *
+ * A default that names nobody on the list starts the list from the top, which is
+ * what `defaultPersonaOf` already makes of one (`src/content/personas.ts`).
+ */
+export function demoRota(
+  personas: readonly Persona[],
+  first: Persona | undefined,
+): readonly Persona[] {
+  const start = first === undefined ? -1 : personas.findIndex((persona) => persona.id === first.id);
+  if (start <= 0) return personas;
+  return [...personas.slice(start), ...personas.slice(0, start)];
+}
+
 export interface AttractDemo {
   /** The world on screen. Replaced when the demo loops, so read it every frame. */
   readonly world: World;
-  /** Steps into the current pass of the log. */
+  /** Steps into the current leg. */
   readonly step: number;
   /** How many times the demo has started over. */
   readonly loops: number;
-  /** Advance one simulation step, looping at the end of the log. */
+  /** The persona flying this leg, or `undefined` while the script is. */
+  readonly persona: Persona | undefined;
+  /** Advance one simulation step, starting the next leg when this one is over. */
   advance: () => readonly SimEvent[];
-  /** Start the demo again from the top. Returns the new world's opening events. */
+  /** Start the next leg from the top. Returns the new world's opening events. */
   restart: () => readonly SimEvent[];
 }
 
@@ -105,33 +165,80 @@ export interface AttractDemoOptions {
   readonly rules: Rules;
   /** What plays as each stage. The demo flies the real stage, not a special one. */
   readonly stages?: StageSource;
+  /** The difficulty rank, so the demo world runs at the one its stages were resolved at. */
+  readonly rank?: string;
   readonly seed?: string;
+  /** Who demonstrates the game, in menu order. Empty or absent is the script. */
+  readonly personas?: readonly Persona[];
+  /** Who flies first: the variant's `defaultPersona`. Absent is the first listed. */
+  readonly first?: Persona | undefined;
+  /** Overridable so a test can reach the ceiling. Defaults to {@link DEMO_TURN_STEPS}. */
+  readonly turnSteps?: number;
   /** Overridable so a test can play a shorter log. Defaults to {@link DEMO_SCRIPT}. */
   readonly replay?: Replay;
+}
+
+/** What produces the demo's input for one leg: a persona's pilot, or the script. */
+interface DemoDriver {
+  readonly persona: Persona | undefined;
+  /** True when this leg has run out of input — the log's end, or the ceiling. */
+  readonly done: boolean;
+  sample: (world: World) => InputFrame;
 }
 
 /**
  * The demo loop.
  *
- * Restarts when the log runs out or when the demo pilot gets itself killed, so
+ * A leg ends when its pilot's game is over, when the script runs out or when a
+ * persona reaches the ceiling, and the next one starts on the following step, so
  * the cabinet never sits on a dead ship.
  */
 export function createAttractDemo(options: AttractDemoOptions): AttractDemo {
-  const { rules, seed = DEMO_SEED } = options;
+  const { rules, seed = DEMO_SEED, turnSteps = DEMO_TURN_STEPS } = options;
   const replay = options.replay ?? createAttractReplay(seed);
-  // `exactOptionalPropertyTypes` again: an absent stage source and an explicit
+  const rota = demoRota(options.personas ?? [], options.first);
+  // `exactOptionalPropertyTypes` again: an absent option and an explicit
   // `undefined` are different values to `createWorld`.
-  const stageOption = options.stages === undefined ? {} : { stages: options.stages };
+  const worldOptions = {
+    ...(options.stages === undefined ? {} : { stages: options.stages }),
+    ...(options.rank === undefined ? {} : { rank: options.rank }),
+  };
 
-  const newWorld = (): World => createWorld({ seed, rules, ...stageOption });
+  const newWorld = (): World => createWorld({ seed, rules, ...worldOptions });
+
+  const driverFor = (leg: number): DemoDriver => {
+    const persona = rota[leg % Math.max(1, rota.length)];
+    if (persona === undefined) {
+      const source = createReplaySource(replay);
+      return {
+        persona: undefined,
+        get done(): boolean {
+          return source.done;
+        },
+        sample: () => source.sample(),
+      };
+    }
+    // The pilot's own stream, never the world's, and seeded by the persona alone:
+    // a leg that came round again with a different seed would be a different run.
+    const pilot = createAutopilot({ persona, seed: `${seed}:${persona.id}` });
+    return {
+      persona,
+      get done(): boolean {
+        return step >= turnSteps;
+      },
+      sample: (world) => pilot.sample(viewOfWorld(world)),
+    };
+  };
 
   let loops = 0;
-  let source = createReplaySource(replay);
+  let step = 0;
+  let driver = driverFor(0);
   let world = newWorld();
 
   const restart = (): readonly SimEvent[] => {
     loops += 1;
-    source = createReplaySource(replay);
+    step = 0;
+    driver = driverFor(loops);
     world = newWorld();
     return world.events;
   };
@@ -141,15 +248,19 @@ export function createAttractDemo(options: AttractDemoOptions): AttractDemo {
       return world;
     },
     get step(): number {
-      return source.step;
+      return step;
     },
     get loops(): number {
       return loops;
     },
+    get persona(): Persona | undefined {
+      return driver.persona;
+    },
 
     advance(): readonly SimEvent[] {
-      if (source.done || world.status === 'game-over') return restart();
-      return stepWorld(world, source.sample());
+      if (driver.done || world.status === 'game-over') return restart();
+      step += 1;
+      return stepWorld(world, driver.sample(world));
     },
 
     restart,

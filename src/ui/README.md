@@ -28,14 +28,28 @@ The front-end shell around it landed with Milestone 2:
   phase says. Time is counted in **simulation steps**, never the wall clock, so a
   screen looks the same at the same step on any machine and a test can run a phase
   out in a loop.
-- **The attract demo is the real simulation.** `attract.ts` holds an input log
-  and plays it through `createReplaySource` (`src/engine/replay.ts`) into a real
-  `createWorld`/`stepWorld`, on the same rules and the same `StageSource` a game
-  gets — so it flies the pack's real stage, entry waves and all. There is no demo
-  animation to keep in step with the game, and the player's own input cannot
-  reach the demo world — only the start button, which ends it. No run in the log
-  is longer than ~130 steps, because the fighter crosses the playfield in 138:
-  longer and it parks against a wall.
+- **The attract demo is the real simulation.** `attract.ts` builds a real
+  `createWorld`/`stepWorld` on the same rules, rank and `StageSource` a game gets —
+  so it flies the pack's real stage, entry waves and all — and hands it one input
+  frame per step. There is no demo animation to keep in step with the game, and
+  the player's own input cannot reach the demo world — only the start button,
+  which ends it.
+- **The variant's personas fly it, in turn.** The `defaultPersona` first, then on
+  through the list in menu order, each playing one whole game; the next takes over
+  on the step after a game over, with a three-minute ceiling that no shipped
+  persona reaches. Every leg starts the same world from the same seed and each
+  pilot has a seed the cycle never advances, so the cycle repeats exactly. The
+  header of `attract.ts` is the argument for flying it this way rather than with
+  the input log.
+- **A variant with no personas is flown by the input log**, `DEMO_SCRIPT`,
+  through `createReplaySource` (`src/engine/replay.ts`). It is that variant's whole
+  demo and never a leg of a persona cycle. No run in the log is longer than ~130
+  steps, because the fighter crosses the playfield in 138: longer and it parks
+  against a wall.
+- **Who is flying is named in the bottom band**, by `drawPersonaTag` in `hud.ts`:
+  the demo's persona in attract and the armed one in a watched game, read from the
+  flow's `flying`. It sits between the reserve fighters and the badges and is
+  fitted to the room they leave, dropping `AUTO` before it cuts the label.
 - **The results screen counts from events**, not from bookkeeping added to the
   sim: `shot-fired` against `target-hit`/`target-destroyed` (`results.ts`).
 - **The high-score table degrades, never throws.** `highscores.ts` splits

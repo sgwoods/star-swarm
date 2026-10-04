@@ -1,13 +1,13 @@
 /**
  * Autoplay: the cabinet playing itself, as a persona.
  *
- * Attract mode (`./attract.ts`) is the real simulation driven by a **recorded
- * input log**, which is the right shape for a demo and the wrong shape for a
- * persona: a recording cannot adapt to a game that fights back differently, so
- * "beginner" and "astronaut" would be two recordings of two different runs rather
- * than two ways of playing one. The pilots in `scripts/record-replay.ts` are the
- * right shape — something that reads the world and decides — and this is that,
- * made into data and given a way in.
+ * An input log is the wrong shape for a persona: a recording cannot adapt to a
+ * game that fights back differently, so "beginner" and "astronaut" would be two
+ * recordings of two different runs rather than two ways of playing one. The
+ * pilots in `scripts/record-replay.ts` are the right shape — something that reads
+ * the world and decides — and this is that, made into data and given two ways in:
+ * a watched game, armed from the settings menu, and the attract demo
+ * (`./attract.ts`), which flies a variant's personas in turn.
  *
  * Four rules hold this file, and each one is asserted in
  * `tests/unit/autoplay.test.ts` rather than trusted:
