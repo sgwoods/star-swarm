@@ -24,7 +24,7 @@
  * | `volume`     | `Synth.setVolume` (`src/audio/synth.ts`)                      |
  * | `muted`      | `Synth.setMuted`                                              |
  * | `controls`   | the keyboard map handed to `createKeyboardInput`              |
- * | `crt`        | stored and reported; `src/render/crt.ts` is not written yet    |
+ * | `crt`        | the scanline filter `src/render/crt.ts` draws over the screen |
  * | `packs`      | an override of a variant's own pack list, per variant          |
  *
  * Persistence is {@link KeyedStorage} from `./storage.ts` — the same interface
@@ -83,7 +83,7 @@ export interface Settings {
   /** Master volume, 0…1. */
   readonly volume: number;
   readonly muted: boolean;
-  /** The CRT filter option. Stored and reported; the filter itself is unwritten. */
+  /** The CRT filter option: `src/main.ts` hands `src/render/crt.ts` to the display. */
   readonly crt: boolean;
   readonly controls: ControlScheme;
   /**

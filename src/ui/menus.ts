@@ -283,9 +283,8 @@ export function createSettingsMenu(options: SettingsMenuOptions): SettingsMenu {
       label: 'CRT',
       value: settings.crt ? 'ON' : 'OFF',
       editable: true,
-      // Honest about the half that is not built: the option persists and is
-      // reported, and no filter reads it yet.
-      note: 'FILTER NOT BUILT YET',
+      // What `src/render/crt.ts` draws, so the row says what turning it on does.
+      note: MENU_TEXT.crtNote,
     });
     // The value is a count and the note is the list, because a pack list is a
     // sentence's worth of text and the value column is a word's worth.
@@ -415,6 +414,8 @@ export const MENU_TEXT = Object.freeze({
   autoplayOff: 'OFF',
   autoplayOffNote: 'WATCH IT PLAY ITSELF',
   sessionOnly: 'THIS SESSION ONLY',
+  /** The line under the `CRT` row. */
+  crtNote: 'SCANLINES, CURVED GLASS',
 });
 
 const HEADING_COLOUR = '#ff2b2b';

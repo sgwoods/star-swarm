@@ -176,7 +176,7 @@ describe('the checker catches a false claim', () => {
     {
       what: 'a path asserted present with a marker',
       true: '<!-- check:path src/sim/world.ts -->',
-      false: '<!-- check:path src/render/crt.ts -->',
+      false: '<!-- check:path src/sim/scoring.ts -->',
       says: /check:path names a path that does not exist/,
     },
     {
