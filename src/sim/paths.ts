@@ -49,17 +49,20 @@
  * throughout because `hypot` is free to be implemented differently by different
  * engines, and distances feed directly into positions.
  *
- * `Math.sin`, `Math.cos` and `Math.atan2` are the remaining engine-defined
- * functions here: the ECMAScript spec allows an implementation-dependent
- * approximation, so curved segments are reproducible on one engine but not
- * guaranteed identical across two. That is the same bargain `src/engine/rng.ts`
- * refuses to make, and it is deliberate — a path table of pre-rounded integers
- * would buy cross-engine equality at the cost of the smooth arcs the content
- * model is built around. If a golden replay ever needs to survive a change of
- * engine, this is the place to look first.
+ * There is no `Math.sin`, `Math.cos` or `Math.atan2` here. The specification
+ * lets an engine approximate those, and V8 approximates them differently on
+ * arm64 and x86-64, so every sine, cosine and heading comes from the tables in
+ * `src/engine/trig.ts` instead: a binary angle in, a fixed-point value out.
+ * Everything else in this file is `+ − × ÷` and `Math.sqrt`, which ECMAScript
+ * specifies to the bit — so a path samples to the same numbers on every
+ * conforming engine and architecture, curves included, the same bargain
+ * `src/engine/rng.ts` makes for randomness. The tables are fine enough that no
+ * curve moves by more than a few millionths of a pixel from the one the engine's
+ * own functions would draw; their header has the figures.
  */
 
 import type { MovementPath, PathSegment } from '../content/schema.js';
+import { angleToDegrees, atan2Angle, cosine, degreesToAngle, sine } from '../engine/trig.js';
 
 /* -------------------------------------------------------------------------- */
 /* Constants                                                                    */
@@ -97,8 +100,9 @@ const BEZIER_SAMPLES = 64;
  */
 const EXIT_EPSILON = 1e-9;
 
+/** For arc lengths, which are arithmetic and never pass through a sine. */
 const DEG_TO_RAD = Math.PI / 180;
-const RAD_TO_DEG = 180 / Math.PI;
+/** For the derivative of a periodic segment, which scales by the wave's angular rate. */
 const TAU = Math.PI * 2;
 
 /* -------------------------------------------------------------------------- */
@@ -258,19 +262,25 @@ export function normaliseHeading(degrees: number): number {
 
 /** Unit vector for a heading: 0 is down, and the angle runs clockwise. */
 export function headingToVector(degrees: number): readonly [number, number] {
-  const r = degrees * DEG_TO_RAD;
-  return [-Math.sin(r), Math.cos(r)];
+  const angle = degreesToAngle(degrees);
+  return [-sine(angle), cosine(angle)];
 }
 
-/** Heading of a direction vector. A zero vector has no heading; callers keep theirs. */
+/**
+ * Heading of a direction vector. A zero vector has no heading; callers keep theirs.
+ *
+ * Always a whole binary angle (`src/engine/trig.ts`) in degrees, so it is already
+ * in `[0, 360)` and converts back to the same angle exactly.
+ */
 export function vectorToHeading(dx: number, dy: number): number {
-  return normaliseHeading(Math.atan2(-dx, dy) * RAD_TO_DEG);
+  return angleToDegrees(atan2Angle(-dx, dy));
 }
 
 /** Rotate clockwise-positive in screen space (x right, y down). */
-function rotate(x: number, y: number, radians: number): readonly [number, number] {
-  const c = Math.cos(radians);
-  const s = Math.sin(radians);
+function rotate(x: number, y: number, degrees: number): readonly [number, number] {
+  const angle = degreesToAngle(degrees);
+  const c = cosine(angle);
+  const s = sine(angle);
   return [x * c - y * s, x * s + y * c];
 }
 
@@ -531,10 +541,10 @@ export function tryCompilePath(path: MovementPath, env: PathEnvironment = {}): C
    *
    * Interpolating between the two endpoints rather than stepping
    * `origin + direction × speed × frame` is what makes the arrival exact: a
-   * heading of 270° is a `cos` away from being exactly horizontal, and stepping
-   * along it leaves a flyer that should land on y = 20 at y = 19.999999999999986.
-   * Over a `toSlot` that is the difference between sitting in the formation slot
-   * and sitting a hair beside it.
+   * direction is only as exact as the sine and cosine it is made of, which off
+   * a whole degree is to within 1.1e-8, and stepping along it leaves a flyer that
+   * should land on y = 20 at y = 19.99999999 or so. Over a `toSlot` that is the
+   * difference between sitting in the formation slot and sitting a hair beside it.
    */
   const straight = (
     index: number,
@@ -636,8 +646,7 @@ export function tryCompilePath(path: MovementPath, env: PathEnvironment = {}): C
 
         const evaluate: Evaluator = (local) => {
           const swept = frames > 0 ? (local / frames) * degrees * sign : 0;
-          const radians = swept * DEG_TO_RAD;
-          const [rx, ry] = rotate(startX, startY, radians);
+          const [rx, ry] = rotate(startX, startY, swept);
           return { x: cx + rx, y: cy + ry, heading: normaliseHeading(entryHeading + swept) };
         };
         const end = evaluate(frames);
@@ -647,22 +656,26 @@ export function tryCompilePath(path: MovementPath, env: PathEnvironment = {}): C
 
       case 'lissajous': {
         const { ax, ay, fx, fy, duration } = segment;
-        const phase = (segment.phase ?? 0) * DEG_TO_RAD;
+        const phase = segment.phase ?? 0;
         const frames = duration;
+        // Each axis is a phase angle in degrees: `fx` (or `fy`) whole turns over
+        // the segment, the x axis starting `phase` degrees in.
+        const angleX = (u: number): number => degreesToAngle(360 * fx * u + phase);
+        const angleY = (u: number): number => degreesToAngle(360 * fy * u);
         // Anchored so the figure starts exactly where the flyer already is,
         // whatever the phase offset — otherwise a phased lissajous teleports.
-        const offsetX = (u: number): number => ax * Math.sin(TAU * fx * u + phase);
-        const offsetY = (u: number): number => ay * Math.sin(TAU * fy * u);
-        const anchorX = pose.x - offsetX(0);
-        const anchorY = pose.y - offsetY(0);
+        const anchorX = pose.x - ax * sine(angleX(0));
+        const anchorY = pose.y - ay * sine(angleY(0));
         const entryHeading = pose.heading;
         const evaluate: Evaluator = (local) => {
           const u = frames > 0 ? local / frames : 0;
-          const vx = frames > 0 ? (ax * TAU * fx * Math.cos(TAU * fx * u + phase)) / frames : 0;
-          const vy = frames > 0 ? (ay * TAU * fy * Math.cos(TAU * fy * u)) / frames : 0;
+          const thetaX = angleX(u);
+          const thetaY = angleY(u);
+          const vx = frames > 0 ? (ax * TAU * fx * cosine(thetaX)) / frames : 0;
+          const vy = frames > 0 ? (ay * TAU * fy * cosine(thetaY)) / frames : 0;
           return {
-            x: anchorX + offsetX(u),
-            y: anchorY + offsetY(u),
+            x: anchorX + ax * sine(thetaX),
+            y: anchorY + ay * sine(thetaY),
             heading: vx !== 0 || vy !== 0 ? vectorToHeading(vx, vy) : entryHeading,
           };
         };
@@ -687,9 +700,10 @@ export function tryCompilePath(path: MovementPath, env: PathEnvironment = {}): C
         const k = TAU / wavelength;
         const evaluate: Evaluator = (local) => {
           const along = speed * local;
-          const lateral = amplitude * Math.sin(k * along);
+          const theta = degreesToAngle((360 * along) / wavelength);
+          const lateral = amplitude * sine(theta);
           const vAlong = speed;
-          const vLateral = amplitude * k * speed * Math.cos(k * along);
+          const vLateral = amplitude * k * speed * cosine(theta);
           const vx = fwdX * vAlong + perpX * vLateral;
           const vy = fwdY * vAlong + perpY * vLateral;
           return {

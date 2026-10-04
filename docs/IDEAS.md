@@ -67,8 +67,3 @@ ideas rather than roadmap items only because nobody has asked for them.
   without a page load.
 - **Replay sharing.** A golden replay is a seed plus an input log, so a run is
   already a short file. Somebody could trade them.
-- **Portable determinism** — fixed-point or table-driven trigonometry, so the
-  simulation is bit-identical across CPU architectures rather than merely
-  quantised past the difference. This one is a known open problem rather than a
-  wish; [`docs/ROADMAP.md`](ROADMAP.md#open-questions-this-roadmap-does-not-answer)
-  records why it is unscheduled.

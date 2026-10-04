@@ -172,9 +172,13 @@ describe('arc and loop', () => {
         segments: [{ type: 'arc', radius: 24, degrees: 200, dir: 'cw', speed: 1.5 }],
       }),
     );
+    // "Exactly" to what the sine table guarantees: each component of a rotation
+    // is within 1.1e-8 of true (`src/engine/trig.ts`), so a 24 px radius holds to
+    // within 24 × 1.1e-8, a quarter of a millionth of a pixel.
     for (let frame = 0; frame <= compiled.totalFrames; frame += 1) {
       const point = samplePath(compiled, frame);
-      expect(Math.sqrt((point.x - 76) ** 2 + (point.y - 100) ** 2)).toBeCloseTo(24, 9);
+      const radius = Math.sqrt((point.x - 76) ** 2 + (point.y - 100) ** 2);
+      expect(Math.abs(radius - 24)).toBeLessThan(24 * 1.1e-8);
     }
   });
 
@@ -274,8 +278,12 @@ describe('aimAtPlayer', () => {
     expect(compiled.totalFrames).toBe(30);
     const length = Math.sqrt((60 - 112) ** 2 + (264 - 40) ** 2);
     const end = samplePath(compiled, 30);
-    expect(end.x).toBeCloseTo(112 + ((60 - 112) / length) * 60, 9);
-    expect(end.y).toBeCloseTo(40 + ((264 - 40) / length) * 60, 9);
+    // The heading comes from the arctangent table and the direction from the sine
+    // table (`src/engine/trig.ts`): 5.5e-9 rad and 1.1e-8 per component, so a
+    // 60 px run lands within 60 × 1.65e-8, a millionth of a pixel, of the exact line.
+    const reach = 60 * 1.65e-8;
+    expect(Math.abs(end.x - (112 + ((60 - 112) / length) * 60))).toBeLessThan(reach);
+    expect(Math.abs(end.y - (40 + ((264 - 40) / length) * 60))).toBeLessThan(reach);
     // It commits: moving the player afterwards cannot bend a compiled path.
     expect(samplePath(compiled, 30).heading).toBeCloseTo(samplePath(compiled, 1).heading, 9);
   });

@@ -41,6 +41,7 @@ import {
   RESERVED_ABILITY_TYPES,
   STAGE_KINDS,
 } from '../../../src/content/schema.js';
+import { trigTables } from '../../../src/engine/trig.js';
 import { ABILITY_REGISTRY } from '../../../src/sim/abilities/registry.js';
 import {
   REVERSE_PIXELS_PER_FRAME,
@@ -830,6 +831,15 @@ export function counters(root = REPO_ROOT): ReadonlyMap<string, () => number> {
     ['starfield.reversePixels', () => REVERSE_PIXELS_PER_FRAME],
     ['starfield.banks', () => STAR_BANKS],
     ['starfield.twinkleFrames', () => TWINKLE_FRAMES],
+
+    /**
+     * The resolution of the simulation's trigonometry, read off the tables
+     * themselves. Provisional rather than arcade (the reference has not decoded
+     * the flight-vector programs), but a precision the state document quotes, and
+     * one a change to either table would silently falsify.
+     */
+    ['trig.sineEntries', () => trigTables().sine.length],
+    ['trig.arctanEntries', () => trigTables().arctan.length],
 
     /**
      * The forged pack, read through the real loader exactly as the Classic

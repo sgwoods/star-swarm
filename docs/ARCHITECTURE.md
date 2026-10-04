@@ -457,7 +457,7 @@ flowchart TB
     end
 
     subgraph deterministic["The deterministic half — headless, no host APIs"]
-        engine["src/engine/<br/>fixed 60 Hz loop · seeded RNG<br/>abstract input · replay logs"]
+        engine["src/engine/<br/>fixed 60 Hz loop · seeded RNG<br/>trig tables · abstract input · replay logs"]
         sim["src/sim/<br/>world · player · shots · enemies<br/>formation · paths · dives<br/>challenge · ability registry"]
     end
 
@@ -494,12 +494,13 @@ hands back a list of events describing what happened. The presentation layers
 read those; nothing calls back in.
 
 **That rule is mechanical.** `eslint.config.js` restricts the imports and the
-host globals inside `src/sim/`, and bans `Math.random` across `src/sim/` and
-`src/engine/`. `tests/unit/sim-boundary.test.ts` scans the tree as a backstop
-_and_ runs ESLint against a deliberately illegal probe file, so the rules cannot
-be quietly deleted. Both run in CI. (The tree scan is textual, which is why an
-identifier spelled exactly `window` fails inside `src/sim/` even as a local
-variable — name it `hitWindow`.)
+host globals inside `src/sim/`, and bans `Math.random` — and every `Math`
+function the specification leaves to the engine, with the `**` operator — across
+`src/sim/`, `src/engine/` and `src/content/`. `tests/unit/sim-boundary.test.ts`
+scans the tree as a backstop _and_ runs ESLint against a deliberately illegal
+probe file, so the rules cannot be quietly deleted. Both run in CI. (The tree
+scan is textual, which is why an identifier spelled exactly `window` fails inside
+`src/sim/` even as a local variable — name it `hitWindow`.)
 
 **That is what buys the testing story.** Because the simulation needs no browser,
 both Vitest projects run on the **Node** environment with no DOM at all:
@@ -510,21 +511,30 @@ screen — it is the real game replaying a real input log, so the demo cannot dr
 from the game.
 <!-- check:count vitest.projects 2 -->
 
-One honest limit on that, worth stating because it is easy to overclaim:
-**determinism holds for a given machine, not across machines.** `Math.sin`,
-`Math.cos` and `Math.atan2` are engine-defined and can land one unit in the last
-place apart on different CPU architectures — a golden recorded on an arm64 Mac
-really did fail CI on x86-64 Linux over a single bit in one enemy's position. So
-the state a golden compares is quantised to six decimal places: far coarser than
-that noise, and still half a million times finer than the half-pixel that is the
-finest difference anyone could see. That makes the goldens portable; it does not
-make the simulation bit-identical, and nothing here claims it does.
+**Determinism holds across machines, to the bit.** The specification lets an
+engine approximate `Math.sin`, `Math.cos` and `Math.atan2`, and V8 approximates
+them differently on arm64 and x86-64 — on one Node release, roughly one call in
+two hundred lands a unit in the last place apart, which is how a golden recorded
+on an arm64 Mac once failed CI on x86-64 Linux. So the simulation calls none of
+them. Every sine, cosine and heading comes from `src/engine/trig.ts`: an integer
+angle of 2^22 to the degree, a quarter-wave table of fixed-point sines with an entry
+at every 64th of a degree, and a table of arctangents, built at load from
+arithmetic the specification pins to the bit. Everything else the simulation
+computes is `+ − × ÷` and `Math.sqrt`, which it pins too. Every whole degree —
+what headings, arcs and bombing vectors are written in — reads an exact entry, so
+`sin 30°` is exactly a half. Between entries the cost is precision nobody can see:
+a sine within 1.1e-8 of the true value, an arctangent within 5.5e-9 rad, and over
+every path the shipped packs held when the tables went in, no position further
+than 3.6e-6 px from where the engine's functions put it. The return is that a
+golden compares every number exactly: `fingerprintWorld` rounds nothing, and a
+golden recorded on either architecture replays byte for byte on the other.
+<!-- check:count trig.sineEntries 5761 trig.arctanEntries 8193 -->
 
 ### The layers one at a time
 
 | Layer          | What it is                                                                                                                                                                                  |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/engine/`  | The fixed-step loop, the seeded RNG, abstract input, and input recording/replay. Knows nothing about this game or any game.                                                                 |
+| `src/engine/`  | The fixed-step loop, the seeded RNG, the trigonometry tables, abstract input, and input recording/replay. Knows nothing about this game or any game.                                        |
 | `src/sim/`     | The world and one step of it: player, shots, collisions, lives, enemies, formation, the path interpreter, dives, enemy fire, challenge stages, and the ability registry with capture in it. |
 | `src/content/` | The content platform: the Zod schemas, the loader, the registry, the module that interprets a rules document, and stage resolution.                                                         |
 | `src/render/`  | The 224×288 backbuffer presented at a whole-number scale, sprite rasterisation, the pixel font, the starfield, one-shot effect animations, and scene composition.                           |

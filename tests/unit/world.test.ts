@@ -660,13 +660,16 @@ describe('the simulation boundary', () => {
 
 describe('the fingerprint’s precision', () => {
   /**
-   * `fingerprintWorld` quantises every number it serialises, which is what stops a
-   * golden recorded on one machine failing on another over a last-bit difference in
-   * `Math.sin`. That deliberately narrows what a golden detects, so both edges of
-   * the new mesh are pinned here: a difference no machine could disagree about
-   * meaningfully is absorbed, and a difference far below anything a player could
-   * see is still caught. Without the second half nobody could tell later whether
-   * the net still catches anything at all.
+   * `fingerprintWorld` compares every number exactly. It used to round to six
+   * decimal places, to absorb `Math.sin` landing a unit in the last place apart on
+   * arm64 and x86-64, and both edges of that mesh were pinned here. Both edges of
+   * exact are pinned now. The catching edge: one ULP, the smallest difference a
+   * double can carry, reaches the string — in an enemy's position and in a bomb's
+   * velocity alike — which the rounding absorbed and any tolerance at all would.
+   * The absorbing edge has nothing left to absorb, and that is the claim to hold:
+   * the numbers compared are made without engine noise, so exact costs nothing
+   * across machines. Without the first half a mesh could come back unnoticed;
+   * without the second, nobody could tell later whether exact was still safe.
    */
   const nextUp = (value: number): number => {
     const view = new DataView(new ArrayBuffer(8));
@@ -675,66 +678,61 @@ describe('the fingerprint’s precision', () => {
     return view.getFloat64(0);
   };
 
-  /** A world with enemies in flight, so the fingerprint carries real positions. */
-  function flying(): { world: World; enemy: Enemy } {
-    const world = createWorld({ seed: 'fingerprint', rules, stages });
-    for (let i = 0; i < 200; i += 1) stepWorld(world, EMPTY_FRAME);
-    const enemy = world.fleet.enemies.find((candidate) => candidate.state !== 'standby');
-    if (enemy === undefined) throw new Error('no enemy had launched after 200 steps');
-    return { world, enemy };
+  const slantedBullets = (world: World): World['enemyBullets'] =>
+    world.enemyBullets.filter((bullet) => bullet.active && bullet.vx !== 0);
+
+  /**
+   * A stage-20 world with enemies flying in and aimed bombs in the air: stage 20
+   * bombs on the way in, so the first slanted bullets are up within a second.
+   */
+  function busy(): World {
+    const world = createWorld({ seed: 'fingerprint', rules, stages, stage: 20 });
+    while (slantedBullets(world).length < 2) {
+      if (world.step > 600) throw new Error('no aimed bombs in flight after 600 steps');
+      stepWorld(world, EMPTY_FRAME);
+    }
+    return world;
   }
 
-  // Sits on the quantiser's own grid, which is the middle of a rounding cell and
-  // therefore the honest place to measure from: a value parked on a cell boundary
-  // would straddle it, and that residual is named in `fingerprintWorld`'s comment
-  // rather than papered over here.
-  const ANCHOR = 123.456789;
+  /** The bullet whose velocity is furthest from an axis, so it went through a sine. */
+  function slantedBullet(world: World): World['enemyBullets'][number] | undefined {
+    return slantedBullets(world).sort((a, b) => Math.abs(b.vx) - Math.abs(a.vx))[0];
+  }
 
-  it('absorbs a one-ULP difference, which is the cross-machine noise floor', () => {
-    const { world, enemy } = flying();
-    enemy.x = ANCHOR;
+  it.each([
+    ['an enemy’s x', (world: World) => world.fleet.enemies.find((e) => !Number.isInteger(e.x))],
+    ['a bullet’s velocity', (world: World) => slantedBullet(world)],
+  ] as const)('catches a one-ULP difference in %s — nothing is rounded', (_label, pick) => {
+    const world = busy();
+    const target = pick(world) as { x?: number; vx?: number } | undefined;
+    if (target === undefined) throw new Error('nothing fractional to nudge');
+    const key = 'vx' in target ? 'vx' : 'x';
     const before = fingerprintWorld(world);
-    enemy.x = nextUp(ANCHOR);
-    expect(enemy.x).not.toBe(ANCHOR);
-    expect(fingerprintWorld(world)).toBe(before);
-  });
-
-  it('still catches a thousandth of a pixel, far below anything drawable', () => {
-    const { world, enemy } = flying();
-    enemy.x = ANCHOR;
-    const before = fingerprintWorld(world);
-    enemy.x = ANCHOR + 0.001;
+    const value = target[key] ?? 0;
+    target[key] = nextUp(value);
+    expect(target[key]).not.toBe(value);
     expect(fingerprintWorld(world)).not.toBe(before);
   });
 
-  it('catches a millionth of a pixel too — the mesh is 1e-6, not a rounded pixel', () => {
-    const { world, enemy } = flying();
-    enemy.x = ANCHOR;
-    const before = fingerprintWorld(world);
-    enemy.x = ANCHOR + 0.000001;
-    expect(fingerprintWorld(world)).not.toBe(before);
-  });
-
-  it('quantises every number in the structure, not only the ones a test pokes', () => {
-    // The sibling claim to the three above, and the one they cannot make: those
-    // nudge an enemy's `x`, so they prove the replacer reaches *that* number. This
-    // one walks the whole serialised string, which is what says a float added to
-    // the fingerprint later — the capture channel's carry and spin poses were
-    // exactly that — cannot quietly reintroduce the cross-machine failure.
-    const world = createWorld({ seed: 'fingerprint-structure', rules, stages });
-    for (let i = 0; i < 1_400; i += 1) stepWorld(world, EMPTY_FRAME);
-
-    // Only meaningful with real fractional values in flight to round.
-    expect(world.fleet.enemies.some((enemy) => !Number.isInteger(enemy.x))).toBe(true);
-    for (const [, decimals] of fingerprintWorld(world).matchAll(/-?\d+\.(\d+)/g)) {
-      expect(decimals?.length).toBeLessThanOrEqual(6);
+  it('needs no tolerance: a bomb’s heading is the trig table’s, not the engine’s', () => {
+    // A bullet's velocity is a unit vector from `src/engine/trig.ts` times the
+    // pack's bullet speed, and that table hands out exact multiples of 2^-30 —
+    // which `Math.sin` and `Math.cos` almost never return. So every slanted bomb in
+    // flight lying on that grid is the simulation's numbers being made from the
+    // portable table, and would stop being so the day an engine-defined function
+    // came back.
+    const world = busy();
+    const speed = rules.enemies.bullet.speed;
+    for (const bullet of slantedBullets(world)) {
+      expect(Number.isInteger((bullet.vx / speed) * 2 ** 30)).toBe(true);
+      expect(Number.isInteger((bullet.vy / speed) * 2 ** 30)).toBe(true);
     }
   });
 
   it('leaves the RNG state exactly as it is, bit for bit', () => {
     // The generator's four uint32s are part of the on-disk contract, so they must
-    // pass through the quantiser untouched — `2 ** 32 - 1` included.
-    const { world } = flying();
+    // pass through the serialiser untouched — `2 ** 32 - 1` included.
+    const world = busy();
     world.rng.setState([4294967295, 0, 2324523762, 1]);
     const printed: unknown = JSON.parse(fingerprintWorld(world));
     expect((printed as { rng: number[] }).rng).toEqual([4294967295, 0, 2324523762, 1]);
