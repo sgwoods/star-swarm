@@ -35,7 +35,7 @@ import { createStageSource, type StageSource } from '../../src/content/stages.js
 import type { SimEvent, SimEventType } from '../../src/sim/events.js';
 import { createWorld, fingerprintWorld, stepWorld } from '../../src/sim/world.js';
 import { autopilotSource } from '../../src/ui/autoplay.js';
-import { installedPack, shippedVariants } from '../helpers/variants.js';
+import { installedPack, shippedVariants, unsharedRules } from '../helpers/variants.js';
 
 const PACK_ID = 'ability-demo';
 
@@ -302,7 +302,12 @@ describe('a pack that switches on new abilities is only data', () => {
 
   it('plays under the base pack’s rules document itself, not a copy', () => {
     expect(demoPack().rules).toBeUndefined();
-    expect(rules()).toBe(installedPack('classic').rules);
+    // Classic's own tables, shared rather than copied. The ranks' own normal
+    // sequences are the exception: they name Classic's scripts, and this pack's
+    // own normal half supersedes them at every rank (`composeRules`).
+    const base = installedPack('classic').rules;
+    if (base === undefined) throw new Error('the classic pack has no rules.json');
+    expect(unsharedRules(rules(), base)).toEqual([]);
     expect(stageOne().stageFor(1)?.stage.id).toBe('demo-1');
   });
 });

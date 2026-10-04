@@ -19,6 +19,7 @@
 import type { LoadedPack } from './loader.js';
 import type {
   Alien,
+  DifficultyRank,
   Formation,
   MovementPath,
   PackManifest,
@@ -27,6 +28,7 @@ import type {
   Sprite,
   Stage,
   StageSequence,
+  StageSequenceOverride,
 } from './schema.js';
 
 /** One half of a stage sequence, as the schema infers it. */
@@ -174,19 +176,55 @@ export function composeManifest(packs: readonly LoadedPack[]): PackManifest {
 }
 
 /**
- * The rules in force: the **last layered pack that ships a `rules.json`**.
+ * The rules in force: the **last layered pack that ships a `rules.json`**, less
+ * any rank's stage sequence a later pack has superseded.
  *
  * Not simply the last pack's, because an overlay that changes only art or a
  * flight path ships no rules document, and reading `undefined` off it would hand
  * the simulation no rules at all — `createWorld` requires them, so the game
  * would refuse to start over a pack that had nothing to say about rules.
+ *
+ * **A rank's sequence is a statement about one half of the stage sequence, and
+ * "later wins" reaches it.** A rank may override either half
+ * (`stageSequenceOverrideSchema`), and the override is read before the
+ * manifest's. So when a pack layered *after* the rules states a half of its own,
+ * every rank's override of that half is dropped: otherwise an overlay that ships
+ * its own stages would play them at the default rank and the base pack's at
+ * every other — the Deep Sea game played Classic's combat scripts on HARD. Every
+ * other part of the document is the base's own object, shared rather than copied,
+ * and a registry where no later pack states a half gets the document back
+ * unchanged and identical.
  */
 export function composeRules(packs: readonly LoadedPack[]): Rules | undefined {
   for (let index = packs.length - 1; index >= 0; index -= 1) {
     const rules = packs[index]?.rules;
-    if (rules !== undefined) return rules;
+    if (rules !== undefined) return withoutSupersededSequences(rules, packs.slice(index + 1));
   }
   return undefined;
+}
+
+const SEQUENCE_HALVES = ['normal', 'challenge'] as const;
+
+/** `rules` with every rank's override of a half that one of `later` states removed. */
+function withoutSupersededSequences(rules: Rules, later: readonly LoadedPack[]): Rules {
+  const superseded = SEQUENCE_HALVES.filter((half) =>
+    later.some((pack) => pack.manifest.stageSequence[half].rows.length > 0),
+  );
+  const overridden = (rank: DifficultyRank): boolean =>
+    superseded.some((half) => rank.stageSequence?.[half] !== undefined);
+  if (!Object.values(rules.difficulty.ranks).some(overridden)) return rules;
+
+  const ranks: Record<string, DifficultyRank> = {};
+  for (const [id, rank] of Object.entries(rules.difficulty.ranks)) {
+    if (!overridden(rank)) {
+      ranks[id] = rank;
+      continue;
+    }
+    const kept: StageSequenceOverride = { ...rank.stageSequence };
+    for (const half of superseded) delete kept[half];
+    ranks[id] = { ...rank, stageSequence: kept };
+  }
+  return { ...rules, difficulty: { ...rules.difficulty, ranks } };
 }
 
 /**

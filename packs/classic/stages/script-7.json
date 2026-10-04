@@ -1,12 +1,12 @@
 {
-  "id": "stage-5",
+  "id": "script-7",
   "kind": "normal",
   "formation": "classic40",
   "waves": [
     {
       "at": 0,
-      "entryPath": "entry-wide-arc",
-      "spacing": 12,
+      "entryPath": "entry-side-file",
+      "spacing": 11,
       "slots": [
         {
           "alien": "wing",
@@ -15,7 +15,7 @@
         {
           "alien": "wing",
           "home": 17,
-          "trailing": true
+          "mirror": true
         },
         {
           "alien": "wing",
@@ -24,7 +24,7 @@
         {
           "alien": "wing",
           "home": 19,
-          "trailing": true
+          "mirror": true
         },
         {
           "alien": "drone",
@@ -33,7 +33,7 @@
         {
           "alien": "drone",
           "home": 37,
-          "trailing": true
+          "mirror": true
         },
         {
           "alien": "drone",
@@ -42,14 +42,14 @@
         {
           "alien": "drone",
           "home": 39,
-          "trailing": true
+          "mirror": true
         }
       ]
     },
     {
-      "at": 185,
-      "entryPath": "entry-wide-arc",
-      "spacing": 12,
+      "at": 160,
+      "entryPath": "entry-side-file",
+      "spacing": 13,
       "slots": [
         {
           "alien": "warden",
@@ -58,9 +58,7 @@
         },
         {
           "alien": "warden",
-          "home": 2,
-          "mirror": true,
-          "trailing": true
+          "home": 2
         },
         {
           "alien": "warden",
@@ -69,9 +67,7 @@
         },
         {
           "alien": "warden",
-          "home": 1,
-          "mirror": true,
-          "trailing": true
+          "home": 1
         },
         {
           "alien": "wing",
@@ -80,9 +76,7 @@
         },
         {
           "alien": "wing",
-          "home": 13,
-          "mirror": true,
-          "trailing": true
+          "home": 13
         },
         {
           "alien": "wing",
@@ -91,16 +85,14 @@
         },
         {
           "alien": "wing",
-          "home": 15,
-          "mirror": true,
-          "trailing": true
+          "home": 15
         }
       ]
     },
     {
-      "at": 370,
-      "entryPath": "entry-long-row",
-      "spacing": 10,
+      "at": 320,
+      "entryPath": "entry-wide-arc",
+      "spacing": 12,
       "slots": [
         {
           "alien": "wing",
@@ -145,17 +137,19 @@
       ]
     },
     {
-      "at": 530,
-      "entryPath": "entry-wide-arc",
-      "spacing": 11,
+      "at": 500,
+      "entryPath": "entry-long-row",
+      "spacing": 10,
       "slots": [
         {
           "alien": "drone",
-          "home": 29
+          "home": 29,
+          "mirror": true
         },
         {
           "alien": "drone",
           "home": 31,
+          "mirror": true,
           "trailing": true
         },
         {
@@ -171,11 +165,13 @@
         },
         {
           "alien": "drone",
-          "home": 33
+          "home": 33,
+          "mirror": true
         },
         {
           "alien": "drone",
           "home": 35,
+          "mirror": true,
           "trailing": true
         },
         {
@@ -192,7 +188,7 @@
       ]
     },
     {
-      "at": 700,
+      "at": 670,
       "entryPath": "entry-side-file",
       "spacing": 11,
       "slots": [

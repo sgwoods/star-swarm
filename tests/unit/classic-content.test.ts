@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { isChallengeStage, normalStageOrdinal, resolveStageId } from '../../src/content/rules.js';
+import {
+  isChallengeStage,
+  normalStageOrdinal,
+  resolveStageId,
+  resolveStageSequence,
+} from '../../src/content/rules.js';
 import { formationAxes } from '../../src/content/schema.js';
+import { createStageSource } from '../../src/content/stages.js';
 import { waveLaunchFrames } from '../../src/sim/enemies.js';
 import { classicFormation, classicPack, classicRules, classicStages } from '../helpers/rules.js';
 
@@ -35,14 +41,56 @@ const stages = classicStages();
 const formation = classicFormation();
 
 /**
- * Every normal stage the pack ships, in sequence order and de-duplicated.
+ * Reference section 5's per-stage script assignment, verbatim: for each normal
+ * stage through 22, the combat script row that rank A, B, C and D play. The rows
+ * are the reference's own zero-based numbers, and `script-N` is row N.
+ */
+const SCRIPT_TABLE: readonly (readonly [stage: number, ...rows: number[]])[] = [
+  [1, 0, 0, 0, 0],
+  [2, 1, 1, 1, 1],
+  [4, 4, 2, 4, 7],
+  [5, 3, 3, 6, 9],
+  [6, 2, 0, 5, 8],
+  [8, 4, 4, 7, 7],
+  [9, 6, 6, 9, 12],
+  [10, 0, 5, 0, 11],
+  [12, 7, 4, 7, 10],
+  [13, 9, 6, 12, 12],
+  [14, 8, 0, 11, 11],
+  [16, 10, 7, 10, 10],
+  [17, 12, 9, 12, 12],
+  [18, 0, 8, 11, 11],
+  [20, 10, 10, 10, 10],
+  [21, 12, 12, 12, 12],
+  [22, 11, 11, 11, 11],
+];
+
+/** The table's columns, in its order. The ROM stores them B, C, D, A. */
+const RANKS = ['A', 'B', 'C', 'D'] as const;
+
+/** The script row `rank` plays at the table's entry `index`. */
+function scriptRow(index: number, rank: (typeof RANKS)[number]): number {
+  const row = SCRIPT_TABLE[index]?.[RANKS.indexOf(rank) + 1];
+  if (row === undefined) throw new Error(`no entry ${String(index)} for rank ${rank}`);
+  return row;
+}
+
+/**
+ * Every normal stage document any rank plays, de-duplicated.
  *
  * De-duplicated because a stage document is an **entry script**, not a stage: the
  * reference's selection table gives stage 8 script row 4, the same row as stage 4,
- * so `stage-4` plays twice and shipping a `stage-8.json` copy of it would be two
- * files that have to stay in step. See `packs/classic/README.md`.
+ * and several ranks share rows, so `script-4` plays at many stage numbers and
+ * shipping a copy for each would be files that have to stay in step. Every rank,
+ * because rank A never plays row 5 at all. See `packs/classic/stages/README.md`.
  */
-const normalStages = [...new Set(pack.manifest.stageSequence.normal.rows)].map((id) => {
+const normalStages = [
+  ...new Set(
+    Object.keys(rules.difficulty.ranks).flatMap(
+      (rank) => resolveStageSequence(pack.manifest, rules, rank).normal.rows,
+    ),
+  ),
+].map((id) => {
   const document = pack.stages.get(id);
   if (document === undefined) throw new Error(`the classic pack has no ${id}`);
   return { id, stage: document };
@@ -217,32 +265,77 @@ describe.each(normalStages)('$id', ({ stage }) => {
   });
 });
 
-describe('the normal stage sequence', () => {
-  /**
-   * Reference section 5's per-stage script assignment, rank A, as far as this
-   * pack authors it. A stage document is named for the *first* stage that plays
-   * its script row, which is why stage 8 plays `stage-4`: both are script row 4.
-   */
-  const rankA: readonly (readonly [stage: number, script: number, plays: string])[] = [
-    [1, 0, 'stage-1'],
-    [2, 1, 'stage-2'],
-    [4, 4, 'stage-4'],
-    [5, 3, 'stage-5'],
-    [6, 2, 'stage-6'],
-    [8, 4, 'stage-4'],
-  ];
+describe('the normal stage sequences', () => {
+  const cases = RANKS.flatMap((rank) =>
+    SCRIPT_TABLE.map(([stage], index) => [rank, stage, scriptRow(index, rank)] as const),
+  );
 
-  it.each(rankA)('plays stage %i (script row %i) as %s', (stage, _script, plays) => {
+  it.each(cases)('rank %s plays stage %i as script row %i', (rank, stage, row) => {
     expect(isChallengeStage(rules, stage)).toBe(false);
-    expect(resolveStageId(pack.manifest, rules, stage)).toBe(plays);
+    expect(resolveStageId(pack.manifest, rules, stage, rank)).toBe(`script-${String(row)}`);
   });
 
   it('indexes the sequence exactly as the ROM indexes its own', () => {
     // `adj − (adj >> 2) − 1` for a non-challenge stage, which is what
     // `normalStageOrdinal` has to agree with for the rows to line up at all.
-    for (const [stage] of rankA) {
+    SCRIPT_TABLE.forEach(([stage], index) => {
       expect(normalStageOrdinal(rules, stage)).toBe(stage - (stage >> 2) - 1);
+      expect(normalStageOrdinal(rules, stage)).toBe(index);
+    });
+  });
+
+  it('folds past stage 22 exactly as `c_25A2` does, at every rank', () => {
+    // The ROM folds `while (adj >= 23) adj -= 4` before indexing, so stages 24
+    // onward cycle entries 14, 15 and 16 for ever. `repeatLast: 3` has to say the
+    // same thing, and only a walk well past the table shows that it does.
+    for (const rank of RANKS) {
+      for (let stage = 1; stage <= 255; stage += 1) {
+        if (isChallengeStage(rules, stage)) continue;
+        let adj = stage;
+        while (adj >= 23) adj -= 4;
+        const row = scriptRow(adj - (adj >> 2) - 1, rank);
+        expect([rank, stage, resolveStageId(pack.manifest, rules, stage, rank)]).toEqual([
+          rank,
+          stage,
+          `script-${String(row)}`,
+        ]);
+      }
     }
+  });
+
+  it('selects a whole sequence per rank, and the default rank’s is the manifest’s', () => {
+    // A rank never multiplies another's table: each is a list of documents. Rank
+    // A is the factory default, so its list is the pack-wide one and it states no
+    // override; the other three state theirs in full.
+    const listed = (rank: string) => resolveStageSequence(pack.manifest, rules, rank).normal;
+    expect(listed('A')).toBe(pack.manifest.stageSequence.normal);
+    expect(resolveStageId(pack.manifest, rules, 4)).toBe(
+      resolveStageId(pack.manifest, rules, 4, 'A'),
+    );
+    for (const rank of RANKS) {
+      expect(listed(rank).rows).toEqual(
+        SCRIPT_TABLE.map((_entry, index) => `script-${String(scriptRow(index, rank))}`),
+      );
+      expect(listed(rank).repeatLast).toBe(3);
+    }
+  });
+
+  it('ships one document per script row, named for the row', () => {
+    // The naming rule: `script-N` is the reference's combat script row N, whatever
+    // stage and rank play it. A stage-numbered name cannot work across ranks —
+    // rank A plays row 4 at stage 4 and rank D plays row 7 there — and row 5 has
+    // no stage under rank A to be named for.
+    const shipped = [...pack.stages.values()]
+      .filter((stage) => stage.kind === 'normal')
+      .map((stage) => stage.id)
+      .sort();
+    expect(shipped).toEqual(
+      Array.from({ length: 13 }, (_unused, row) => `script-${String(row)}`).sort(),
+    );
+    expect(new Set(normalStages.map(({ id }) => id))).toEqual(new Set(shipped));
+    // And row 5 is reached by ranks B and C alone.
+    const rankA = new Set(pack.manifest.stageSequence.normal.rows);
+    expect(shipped.filter((id) => !rankA.has(id))).toEqual(['script-5']);
   });
 
   it('interleaves the two sequences, with a real normal stage either side', () => {
@@ -255,49 +348,44 @@ describe('the normal stage sequence', () => {
     const plays = (stage: number): string | undefined =>
       resolveStageId(pack.manifest, rules, stage);
     expect([1, 2, 3, 4, 5, 6, 7, 8].map(plays)).toEqual([
-      'stage-1',
-      'stage-2',
+      'script-0',
+      'script-1',
       'challenge-1',
-      'stage-4',
-      'stage-5',
-      'stage-6',
+      'script-4',
+      'script-3',
+      'script-2',
       'challenge-2',
       // Stage 8 is script row 4 again, which is why it replays stage 4's document
       // rather than shipping a second copy of it.
-      'stage-4',
+      'script-4',
     ]);
-    // And past the authored rows: the normal half holds its last row while the
-    // challenge half keeps cycling all eight, on its own period.
-    expect([11, 15].map(plays)).toEqual(['challenge-3', 'challenge-4']);
-    expect([9, 10, 12].map(plays)).toEqual(['stage-4', 'stage-4', 'stage-4']);
+    expect([9, 10, 11, 12].map(plays)).toEqual(['script-6', 'script-0', 'challenge-3', 'script-7']);
+    expect([23, 24, 25, 26, 27, 28].map(plays)).toEqual([
+      'challenge-6',
+      'script-10',
+      'script-12',
+      'script-11',
+      'challenge-7',
+      'script-10',
+    ]);
   });
 
   it('gives every stage of the ladder the kind its half of the sequence implies', () => {
     // The loader enforces this per document; what it cannot see is the pairing of
     // a stage *number* with the kind that plays there, which is what decides
     // whether the formation sways and whether the enemies attack.
-    for (let stage = 1; stage <= 16; stage += 1) {
-      const kind = stages.stageFor(stage)?.stage.kind;
-      expect([stage, kind]).toEqual([
-        stage,
-        isChallengeStage(rules, stage) ? 'challenge' : 'normal',
-      ]);
+    for (const rank of RANKS) {
+      const source = createStageSource(pack, { rank });
+      for (let stage = 1; stage <= 30; stage += 1) {
+        expect([rank, stage, source.stageFor(stage)?.stage.kind]).toEqual([
+          rank,
+          stage,
+          isChallengeStage(rules, stage) ? 'challenge' : 'normal',
+        ]);
+      }
     }
-  });
-
-  it('cycles one row past stage 8, because the rest of the table is not authored', () => {
-    // The arcade cycles the last *three* from stage 24, a property of the whole
-    // 17-entry table. Until rows 7–17 land, `repeatLast: 1` is the honest
-    // statement: nothing is claimed about a plateau that is not there yet.
-    expect(pack.manifest.stageSequence.normal.rows).toEqual([
-      'stage-1',
-      'stage-2',
-      'stage-4',
-      'stage-5',
-      'stage-6',
-      'stage-4',
-    ]);
-    expect(pack.manifest.stageSequence.normal.repeatLast).toBe(1);
+    // The shared source the other tests use is rank A's.
+    expect(stages.stageFor(9)?.stage.id).toBe('script-6');
   });
 
   it('composes every stage identically — the same forty homes in the same order', () => {
@@ -329,6 +417,73 @@ describe('the normal stage sequence', () => {
     );
     expect(new Set(choreography).size).toBe(choreography.length);
   });
+});
+
+/**
+ * Which of [SW]'s three entrance patterns a document reads as.
+ *
+ * Not a ROM value: the flight-vector programs that would say were never decoded.
+ * What the reference does give is the patterns' order — 1 and 2 on stages 1 and 2,
+ * then 1, 2, 3 on every later set of three — and the table above says which row
+ * each rank plays where. Put the two together and every row but two lands only on
+ * stages of one pattern, at every rank; that agreement is what the choreography
+ * here is built on, and what this block holds it to.
+ */
+describe('the shape each script row reads as', () => {
+  const OPENING_PATH: Readonly<Record<number, string>> = {
+    1: 'entry-side-file',
+    2: 'entry-wide-arc',
+    3: 'entry-long-row',
+  };
+
+  /** The entrance pattern [SW]'s order puts at normal stage `stage`. */
+  const patternAt = (stage: number): number => (stage <= 2 ? stage : (stage % 4) + 1);
+
+  /** Every pattern any rank plays `row` under, through stage 22. */
+  const patternsOf = (row: number): Set<number> =>
+    new Set(
+      SCRIPT_TABLE.flatMap(([stage], index) =>
+        RANKS.filter((rank) => scriptRow(index, rank) === row).map(() => patternAt(stage)),
+      ),
+    );
+
+  it('puts every row on stages of one pattern, at every rank, except rows 0 and 2', () => {
+    // The two exceptions are recorded in `packs/classic/stages/README.md`: row 0 is
+    // stage 1 everywhere and a third-pattern stage later on, and row 2 is a
+    // third-pattern stage under rank A and a first-pattern one under rank B.
+    const rows = Array.from({ length: 13 }, (_unused, row) => row);
+    expect(rows.filter((row) => patternsOf(row).size > 1)).toEqual([0, 2]);
+  });
+
+  it.each(Array.from({ length: 13 }, (_unused, row) => row))(
+    'opens script-%i with the pattern the first stage playing it calls for',
+    (row) => {
+      // Rank A first, as the factory setting [SW] describes; a row rank A never
+      // plays is read off the first rank in the ROM's own order, B, C, D.
+      const stage = ['A', 'B', 'C', 'D']
+        .flatMap((rank) =>
+          SCRIPT_TABLE.filter(
+            (_entry, index) => scriptRow(index, rank as (typeof RANKS)[number]) === row,
+          ),
+        )
+        .map(([first]) => first)[0];
+      expect(stage).toBeDefined();
+      const pattern = patternAt(stage ?? 0);
+      const opening = pack.stages.get(`script-${String(row)}`)?.waves[0];
+      expect(opening?.entryPath).toBe(OPENING_PATH[pattern]);
+      const slots = opening?.slots ?? [];
+      if (pattern === 1) {
+        // Both sides at once: every pair launches together, one each side.
+        expect(slots.every((slot) => !slot.trailing)).toBe(true);
+      } else {
+        // One side at a time, the first group from the left.
+        expect(slots[0]?.mirror).toBe(false);
+        expect(slots.filter((_slot, index) => index % 2 === 1).every((slot) => slot.trailing)).toBe(
+          true,
+        );
+      }
+    },
+  );
 });
 
 describe('the formation motion and the formation agree', () => {

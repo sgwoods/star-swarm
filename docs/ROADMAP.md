@@ -52,10 +52,6 @@ was never a deployment question:
 
 Also in this milestone, because they are the same kind of work:
 
-- **Ship: the remaining Classic normal stage scripts**, and with them the three
-  difficulty ranks' own stage sequences. Reference section 5 gives all four ranks'
-  seventeen-entry index lists; they need ten of the thirteen combat scripts
-  through stage 8 alone, so the ranks cannot be authored before the scripts are.
 - **Ship: a second game**, rather than a variant of this one — the Galaxian-lineage
   mode the captain's standing direction asks for. It will be another pack plus
   another `rules.json` and a variant document naming them, and the question it will

@@ -56,8 +56,9 @@ see [§3](#3-the-layers).
 The game is playable now, and Milestone 2 is complete: entry waves, formation
 motion, slot homing, dive attacks, enemy fire, the difficulty ramp, the transform
 attack, scoring, lives, attract mode, game over, the hit-ratio results card and
-the high-score table are all in; the normal stages through 8 and eight challenge
-stages are authored as pack data; and the capture mechanic — tractor beam,
+the high-score table are all in; all thirteen of the arcade's entry scripts,
+each difficulty rank's own sequence of them and eight challenge stages are
+authored as pack data; and the capture mechanic — tractor beam,
 captured fighter, rogue, rescue and dual fighter — is in. A bomb, a tractor beam
 and flying into an enemy all take a fighter, which is every way the arcade has of
 doing it. Milestone 3 has begun: the variant concept, the start-up selector and
@@ -67,7 +68,7 @@ stage it passes ([§4.7](#47-the-playability-pass)), and the ability registry is
 in, with four abilities a pack's aliens switch on beside the capture beam
 ([§4.4](#44-where-a-second-game-plugs-in)).
 [§5](#5-what-is-not-here-yet) is what is left.
-<!-- check:count classic.sequence.normal 6 classic.stages.challenge 8 -->
+<!-- check:count classic.stages.normal 13 classic.sequence.normal 17 classic.stages.challenge 8 -->
 
 ---
 
@@ -853,7 +854,12 @@ field by field rather than taking the last one whole: `roles`, `formations` and
 `src/render/sprites.ts` checks membership in and never indexes), and
 `stageBadges` and each half of `stageSequence` are replaced by the last pack that
 states a non-empty one. Rules are the whole document from the last pack that ships
-one. A single-pack registry gets its own manifest back unchanged, so this is a
+one — less any rank's own sequence for a half that a pack layered after it states,
+since that rank override is a statement about the same half and the later one
+wins. Without it the Deep Sea game would play its own stages at its default rank
+and Classic's combat scripts at the other three, because Classic's ranks B, C and
+D each name their own; the rest of the document is still Classic's object, shared
+rather than copied. A single-pack registry gets its own manifest back unchanged, so this is a
 generalisation of the rule the registry always documented rather than a second
 rule beside it — and it is what lets `packs/swarm-remix/`'s `pack.json` be four
 lines.
@@ -1013,19 +1019,6 @@ stale absence list is the failure mode this section is most prone to — a docum
 describing as deliberately absent something that shipped two merges ago.
 [`docs/ROADMAP.md`](ROADMAP.md) is where each of these is scheduled.
 
-- **Normal stages past 8.** The pack authors the normal stages through 8 and then
-  plateaus on the last of them, because the arcade's seventeen-entry index list
-  cycles its final three rows and claiming that plateau three rows early would
-  assert something that is not there. The challenge half does _not_ plateau — all
-  eight of its scripts cycle — so the two halves of one sequence deliberately
-  repeat on different periods. Difficulty keeps ramping past 8 either way: the
-  rank table is a separate ramp with its own 26 rows across all four ranks.
-  <!-- check:count classic.sequence.normal 6 classic.sequence.challenge 8 rules.ranks 4 rules.difficultyRows 26 -->
-- **The other three difficulty ranks' stage sequences.** The pack ships one
-  pack-wide sequence. Reference section 5 gives all four ranks' index lists, and
-  they need ten of the thirteen combat scripts through stage 8 alone;
-  `packs/classic/stages/README.md` records why they cannot land until the
-  remaining scripts do.
 - **Two of the registry's seven ids.** `transform` and `mirrorPlayer` are reserved
   in `src/content/schema.ts` and implemented nowhere: an alien may declare either
   with any parameters and nothing reads it, so `/forge` **refuses** a prompt that
@@ -1165,7 +1158,8 @@ a rank, and `src/content/rules.ts` resolves that rank into whole data tables. Th
 rank reaches **both** halves of what section 6 says a rank selects — the per-stage
 difficulty rows and the entry-wave script sequence — because the flow passes it to
 `createWorld` _and_ to `createStageSource`; a preset that reached only the world
-would apply half of it. `tests/unit/variants.test.ts` asserts the resolved row is
+would apply half of it. On Classic both halves are visible: EXPERT is rank D, which
+plays script row 7 as stage 4 where ARCADE's rank A plays row 4. `tests/unit/variants.test.ts` asserts the resolved row is
 _identical_ to the rank's own row rather than merely different between presets,
 which is the assertion a multiplier would also pass.
 

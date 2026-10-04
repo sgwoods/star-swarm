@@ -257,7 +257,8 @@ formation inherits both motions with no new code — and why §7.2 matters.
 the manifests field by field: `roles`, `formations`, `sounds` and `effects` merge
 per key, the palette is a union, and `stageBadges` and **each half of
 `stageSequence` on its own** are replaced by the last pack to state a non-empty
-one. Rules are the whole document from the last pack that ships one.
+one. Rules are the whole document from the last pack that ships one, less any
+rank's own sequence for a half a later pack states.
 
 Two limits bound what a forged addition can be, and a generator that does not know
 them will produce packs that fail:
@@ -277,7 +278,10 @@ them will produce packs that fail:
 
 Replacing only one half of the stage sequence is the useful middle: a pack can
 state `stageSequence.normal` and inherit the challenge half from the pack it is
-layered over, because the two halves are composed independently.
+layered over, because the two halves are composed independently. Stating it also
+retires the base rules' per-rank lists for that half — Classic's ranks B, C and D
+each name their own sequence of Classic's scripts — so a forged pack's own stages
+play at every difficulty preset, not only the default one.
 
 ## 7. Six couplings the schema does not show
 

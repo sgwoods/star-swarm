@@ -184,7 +184,7 @@ describe('what the goldens actually cover', () => {
 
     // The ramp *selects*: stage 20's row raises the diver limit well past stage
     // 1's two, and the later bump raises it again. Read from the rules rather than
-    // from the world, which has already rolled on to stage 21 by the end.
+    // from the world, which may have rolled on to another stage by the end.
     const row = resolveDifficultyRow(rules, 20);
     expect([row?.maxDivers, row?.maxDiversBump]).toEqual([4, 6]);
     expect(row?.reloadBombVectors).toBe(true);
@@ -204,8 +204,8 @@ describe('what the goldens actually cover', () => {
 
     // Every one of the trio is off the field by the end, and each left the only
     // two ways it can: shot, or out of the bottom for good. In *this* run all
-    // three are shot — the alternative, that they leave undestroyed because their
-    // alien says `dive.returns: false`, is pinned by group id in
+    // three leave by the bottom undestroyed, because their alien says
+    // `dive.returns: false`; the same property is pinned by group id in
     // `tests/unit/dive.test.ts` rather than left to whatever a recorded pilot
     // happens to hit.
     const group = transformed[0]?.group ?? [];

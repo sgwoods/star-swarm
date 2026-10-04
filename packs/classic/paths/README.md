@@ -19,8 +19,9 @@ choreography, and it draws a sharp line:
   and the choreography inside any of them. That needs the `db_2A3C` →
   `db_2A6C` flight-vector programs decoded, which the reference says it did not
   open. So there are three entry paths here, not thirteen. The per-stage script table
-  of reference section 5 is now wired up as far as stage 8; `../stages/README.md`
-  says which document plays when, and which shape each one reads as.
+  of reference section 5 is wired up in full, all thirteen rows at all four ranks;
+  `../stages/README.md` says which document plays when, and which shape each one
+  reads as.
 
 The coordinates are this pack's rendition of a shape the reference describes in
 words; they are not measured from the original, and nothing here should be read

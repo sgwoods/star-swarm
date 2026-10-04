@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Rules } from '../../src/content/schema.js';
 import type { ResolvedVariant } from '../../src/content/variants.js';
-import { maxXFor } from '../../src/content/rules.js';
+import { maxXFor, resolveStageSequence } from '../../src/content/rules.js';
 import type { EnemyBullet } from '../../src/sim/shots.js';
 import {
   clearsEnough,
@@ -170,15 +170,35 @@ describe('which personas fly a variant', () => {
 
 describe('which stages are flown', () => {
   it('flies each stage document once, at the first number that plays it', () => {
-    const flights = stageFlights(variant('classic'));
+    const classic = variant('classic');
+    const flights = stageFlights(classic);
     const ids = flights.map((flight) => flight.stage.id);
     expect(new Set(ids).size).toBe(ids.length);
-    // Stage 8 plays `stage-4` again; it is flown once, as stage 4.
-    expect(flights.find((flight) => flight.stage.id === 'stage-4')?.number).toBe(4);
-    expect(flights.find((flight) => flight.stage.id === 'challenge-1')?.number).toBe(3);
-    // Every document the pack's sequence names, and nothing else.
-    const { normal, challenge } = variant('classic').registry.manifest.stageSequence;
-    expect(new Set(ids)).toEqual(new Set([...normal.rows, ...challenge.rows]));
+    const flown = (id: string) => flights.find((flight) => flight.stage.id === id);
+    // Stage 8 plays `script-4` again; it is flown once, as stage 4.
+    expect(flown('script-4')).toMatchObject({ number: 4, rank: 'A' });
+    expect(flown('challenge-1')).toMatchObject({ number: 3, rank: 'A' });
+    // Script row 5 is the one the default rank never plays, so it is flown where
+    // the first other rank in declaration order meets it: rank B's stage 10.
+    expect(flown('script-5')).toMatchObject({ number: 10, rank: 'B' });
+    // Every document any rank's sequence names, and nothing else.
+    const named = Object.keys(classic.rules.difficulty.ranks).flatMap((rank) => {
+      const { normal, challenge } = resolveStageSequence(
+        classic.registry.manifest,
+        classic.rules,
+        rank,
+      );
+      return [...normal.rows, ...challenge.rows];
+    });
+    expect(new Set(ids)).toEqual(new Set(named));
+  });
+
+  it('flies an overlay’s own stages at every rank, never the base pack’s', () => {
+    // Deep Sea states its own normal half over Classic's rules, whose ranks B, C
+    // and D carry sequences of Classic's combat scripts. The later statement wins
+    // (`composeRules`), so no rank of the forged game flies a Classic script.
+    const ids = stageFlights(variant('deep-sea')).map((flight) => flight.stage.id);
+    expect(ids.filter((id) => id.startsWith('script-'))).toEqual([]);
   });
 });
 

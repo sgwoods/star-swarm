@@ -312,8 +312,8 @@ describe('the four-phase update', () => {
 
 describe('slot homing', () => {
   it('flies the whole stage in and parks all forty enemies on their own slots', () => {
-    const content = stageContent({ id: 'stage-1', formation: 'classic40', waves: [] });
-    const real = pack.stages.get('stage-1');
+    const content = stageContent({ id: 'script-0', formation: 'classic40', waves: [] });
+    const real = pack.stages.get('script-0');
     expect(real).toBeDefined();
     const stage: StageContent = { ...content, stage: real! };
 

@@ -1,5 +1,5 @@
 {
-  "id": "stage-6",
+  "id": "script-8",
   "kind": "normal",
   "formation": "classic40",
   "waves": [
@@ -98,9 +98,9 @@
       ]
     },
     {
-      "at": 375,
-      "entryPath": "entry-wide-arc",
-      "spacing": 11,
+      "at": 360,
+      "entryPath": "entry-long-row",
+      "spacing": 9,
       "slots": [
         {
           "alien": "wing",
@@ -113,13 +113,11 @@
         },
         {
           "alien": "wing",
-          "home": 4,
-          "mirror": true
+          "home": 4
         },
         {
           "alien": "wing",
           "home": 6,
-          "mirror": true,
           "trailing": true
         },
         {
@@ -133,29 +131,29 @@
         },
         {
           "alien": "wing",
-          "home": 8,
-          "mirror": true
+          "home": 8
         },
         {
           "alien": "wing",
           "home": 10,
-          "mirror": true,
           "trailing": true
         }
       ]
     },
     {
-      "at": 545,
-      "entryPath": "entry-long-row",
-      "spacing": 9,
+      "at": 540,
+      "entryPath": "entry-wide-arc",
+      "spacing": 11,
       "slots": [
         {
           "alien": "drone",
-          "home": 29
+          "home": 29,
+          "mirror": true
         },
         {
           "alien": "drone",
           "home": 31,
+          "mirror": true,
           "trailing": true
         },
         {
@@ -169,11 +167,13 @@
         },
         {
           "alien": "drone",
-          "home": 33
+          "home": 33,
+          "mirror": true
         },
         {
           "alien": "drone",
           "home": 35,
+          "mirror": true,
           "trailing": true
         },
         {
@@ -194,39 +194,39 @@
       "slots": [
         {
           "alien": "drone",
-          "home": 20
-        },
-        {
-          "alien": "drone",
-          "home": 22,
+          "home": 20,
           "mirror": true
         },
         {
           "alien": "drone",
-          "home": 25
+          "home": 22
         },
         {
           "alien": "drone",
-          "home": 27,
+          "home": 25,
           "mirror": true
         },
         {
           "alien": "drone",
-          "home": 24
+          "home": 27
         },
         {
           "alien": "drone",
-          "home": 26,
+          "home": 24,
           "mirror": true
         },
         {
           "alien": "drone",
-          "home": 21
+          "home": 26
         },
         {
           "alien": "drone",
-          "home": 23,
+          "home": 21,
           "mirror": true
+        },
+        {
+          "alien": "drone",
+          "home": 23
         }
       ]
     }

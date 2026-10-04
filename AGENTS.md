@@ -226,7 +226,8 @@ Four things to know before editing either side of it:
   `composeManifest` in `src/content/registry.ts` layers manifest fields one at a
   time — records merge per key, the palette is a union, badges and each half of the
   stage sequence are replaced by the last pack to state one — and rules are the last
-  pack that ships any. A one-pack registry is unchanged by all of it, which is what
+  pack that ships any, less any rank's sequence for a half a later pack states
+  (`composeRules`). A one-pack registry is unchanged by all of it, which is what
   keeps this a generalisation rather than a second rule.
 - **An overlay pack may replace a document, not reference one.** `loadPack`
   resolves references _within_ a pack, so an overlay can ship a different sprite,
@@ -302,7 +303,7 @@ Two consequences when editing `src/sim/formation.ts` or `src/sim/enemies.ts`:
 **A stage document is an entry script, not a stage.** The arcade keeps a library of
 13 combat scripts and selects one per stage through a per-rank 17-entry index list,
 so several stage numbers play one document: `stageSequence.normal.rows` names
-`stage-4` twice because stage 8 is the same script row. Never ship a copy.
+`script-4` twice because stage 8 is the same script row. Never ship a copy.
 `packs/classic/stages/README.md` carries the mapping, the decode of every `home`
 back to the ROM's wave table, and what the reference does not settle.
 
