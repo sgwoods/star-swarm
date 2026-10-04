@@ -104,8 +104,8 @@ The clips are screen recordings of the dev build.
   default (`RESUME`, which is where the cursor opens); and finally the cursor
   moved across to `EXIT` and committed, landing home in attract with the score
   gone and the high-score table untouched. The card's own two dim lines —
-  `L/R PICK   FIRE CHOOSE` and the one saying the exit key cancels — are on
-  screen throughout, which is the thing the clip is evidence of: the first answer
+  `L/R PICK   FIRE CHOOSE`, as the card read when this was recorded, and the one
+  saying the exit key cancels — are on screen throughout, which is the thing the clip is evidence of: the first answer
   is the one a player used to have to guess. The browser's stored table was
   seeded to a modest one before the page loaded, and nothing else about the run is
   arranged: the exit card only draws the line naming the place a score would have

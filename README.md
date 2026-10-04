@@ -16,6 +16,11 @@ Press **Enter** to start, **←/→** to move, **Space** to fire. **P** pauses, 
 **X** leaves the game after asking. The game boots into attract mode, so press
 start before the arrows do anything.
 
+Every menu is worked the same way: **↑/↓** move between rows, **←/→** change the
+row you are on, **Enter** takes it and **Esc** goes back. **Esc** from attract
+opens the settings, where the difficulty, autoplay, sound, controls and CRT
+filter live.
+
 The top-right corner of the screen says which build you are looking at — the
 commit, whether the tree was modified, and the date — and a page that is open
 when a newer build is published blinks **NEW BUILD** at you rather than

@@ -3,6 +3,7 @@
 `flow.ts` (the game-state machine), `attract.ts`, `hud.ts`, `results.ts`,
 `highscores.ts`, `menus.ts` (the start-up variant selector and the settings menu),
 `pause.ts` (the pause card and the one that asks before a run is thrown away),
+`keys.ts` (how every card is worked, and how it says so),
 `settings.ts` (what the player has chosen), `storage.ts` (where it is kept),
 `panel.ts` (the plate every card sits on), `autoplay.ts` (the pilot that plays the
 game as a persona), `build-info.ts` and `build-stamp.ts` (which build is this, and
@@ -152,6 +153,16 @@ And the autoplay pilot, which is a subscriber like everything else here:
   human's `left`, `right` or `fire` in a live game clears the setting on that
   frame — and `menu`, `pause` and `exit` deliberately do not, so a watched run can
   be paused and looked at without ending the demonstration.
+
+And one scheme for working all of those cards:
+
+- **`keys.ts` is how every card is worked**: up and down move between rows, left
+  and right change the row under the cursor, Enter (or fire) takes and Esc goes
+  back; a card with one line of choices answers every direction. `cardPress` is
+  what `flow.ts` reads on every card and `keyLine` is the one way a card writes
+  its help, so neither the behaviour nor the voice can drift card by card. The
+  exit key is left out of both on purpose — it opens the exit card and cancels it,
+  and must never be a key that takes.
 
 Seams left for the tasks that follow, so they attach without editing a screen:
 
