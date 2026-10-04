@@ -22,6 +22,7 @@
  */
 
 import { drawText } from '../render/text.js';
+import { KEY, keyLine } from './keys.js';
 import { cardHeight, fitText, MENU_BLINK_STEPS } from './menus.js';
 import { CARD_TOP, drawCentredPanel } from './panel.js';
 
@@ -80,7 +81,7 @@ export function createExitConfirm(): ExitConfirm {
  */
 export const PAUSE_TEXT = Object.freeze({
   pausedHeading: 'PAUSED',
-  pausedKeys: 'P RESUMES   X EXITS',
+  pausedKeys: keyLine([KEY.pause, 'RESUMES'], [KEY.exit, 'EXITS']),
   exitHeading: 'EXIT GAME?',
   resume: 'RESUME',
   exit: 'EXIT',
@@ -96,9 +97,11 @@ export const PAUSE_TEXT = Object.freeze({
    * Return — did nothing at all. It now commits, and the card says so. Enter is
    * the one to name because it is `start`, which every control scheme keeps;
    * Space is `fire` only in two of the three, so naming it would be untrue on
-   * the WASD scheme. Fire still commits, unnamed.
+   * the WASD scheme. Fire still commits, unnamed — as it does on every card
+   * (`./keys.ts`). The two words sit side by side, so the line names `L/R`; up
+   * and down walk them too, because this card has only one line of choices.
    */
-  exitKeys: 'L/R PICK  ENTER CHOOSES',
+  exitKeys: keyLine([KEY.values, 'MOVE'], [KEY.ok, 'CHOOSES']),
   /**
    * What the exit key does **here**, said as a negative on purpose.
    *
@@ -110,7 +113,7 @@ export const PAUSE_TEXT = Object.freeze({
    * key goes back does not break it: the thing that has to be contradicted is the
    * expectation that this key is the way out.
    */
-  exitCancel: 'X CANCELS, NOT AN EXIT',
+  exitCancel: keyLine([KEY.exit, 'CANCELS, NOT AN EXIT']),
 });
 
 const HEADING_COLOUR = '#ff2b2b';

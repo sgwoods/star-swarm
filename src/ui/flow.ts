@@ -28,8 +28,8 @@
  *
  * The two phases the variant work added are here for the same reason and no other:
  *
- * - **`variant-select`** lists the games this build offers and starts the chosen
- *   one. It is entered at boot **only when there is more than one**; with exactly
+ * - **`variant-select`** lists the games this build offers and lands on the
+ *   chosen one's attract screen. It is entered at boot **only when there is more than one**; with exactly
  *   one variant the flow starts in `attract` and this phase is never entered at
  *   all, so a single-game cabinet has no screen to dismiss. Every later game in
  *   the session begins from attract, as a cabinet does; the way back to the list
@@ -106,6 +106,7 @@ import {
   type SettingsMenu,
   type VariantMenu,
 } from './menus.js';
+import { cardPress } from './keys.js';
 import { createExitConfirm, type ExitConfirm } from './pause.js';
 import { countEvents, EMPTY_STATS, type ResultRow, resultRows, type RunStats } from './results.js';
 import { DEFAULT_SETTINGS, type Settings, type SettingsStore } from './settings.js';
@@ -536,9 +537,9 @@ export function createGameFlow(options: FlowOptions): GameFlow {
    *
    * Three near-misses, each of which was a real bug in a draft of this:
    *
-   * - On the settings screen `fire` moves the cursor and the directions change a
-   *   row, so a wider rule disarmed autoplay while somebody was choosing a persona
-   *   with it.
+   * - On the settings screen `fire` closes the card and the directions move and
+   *   change a row, so a wider rule disarmed autoplay while somebody was choosing a
+   *   persona with them.
    * - On the exit card `fire` commits a choice, so a wider rule threw the run away
    *   *and* stopped the watch session with one press.
    * - On the results and game-over cards any button skips ahead, so a watcher
@@ -764,20 +765,24 @@ export function createGameFlow(options: FlowOptions): GameFlow {
             enter('attract');
             break;
           }
-          if (wasPressed(previous, frame, 'left')) menu.previous();
-          if (wasPressed(previous, frame, 'right')) menu.next();
-          if (wasPressed(previous, frame, 'menu')) {
+          // One column, so every direction walks it (`./keys.ts`).
+          const press = cardPress(previous, frame);
+          if (press.backward) menu.previous();
+          if (press.forward) menu.next();
+          // There is no card behind this one to go back to, so the menu button
+          // does what it does on the attract screen: opens the settings.
+          if (press.back) {
             openSettings('variant-select');
             break;
           }
-          // Fire chooses and leaves the cabinet in attract; start chooses and
-          // plays, because a player who has already pressed start means it.
-          const play = wasPressed(previous, frame, 'start');
-          if (play || wasPressed(previous, frame, 'fire')) {
+          // Taking a game lands on *its* attract screen rather than in play. Start
+          // and fire must mean one thing here, because they mean one thing on
+          // every other card; and attract is where the chosen game's own demo,
+          // high scores and keys are — the settings among them.
+          if (press.accept) {
             selectVariant(menu.chosen);
             variantMenu = undefined;
-            if (play) events = startGame();
-            else enter('attract');
+            enter('attract');
           } else {
             // The demo runs behind the list, so the screen is never still.
             events = demo.advance();
@@ -791,10 +796,13 @@ export function createGameFlow(options: FlowOptions): GameFlow {
             enter('attract');
             break;
           }
-          if (wasPressed(previous, frame, 'left')) menu.adjust(-1);
-          if (wasPressed(previous, frame, 'right')) menu.adjust(1);
-          if (wasPressed(previous, frame, 'fire')) menu.next();
-          if (wasPressed(previous, frame, 'menu') || wasPressed(previous, frame, 'start')) {
+          const press = cardPress(previous, frame);
+          if (press.up) menu.previous();
+          if (press.down) menu.next();
+          if (press.left) menu.adjust(-1);
+          if (press.right) menu.adjust(1);
+          // Every row applies as it changes, so done and back are the same exit.
+          if (press.accept || press.back) {
             settingsMenu = undefined;
             refreshDemo();
             if (settingsFrom === 'variant-select') openVariantSelect();
@@ -865,21 +873,23 @@ export function createGameFlow(options: FlowOptions): GameFlow {
             enter('paused');
             break;
           }
-          if (wasPressed(previous, frame, 'left')) choice.previous();
-          if (wasPressed(previous, frame, 'right')) choice.next();
+          // One row of two words, so every direction walks it (`./keys.ts`).
+          const press = cardPress(previous, frame);
+          if (press.backward) choice.previous();
+          if (press.forward) choice.next();
           // The key that opened the card also closes it, so holding or
           // double-tapping the exit key can never be the press that ends a run;
-          // the service button is a second way back for the same reason.
-          if (wasPressed(previous, frame, 'exit') || wasPressed(previous, frame, 'menu')) {
+          // the service button is the way back it is on every other card.
+          if (wasPressed(previous, frame, 'exit') || press.back) {
             confirm = undefined;
             enter('paused');
             break;
           }
           // Start commits as well as fire: Return is the key a player reaches
           // for on a yes-or-no card, and before it did anything here the card
-          // swallowed it and sat there. It is safe for the reason above — start
-          // never opens this card, so it cannot be the same press held twice.
-          if (wasPressed(previous, frame, 'fire') || wasPressed(previous, frame, 'start')) {
+          // swallowed it and sat there. It is safe for the reason above — neither
+          // opens this card, so neither can be the same press held twice.
+          if (press.accept) {
             const chosen = choice.choice;
             confirm = undefined;
             // Cancelling lands where an ordinary pause lands, so there is one
@@ -912,13 +922,14 @@ export function createGameFlow(options: FlowOptions): GameFlow {
             enter('attract');
             break;
           }
-          if (wasPressed(previous, frame, 'left')) live.previous();
-          if (wasPressed(previous, frame, 'right')) live.next();
-          if (wasPressed(previous, frame, 'fire')) live.commit();
-          if (wasPressed(previous, frame, 'start')) {
-            // Start ends entry early, with whatever letters are showing.
-            while (!live.done) live.commit();
-          }
+          // One letter at a time, so every direction spins it (`./keys.ts`), and
+          // start takes a letter exactly as fire does — the one thing it means on
+          // every card. Back steps to the letter before, so a slip is mendable.
+          const press = cardPress(previous, frame);
+          if (press.backward) live.previous();
+          if (press.forward) live.next();
+          if (press.back) live.back();
+          if (press.accept) live.commit();
           if (live.done || phaseSteps + 1 >= timings.entry) submitEntry();
           break;
         }

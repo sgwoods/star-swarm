@@ -147,8 +147,12 @@ export const PERSONA_TAG_Y = LOGICAL_HEIGHT - 12;
 
 const PERSONA_TAG_COLOUR = '#7d8aa8';
 
-/** What the tag says before the persona's own label, when there is room for it. */
-const PREFIX = 'AUTO  ';
+/**
+ * What the tag says before the persona's own label, when there is room for it.
+ * One space, as every caption on the cards is spaced (`SCORE 2860`, `RANK 1`):
+ * the wider gap is how `./keys.ts` separates *pairs*, and a caption is one.
+ */
+const PREFIX = 'AUTO ';
 
 /** Pixels kept clear between the tag and the glyphs either side of it. */
 const PERSONA_TAG_GAP = 4;

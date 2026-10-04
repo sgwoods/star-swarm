@@ -89,6 +89,14 @@ and **X** leaves one, after asking. The game boots into the start-up selector �
 more than one game ships — and then into _attract mode_, so nothing responds to the
 arrows until you have pressed start.
 
+Every card that waits on a keypress is worked one way, and says so on itself in
+the same words: **↑/↓** (or **W/S**) move between rows, **←/→** change the row
+under the cursor, **Enter** takes what is highlighted and **Esc** goes back. Fire
+takes, too. A card with one line of choices — the game list, the exit card's two
+words, an initial being entered — answers every direction. Taking a game on the
+selector lands on that game's attract screen, and **Enter** there plays it.
+[§6](#working-a-card) has the scheme and why.
+
 ### Supported Node versions
 
 `package.json` declares `"node": "^22.13.0 || >=24.0.0"`. The floor is set by the
@@ -287,7 +295,7 @@ is there because Return is the key a player reaches for on a yes-or-no card, and
 before it committed the card swallowed it without a sign.
 
 **The card says all of that on itself**, in two dim lines under the question:
-`L/R PICK  ENTER CHOOSES`, and then that the exit key cancels and is not the way
+`L/R MOVE   ENTER CHOOSES`, and then that the exit key cancels and is not the way
 out. The first names Enter rather than Space because `start` is bound in every
 control scheme and `fire` is Space in only two of the three. The second line is the one the arrangement needs, and it is written as a
 negative: the pause card this one opens from says `X EXITS`, which is true of the
@@ -1220,6 +1228,66 @@ meaning anything.
 ![The same Deep Sea run after a refresh: placeholder squares, then the pack's own art](media/deep-sea-remembered-variant.gif)
 
 ![The start-up selector, then the settings menu changing the difficulty preset](media/m3-variants.gif)
+
+### Working a card
+
+Five cards wait on an answer — the selector, the settings, the pause card, the
+exit card and initials entry — and they are worked with one scheme, held in
+`src/ui/keys.ts`:
+
+| Key     | On every card                                                |
+| ------- | ------------------------------------------------------------ |
+| `U/D`   | move between rows, wrapping                                  |
+| `L/R`   | change the value of the row under the cursor                 |
+| `ENTER` | take what is highlighted; fire does the same, and is unnamed |
+| `ESC`   | back: close the card, or step back to the letter before      |
+
+It replaced three that disagreed. Fire used to step to the next row on the
+settings screen and choose a game on the selector; Return closed the settings and
+committed the exit card; and there was no way to the row above except round every
+other one, because nothing was bound to the vertical arrows at all. Each card's
+hint was true, and a player who learned one card was misled by the next.
+
+Four decisions inside it:
+
+- **`up` and `down` were appended to `ACTIONS`**, taking bits 128 and 256.
+  `src/engine/input.ts` explains why the list is append-only; every golden in
+  `tests/sim/golden/` reads back unchanged, and `tests/unit/input.test.ts` reads a
+  log written before the two existed as holding neither. Nothing in `src/sim/`
+  reads them, and in a live game they are not a takeover of autoplay.
+- **A card with one line of choices answers every direction.** On the selector,
+  the exit card and initials entry up does what left does and down what right
+  does, so no direction is ever a press that does nothing.
+- **Enter and fire mean one thing everywhere: take.** On the selector that now
+  lands on the chosen game's attract screen rather than in play — the selector
+  used to play on Enter and go to attract on fire, which is the disagreement this
+  exists to remove — and on initials entry it takes one letter rather than the
+  whole entry. The help names Enter and never fire, because fire is Space in two
+  control schemes and Z in the third.
+- **The exit key takes nothing on any card.** It opens the exit card and cancels
+  it, which is the double-tap rule [above](#pause-and-the-way-out); `cardPress`
+  leaves it out of the scheme altogether so it cannot be folded into "take".
+
+**The control scheme narrows `up` and `down` with `left` and `right`**, so on the
+WASD scheme the card is worked with W, A, S and D and the arrows do nothing — one
+set of keys rather than half of two.
+
+Each card's help is a list its draw function iterates, built with `keyLine`: a key
+from the one vocabulary, a space, and what it does **on this card**, pairs three
+spaces apart. `tests/unit/keys.test.ts` reads every card's list, requires each
+pair to start with a key from that vocabulary, refuses `FIRE`, `SPACE` or `START`
+on any of them, and fits each line to its card in characters the font has.
+
+**The attract screen speaks the same voice.** It is not a card — nothing on it has
+a cursor — but it is where a player first reads the keys, and three changes had
+each written to it in their own words. Its title card is now three `keyLine`s
+(`attractKeys` in `src/ui/attract.ts`): moving and firing, pausing and leaving,
+and the settings. The blinking prompt under both attract cards is
+`ENTER START`, the only place the screen says how to start. It is also the one
+screen that names the fire key, because it teaches the game rather than a card,
+so it names the key the player's own control scheme binds: `SPACE`, or `Z` on
+WASD. The persona tag in the bottom band is a caption and is spaced like the
+cards' captions, `AUTO NORMAL` beside `SCORE 2860`.
 
 ---
 

@@ -57,7 +57,7 @@ async function press(page: Page, key: string, settled: () => boolean): Promise<v
  * across as an argument.
  */
 async function pressToRow(page: Page, row: string): Promise<void> {
-  await tap(page, 'Space');
+  await tap(page, 'ArrowDown');
   await page.waitForFunction((id) => window.starSwarm?.settingsMenuRow === id, row);
 }
 
@@ -108,13 +108,21 @@ test('the page boots into the selector with the bundled variants on it', async (
   expect(errors).toEqual([]);
 });
 
-test('the arrows walk the list and start plays the variant under the cursor', async ({ page }) => {
+test('up and down walk the list, and Enter takes the game under the cursor', async ({ page }) => {
   await booted(page);
 
-  await press(page, 'ArrowRight', () => window.starSwarm?.selecting !== 'classic');
+  await press(page, 'ArrowDown', () => window.starSwarm?.selecting !== 'classic');
   const chosen = await page.evaluate(() => window.starSwarm?.selecting);
   expect(chosen).not.toBe('classic');
+  // And back up, which the list never offered before it had a vertical axis.
+  await press(page, 'ArrowUp', () => window.starSwarm?.selecting === 'classic');
+  await press(page, 'ArrowDown', () => window.starSwarm?.selecting !== 'classic');
+  expect(await page.evaluate(() => window.starSwarm?.selecting)).toBe(chosen);
 
+  // Enter takes it, as on every card, and lands on that game's attract screen;
+  // Enter there plays it.
+  await press(page, 'Enter', () => window.starSwarm?.phase === 'attract');
+  expect(await page.evaluate(() => window.starSwarm?.variant)).toBe(chosen);
   await press(page, 'Enter', () => window.starSwarm?.phase === 'playing');
 
   // The game that started is the one that was under the cursor, and it is a real
@@ -158,10 +166,10 @@ test('the settings menu opens, changes the difficulty and survives a reload', as
   // The pack row counts them; the list itself is the note under the card.
   expect(await rows(page)).toContain('PACKS=1');
 
-  // Fire walks to the difficulty row; right changes it. The rank has to move with
+  // Down walks to the difficulty row; right changes it. The rank has to move with
   // it — choosing a rank is the whole of what a preset does.
   const rankBefore = await page.evaluate(() => window.starSwarm?.rank);
-  await press(page, 'Space', () => window.starSwarm?.settingsMenuRow === 'difficulty');
+  await press(page, 'ArrowDown', () => window.starSwarm?.settingsMenuRow === 'difficulty');
   await press(page, 'ArrowRight', () => window.starSwarm?.rank !== 'A');
   const rankAfter = await page.evaluate(() => window.starSwarm?.rank);
   expect(rankBefore).toBe('A');
@@ -186,7 +194,7 @@ test('the chosen difficulty reaches the game that starts', async ({ page }) => {
   await reachAttract(page);
 
   await press(page, 'Escape', () => window.starSwarm?.phase === 'settings');
-  await press(page, 'Space', () => window.starSwarm?.settingsMenuRow === 'difficulty');
+  await press(page, 'ArrowDown', () => window.starSwarm?.settingsMenuRow === 'difficulty');
   await press(page, 'ArrowRight', () => window.starSwarm?.rank !== 'A');
   const rank = await page.evaluate(() => window.starSwarm?.rank);
   const difficulty = await page.evaluate(() => window.starSwarm?.difficulty);
@@ -237,6 +245,7 @@ test('a game plays on the demonstration variant it was started on', async ({ pag
   // The honest end of the demonstration: the overlay pack reaches a real run.
   await booted(page);
   await selectVariant(page, 'swarm-remix');
+  await press(page, 'Enter', () => window.starSwarm?.phase === 'attract');
   await press(page, 'Enter', () => window.starSwarm?.phase === 'playing');
 
   expect(await page.evaluate(() => window.starSwarm?.variant)).toBe('swarm-remix');
@@ -296,6 +305,7 @@ test('a remembered variant is drawn with its own art after a reload', async ({ p
   await page.waitForFunction(() => (window.starSwarm?.step ?? 0) > 0);
   expect(await page.evaluate(() => window.starSwarm?.variant)).toBe('deep-sea');
 
+  await press(page, 'Enter', () => window.starSwarm?.phase === 'attract');
   await press(page, 'Enter', () => window.starSwarm?.phase === 'playing');
   // A fleet actually on the screen: with none launched there is nothing to draw
   // either way, and the count is the trench formation's rather than Classic's.

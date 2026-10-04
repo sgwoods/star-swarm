@@ -19,6 +19,7 @@ import {
   settingsNotes,
   type SettingsMenu,
   variantSelectLines,
+  variantSelectNotes,
   volumeBar,
 } from '../../src/ui/menus.js';
 import { DEFAULT_SETTINGS, type Settings, VOLUME_STEPS } from '../../src/ui/settings.js';
@@ -560,9 +561,45 @@ describe('the settings card says how to work it, whatever the browser allows', (
 });
 
 describe('the selector says how to work it too', () => {
-  it('names the keys that pick a game and the one that starts it', () => {
-    expect(MENU_TEXT.selectKeys).toContain('L/R');
-    expect(MENU_TEXT.selectKeys).toContain('FIRE');
-    expect(MENU_TEXT.selectStart).toContain('START');
+  const help = (demonstrations: boolean): string[] =>
+    variantSelectNotes('A GAME', demonstrations)
+      .filter((line) => line.tone === 'help')
+      .map((line) => line.text);
+
+  it('names the keys that walk the list, take a game and open the settings', () => {
+    for (const demonstrations of [true, false]) {
+      expect(help(demonstrations)).toEqual([MENU_TEXT.selectKeys, MENU_TEXT.selectBack]);
+    }
+    expect(MENU_TEXT.selectKeys).toBe('U/D MOVE   ENTER CHOOSES');
+    expect(MENU_TEXT.selectBack).toBe('ESC SETTINGS');
+  });
+
+  it('leads with the chosen game’s description, then the legend, then the keys', () => {
+    expect(variantSelectNotes('A GAME', true).map((line) => line.tone)).toEqual([
+      'note',
+      'legend',
+      'help',
+      'help',
+    ]);
+    expect(variantSelectNotes('A GAME', false).map((line) => line.tone)).toEqual([
+      'note',
+      'help',
+      'help',
+    ]);
+  });
+
+  it('counts the lines from the lines, so the plate cannot be too short', () => {
+    for (const demonstrations of [true, false]) {
+      expect(variantSelectLines(demonstrations)).toBe(
+        variantSelectNotes('', demonstrations).length,
+      );
+    }
+  });
+});
+
+describe('the settings card names its keys in the scheme every card shares', () => {
+  it('moves with up and down, changes with left and right, and leaves on enter or esc', () => {
+    expect(MENU_TEXT.settingsKeys).toBe('U/D MOVE   L/R CHANGE');
+    expect(MENU_TEXT.settingsDone).toBe('ENTER DONE   ESC BACK');
   });
 });

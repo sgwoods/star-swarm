@@ -102,7 +102,7 @@ describe('the persona tag', () => {
   it('says AUTO and the whole label for every shipped persona on an opening stage', () => {
     // Three fighters in reserve and one badge is the demo's opening screen.
     const cells = personaTagCells({ lives: 3, stage: 1, badges, sheet });
-    for (const label of labels) expect(personaTag(label, cells)).toBe(`AUTO  ${label}`);
+    for (const label of labels) expect(personaTag(label, cells)).toBe(`AUTO ${label}`);
   });
 
   it('keeps clear of the reserve fighters and the badges as both rows grow', () => {
@@ -121,8 +121,8 @@ describe('the persona tag', () => {
   });
 
   it('drops the prefix before the label, and cuts the label only when nothing else fits', () => {
-    expect(personaTag('ASTRONAUT', 15)).toBe('AUTO  ASTRONAUT');
-    expect(personaTag('ASTRONAUT', 14)).toBe('ASTRONAUT');
+    expect(personaTag('ASTRONAUT', 14)).toBe('AUTO ASTRONAUT');
+    expect(personaTag('ASTRONAUT', 13)).toBe('ASTRONAUT');
     expect(personaTag('ASTRONAUT', 7)).toBe('ASTRONA');
     expect(personaTag('ASTRONAUT', 0)).toBe('');
   });

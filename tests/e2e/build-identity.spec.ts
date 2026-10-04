@@ -1,5 +1,7 @@
 import { expect, type Page, test } from '@playwright/test';
 
+import { pressStart } from './harness.js';
+
 /**
  * The build stamp and the new-build detector, in a real browser.
  *
@@ -96,8 +98,7 @@ test('the page knows which build it is, and it is the one being served', async (
 
 test('the stamp is drawn in the top HUD band and nowhere over the playfield', async ({ page }) => {
   await booted(page);
-  await page.keyboard.press('Enter');
-  await page.waitForFunction(() => window.starSwarm?.phase === 'playing');
+  await pressStart(page);
 
   // Right of the HUD's own text on both rows of the top band: something is
   // there, and it is the stamp, because nothing else draws in that gap.
@@ -129,8 +130,7 @@ test('a host with nothing to poll leaves the page silent', async ({ page }) => {
   expect(await page.evaluate(() => window.starSwarm?.buildCheckFailures ?? 0)).toBeGreaterThan(0);
 
   // Still playable, still quiet: no page error, and the game runs on.
-  await page.keyboard.press('Enter');
-  await page.waitForFunction(() => window.starSwarm?.phase === 'playing');
+  await pressStart(page);
   expect(errors).toEqual([]);
 });
 
@@ -140,8 +140,7 @@ test('a newer served build raises the notice, and steals nothing', async ({ page
   const build = await page.evaluate(() => window.starSwarm?.build);
   expect(build).toBeDefined();
 
-  await page.keyboard.press('Enter');
-  await page.waitForFunction(() => window.starSwarm?.phase === 'playing');
+  await pressStart(page);
   const scoreBefore = await page.evaluate(() => window.starSwarm?.score ?? 0);
   const stepBefore = await page.evaluate(() => window.starSwarm?.step ?? 0);
 

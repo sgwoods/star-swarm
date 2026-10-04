@@ -41,7 +41,7 @@ async function tap(page: Page, key: string): Promise<void> {
 async function toRow(page: Page, row: string): Promise<void> {
   for (let i = 0; i < 12; i += 1) {
     if ((await page.evaluate(() => window.starSwarm?.settingsMenuRow)) === row) return;
-    await tap(page, 'Space');
+    await tap(page, 'ArrowDown');
   }
   throw new Error(`never reached the ${row} settings row`);
 }

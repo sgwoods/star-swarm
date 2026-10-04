@@ -183,19 +183,23 @@ export function parseSettings(text: string | undefined): Settings | undefined {
  * hand-written tables, so a key added to the default map appears in whichever
  * schemes claim it and cannot be forgotten in one of them.
  *
- * **A scheme narrows the three keys a player plays with, and nothing else.** The
- * filter is stated that way round — everything but `left`, `right` and `fire`
- * survives every scheme — so that an action appended to
- * {@link DEFAULT_BINDINGS} is in every scheme by default rather than in none of
- * them. A scheme that could not reopen the menu, pause, or leave the game would
- * be a setting a player could not undo.
+ * **A scheme narrows the four directions and fire, and nothing else.** The
+ * filter is stated that way round — everything else survives every scheme — so
+ * that an action appended to {@link DEFAULT_BINDINGS} is in every scheme by
+ * default rather than in none of them. A scheme that could not reopen the menu,
+ * pause, or leave the game would be a setting a player could not undo.
+ *
+ * `up` and `down` are narrowed with `left` and `right` even though only the
+ * cards read them, because a card is worked with all four (`./keys.ts`): on the
+ * WASD scheme a settings screen that moved rows with the arrows and changed
+ * them only with A and D would be two schemes at once.
  */
 export function bindingsFor(scheme: ControlScheme): Readonly<Record<string, Action>> {
   if (scheme === 'both') return DEFAULT_BINDINGS;
-  const arrows = new Set(['ArrowLeft', 'ArrowRight', 'Space']);
-  const wasd = new Set(['KeyA', 'KeyD', 'KeyZ']);
+  const arrows = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space']);
+  const wasd = new Set(['KeyA', 'KeyD', 'KeyW', 'KeyS', 'KeyZ']);
   const keep = scheme === 'arrows' ? arrows : wasd;
-  const played = new Set<Action>(['left', 'right', 'fire']);
+  const played = new Set<Action>(['left', 'right', 'up', 'down', 'fire']);
   const out: Record<string, Action> = {};
   for (const [code, action] of Object.entries(DEFAULT_BINDINGS)) {
     if (!played.has(action) || keep.has(code)) out[code] = action;

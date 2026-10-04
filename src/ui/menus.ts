@@ -30,6 +30,7 @@ import { personaOf } from '../content/personas.js';
 import type { DifficultyPreset } from '../content/variants.js';
 import { presetOf } from '../content/variants.js';
 import { drawText, measureText } from '../render/text.js';
+import { KEY, keyLine } from './keys.js';
 import { CARD_TOP, drawCentredPanel } from './panel.js';
 import {
   CONTROL_SCHEMES,
@@ -405,11 +406,12 @@ export const MENU_BLINK_STEPS = 20;
 export const MENU_TEXT = Object.freeze({
   selectHeading: 'SELECT GAME',
   selectLegend: '* DEMONSTRATION ONLY',
-  selectKeys: 'L/R PICK   FIRE CHOOSE',
-  selectStart: 'START PLAYS IT NOW',
+  /** The two lines of help on each card, in the one voice `./keys.ts` writes. */
+  selectKeys: keyLine([KEY.rows, 'MOVE'], [KEY.ok, 'CHOOSES']),
+  selectBack: keyLine([KEY.back, 'SETTINGS']),
   settingsHeading: 'SETTINGS',
-  settingsKeys: 'FIRE NEXT   L/R CHANGE',
-  settingsDone: 'START OR ESC  DONE',
+  settingsKeys: keyLine([KEY.rows, 'MOVE'], [KEY.values, 'CHANGE']),
+  settingsDone: keyLine([KEY.ok, 'DONE'], [KEY.back, 'BACK']),
   /** What the `AUTOPLAY` row reads when a human is flying, and the line under it. */
   autoplayOff: 'OFF',
   autoplayOffNote: 'WATCH IT PLAY ITSELF',
@@ -485,16 +487,33 @@ export function cardHeight(rows: number, lines: number): number {
 export const SELECT_CARD_TOP = CARD_TOP;
 export const SETTINGS_CARD_TOP = CARD_TOP - 24;
 
-/** Lines under the list on each card, which the height depends on. */
+/**
+ * Every line under the selector's list, in the order they are drawn: the chosen
+ * game's description, the demonstration legend when there is a demonstration to
+ * mark, and the two lines of help — which, as on the settings card, are never
+ * conditional.
+ */
+export function variantSelectNotes(
+  description: string,
+  demonstrations: boolean,
+): readonly MenuLine[] {
+  const lines: MenuLine[] = [{ text: description, tone: 'note' }];
+  if (demonstrations) lines.push({ text: MENU_TEXT.selectLegend, tone: 'legend' });
+  lines.push({ text: MENU_TEXT.selectKeys, tone: 'help' });
+  lines.push({ text: MENU_TEXT.selectBack, tone: 'help' });
+  return lines;
+}
+
+/** Lines under the list on each card, which the height depends on. Derived, not stated. */
 export function variantSelectLines(demonstrations: boolean): number {
-  return demonstrations ? 4 : 3;
+  return variantSelectNotes('', demonstrations).length;
 }
 
 /**
  * How a line under the settings list is inked. See `./pause.ts` for why the
  * lines are a tone rather than a colour.
  */
-export type MenuLineTone = 'note' | 'help';
+export type MenuLineTone = 'note' | 'legend' | 'help';
 
 /** One line under the settings list. */
 export interface MenuLine {
@@ -524,6 +543,13 @@ export function settingsNotes(note: string, persistent: boolean): readonly MenuL
 export function settingsLines(persistent: boolean): number {
   return settingsNotes('', persistent).length;
 }
+
+/** The ink each tone is drawn in. Help is the dim one, as on the pause cards. */
+const MENU_INK: Record<MenuLineTone, string> = {
+  note: NOTE_COLOUR,
+  legend: DIM_COLOUR,
+  help: DIM_COLOUR,
+};
 
 export interface VariantSelectOptions {
   readonly menu: VariantMenu;
@@ -562,18 +588,13 @@ export function drawVariantSelect(
     });
   });
 
-  let line = y + HEADING_GAP + 8 + menu.variants.length * ROW_PITCH;
-  const describe = (text: string, colour: string): void => {
-    drawText(ctx, fitText(text, cells), x, line, { colour, align: 'center' });
-    line += ROW_PITCH;
-  };
-
   // One description, for the game under the cursor. Every game's at once is a
   // card taller than the playfield as soon as there are a few of them.
-  describe(menu.chosen.description ?? '', NOTE_COLOUR);
-  if (demonstrations) describe(MENU_TEXT.selectLegend, DIM_COLOUR);
-  describe(MENU_TEXT.selectKeys, DIM_COLOUR);
-  describe(MENU_TEXT.selectStart, DIM_COLOUR);
+  let line = y + HEADING_GAP + 8 + menu.variants.length * ROW_PITCH;
+  for (const { text, tone } of variantSelectNotes(menu.chosen.description ?? '', demonstrations)) {
+    drawText(ctx, fitText(text, cells), x, line, { colour: MENU_INK[tone], align: 'center' });
+    line += ROW_PITCH;
+  }
 }
 
 export interface SettingsScreenOptions {
@@ -586,9 +607,6 @@ export interface SettingsScreenOptions {
 }
 
 const SETTINGS_CARD_WIDTH = 216;
-
-/** The ink each tone is drawn in. Help is the dim one, as on the pause cards. */
-const MENU_INK: Record<MenuLineTone, string> = { note: NOTE_COLOUR, help: DIM_COLOUR };
 
 /**
  * Draw the settings screen.
