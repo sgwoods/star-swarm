@@ -41,8 +41,48 @@ const DETERMINISM =
   'The autoplay pilot must stay reproducible: its only clock is the simulation step ' +
   'count on the view it is handed (docs/ARCHITECTURE.md section 7).';
 
-/** `Math.random()` is banned in sim and engine alike: seed an Rng instead. */
-const NO_MATH_RANDOM = {
+/**
+ * The `Math` functions ECMAScript leaves to the engine: each may return any nearby
+ * double, and V8's land a unit in the last place apart between arm64 and x86-64.
+ * `Math.sqrt`, `Math.floor`, `Math.round` and `Math.abs` are not here — those are
+ * specified to the bit. The exponent operator is restricted below for the same
+ * reason.
+ */
+const ENGINE_DEFINED_MATH = [
+  'acos',
+  'acosh',
+  'asin',
+  'asinh',
+  'atan',
+  'atan2',
+  'atanh',
+  'cbrt',
+  'cos',
+  'cosh',
+  'exp',
+  'expm1',
+  'hypot',
+  'log',
+  'log10',
+  'log1p',
+  'log2',
+  'pow',
+  'sin',
+  'sinh',
+  'tan',
+  'tanh',
+];
+
+const PORTABLE =
+  'is engine-defined and differs between CPU architectures, so a replay would not survive a ' +
+  'change of machine. Trigonometry comes from src/engine/trig.ts (docs/ARCHITECTURE.md section 3).';
+
+/**
+ * Banned wherever a simulated number is made: `Math.random()`, because a seeded
+ * Rng is the only randomness, and every engine-defined function, because the
+ * simulation is bit-identical across machines and a golden compares it exactly.
+ */
+const DETERMINISTIC_MATH = {
   'no-restricted-properties': [
     'error',
     {
@@ -50,6 +90,16 @@ const NO_MATH_RANDOM = {
       property: 'random',
       message: 'Math.random() breaks determinism. Use a seeded Rng from src/engine/rng.ts instead.',
     },
+    ...ENGINE_DEFINED_MATH.map((property) => ({
+      object: 'Math',
+      property,
+      message: `Math.${property}() ${PORTABLE}`,
+    })),
+  ],
+  'no-restricted-syntax': [
+    'error',
+    { selector: "BinaryExpression[operator='**']", message: `The ** operator ${PORTABLE}` },
+    { selector: "AssignmentExpression[operator='**=']", message: `The **= operator ${PORTABLE}` },
   ],
 };
 
@@ -92,15 +142,16 @@ export default tseslint.config(
     extends: [tseslint.configs.disableTypeChecked],
   },
 
-  // Determinism applies to the whole deterministic half of the codebase — and to
-  // the autoplay pilot, which is not in that half but must behave as if it were.
-  // A persona that consulted `Math.random` or the wall clock would break "same
-  // seed, same persona, same run", which is the one property the autoplay tests
-  // and the goldens both rest on. It draws from a seeded Rng and its only clock is
-  // the simulation's own step count.
+  // Determinism applies to the whole deterministic half of the codebase — the
+  // content modules the sim calls during a step included — and to the autoplay
+  // pilot, which is not in that half but must behave as if it were. A persona that
+  // consulted `Math.random` or the wall clock would break "same seed, same persona,
+  // same run", which is the one property the autoplay tests and the goldens both
+  // rest on. It draws from a seeded Rng and its only clock is the simulation's own
+  // step count.
   {
-    files: ['src/sim/**/*.ts', 'src/engine/**/*.ts', 'src/ui/autoplay.ts'],
-    rules: NO_MATH_RANDOM,
+    files: ['src/sim/**/*.ts', 'src/engine/**/*.ts', 'src/content/**/*.ts', 'src/ui/autoplay.ts'],
+    rules: DETERMINISTIC_MATH,
   },
 
   {

@@ -41,6 +41,14 @@ const FORBIDDEN_GLOBALS = [
   'createImageBitmap',
 ] as const;
 
+/**
+ * `Math` functions whose results ECMAScript leaves to the engine, and which differ
+ * between arm64 and x86-64. The same list `eslint.config.js` bans; the sim takes
+ * its trigonometry from `src/engine/trig.ts`.
+ */
+const ENGINE_DEFINED_MATH =
+  /(?<![\w$.])Math\s*\.\s*(?:a?sinh?|a?cosh?|a?tanh?|atan2|cbrt|exp|expm1|hypot|log(?:10|1p|2)?|pow)\b/;
+
 interface Violation {
   readonly file: string;
   readonly line: number;
@@ -129,6 +137,14 @@ export function scanSimSource(file: string, source: string): Violation[] {
         message: 'uses Math.random() — seed an Rng from src/engine/rng.ts instead',
       });
     }
+
+    if (ENGINE_DEFINED_MATH.test(code) || code.includes('**')) {
+      violations.push({
+        file,
+        line: lineNumber,
+        message: 'uses engine-defined maths — take trigonometry from src/engine/trig.ts',
+      });
+    }
   });
 
   return violations;
@@ -161,6 +177,9 @@ describe('the scanner itself', () => {
     ['const w = window.innerWidth;', "host global 'window'"],
     ['const ctx = new AudioContext();', "host global 'AudioContext'"],
     ['const r = Math.random();', 'Math.random()'],
+    ['const [dx, dy] = [-Math.sin(r), Math.cos(r)];', 'engine-defined maths'],
+    ['const heading = Math.atan2(-dx, dy);', 'engine-defined maths'],
+    ['const grid = 10 ** 6;', 'engine-defined maths'],
   ])('catches %j', (source, expected) => {
     const violations = scanSimSource('src/sim/probe.ts', source);
     expect(violations.length).toBeGreaterThan(0);
@@ -173,6 +192,8 @@ describe('the scanner itself', () => {
     'const paths = registry.paths;',
     '// document how the formation breathes',
     "const label = 'window of opportunity';",
+    'const length = Math.sqrt(dx * dx + dy * dy);',
+    'const [dx, dy] = [-sine(angle), cosine(angle)]; // not Math.sin: it differs by machine',
   ])('does not flag legitimate sim code: %j', (source) => {
     expect(scanSimSource('src/sim/probe.ts', source)).toEqual([]);
   });
@@ -189,7 +210,7 @@ afterAll(() => {
 });
 
 describe('eslint enforces the boundary', () => {
-  it('reports restricted imports, globals and Math.random in src/sim/', async () => {
+  it('reports restricted imports, globals, Math.random and engine-defined maths in src/sim/', async () => {
     writeFileSync(
       PROBE,
       [
@@ -197,7 +218,8 @@ describe('eslint enforces the boundary', () => {
         '',
         'export function probe(): number {',
         '  const width = document.body.clientWidth;',
-        '  return LOGICAL_WIDTH + width + Math.random() + window.innerHeight;',
+        '  const turn = Math.sin(width) + 2 ** 3;',
+        '  return LOGICAL_WIDTH + width + Math.random() + window.innerHeight + turn;',
         '}',
         '',
       ].join('\n'),
@@ -208,11 +230,19 @@ describe('eslint enforces the boundary', () => {
     const [result] = await eslint.lintFiles([PROBE]);
     expect(result).toBeDefined();
 
-    const ruleIds = new Set((result?.messages ?? []).map((m) => m.ruleId));
+    const messages = result?.messages ?? [];
+    const ruleIds = new Set(messages.map((m) => m.ruleId));
     expect(ruleIds).toContain('no-restricted-imports');
     expect(ruleIds).toContain('no-restricted-globals');
     expect(ruleIds).toContain('no-restricted-properties');
-    expect(result?.errorCount ?? 0).toBeGreaterThanOrEqual(4);
+    expect(ruleIds).toContain('no-restricted-syntax');
+    // Named rather than counted: Math.random alone would satisfy the rule id, and
+    // the engine-defined functions are the half that keeps the goldens exact.
+    expect(messages.some((m) => m.message.includes('Math.sin() is engine-defined'))).toBe(true);
+    expect(messages.some((m) => m.message.includes('The ** operator is engine-defined'))).toBe(
+      true,
+    );
+    expect(result?.errorCount ?? 0).toBeGreaterThanOrEqual(6);
   }, 120_000);
 
   it('leaves the same code alone outside src/sim/', async () => {
