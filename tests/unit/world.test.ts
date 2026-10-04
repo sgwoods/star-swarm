@@ -564,7 +564,7 @@ describe('the stage', () => {
 
   it('puts the pack’s stage on the field, with its formation', () => {
     const world = createWorld({ seed: 'stage', rules, stages });
-    expect(world.content?.stage.id).toBe('stage-1');
+    expect(world.content?.stage.id).toBe('script-0');
     expect(world.fleet.enemies).toHaveLength(40);
     expect(world.formation?.columnsAtRest).toHaveLength(10);
   });

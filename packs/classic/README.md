@@ -2,8 +2,9 @@
 
 The arcade-faithful pack. The manifest, the palette, the formation, the rules,
 the entry, dive and challenge paths, the sprite set, the sound set, the three
-roles plus the transform trio, the capture mechanic's content, the normal stages
-through 8 and the eight challenge stages are all here.
+roles plus the transform trio, the capture mechanic's content, all thirteen
+entry scripts with each difficulty rank's own sequence of them, and the eight
+challenge stages are all here.
 
 ## Roles
 
@@ -40,20 +41,26 @@ rather than a sprite of its own name, because that is what it is.
   pattern and its `dive`, from the dive task. Plus the three transform types and
   `captive`, the player's own captured fighter — base 500, so it is 500 parked
   and 1,000 attacking through the same doubling rule as everything else.
-- **`stages/`** — five documents covering the normal stages through 8. Each is
-  five waves of eight, as reference section 5's `db_attk_wav_IDs` composes them:
-  4 `wing` + 4 `drone`, then all four `warden`s with 4 `wing`, then 8 `wing`,
-  then 8 `drone` twice over. Every slot names its own `home`, so the waves are
-  identity-addressed rather than "next free slot", and the 40 homes cover the
-  formation exactly once. That composition is the **same on every stage** —
-  `c_25A2` resets the wave-ID pointer at each one — so a document is really an
-  **entry script**, and stage 8 plays `stage-4` because both are script row 4
-  rather than shipping a second copy of it. The **choreography** — which path
-  each wave flies, the `mirror` and `trailing` flags and the wave timings — is
-  ours: the reference derives the composition but explicitly does not derive
-  which of the thirteen ROM scripts is which shape. `stages/README.md` carries
-  the decode of every `home` back to the ROM table, the script-row mapping and
-  what is still missing; `paths/README.md` covers the three shapes.
+- **`stages/`** — thirteen documents, `script-0` to `script-12`, one per combat
+  script row of reference section 5. Each is five waves of eight, as the
+  reference's `db_attk_wav_IDs` composes them: 4 `wing` + 4 `drone`, then all four
+  `warden`s with 4 `wing`, then 8 `wing`, then 8 `drone` twice over. Every slot
+  names its own `home`, so the waves are identity-addressed rather than "next free
+  slot", and the 40 homes cover the formation exactly once. That composition is
+  the **same on every stage** — `c_25A2` resets the wave-ID pointer at each one —
+  so a document is really an **entry script**, named for its script row rather
+  than for a stage: several stages and all four ranks share them, and stage 8
+  plays `script-4` because it is script row 4 again rather than shipping a second
+  copy. `pack.json`'s `stageSequence.normal` is rank A's seventeen-entry list of
+  them; ranks B, C and D state their own in `rules.json`. All four cycle their
+  last three from stage 24, while the challenge half cycles all eight — the two
+  halves plateau on _different_ periods, which is easy to lose. The
+  **choreography** — which path each wave flies, the `mirror` and `trailing` flags
+  and the wave timings — is ours: the reference derives the composition and the
+  per-rank lists, but explicitly does not derive which of the thirteen ROM scripts
+  is which shape. `stages/README.md` carries the decode of every `home` back to
+  the ROM table, the naming rule, every rank's list, and the reasoning behind each
+  document's shape; `paths/README.md` covers the three shapes.
 - **`stages/challenge-1.json` … `challenge-8.json`** — the eight challenge
   scripts, cycling every eight challenge stages exactly as reference section 8
   says the original's do. Each is five waves of eight single-hit aliens flying a
@@ -168,19 +175,6 @@ has the detail.
 
 ## What is deliberately empty
 
-- The per-rank stage sequences of reference section 5. They cannot land until
-  more script rows exist, and `stages/README.md` says why in detail: through
-  stage 8 alone the four ranks need ten of the thirteen documents, and per-stage
-  ids collide between them.
-
-  Both halves of the pack-wide sequence itself are now filled, and they plateau
-  on _different_ periods, which is easy to lose: the challenge half states
-  `repeatLast: 8` because all eight scripts cycle, and the normal half lists the
-  six normal stages through 8 — the first six of the reference's seventeen — and
-  still states `repeatLast: 1`, because cycling the last three is a property of
-  the whole table and claiming it three rows early would assert a plateau that is
-  not there.
-
 - The `abilities` block of every alien, and the capture beam's own path. Both
   belong to sibling tasks. `paths/README.md` says which entry choreography is
   authored and why there are three entry paths rather than thirteen.
@@ -189,7 +183,9 @@ The dive paths, the aliens' `dive` and `fire` blocks and `transform.types` — t
 three ids `scourge`, `manta` and `ensign`, cycling on a four-stage period for the
 bonus in `scoring.transformGroupBonus` — were on this list and have since landed
 with the dive task. `stageSequence.challenge.rows` and the challenge scripts it
-names were on it too, and land with this one.
+names were on it too, and land with this one. So were the per-rank stage sequences
+and the eight script rows they needed, which landed together; `stages/README.md`
+says how.
 
 ## Two values that were left open, and are now settled
 

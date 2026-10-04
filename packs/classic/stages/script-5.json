@@ -1,0 +1,234 @@
+{
+  "id": "script-5",
+  "kind": "normal",
+  "formation": "classic40",
+  "waves": [
+    {
+      "at": 0,
+      "entryPath": "entry-long-row",
+      "spacing": 9,
+      "slots": [
+        {
+          "alien": "wing",
+          "home": 16
+        },
+        {
+          "alien": "wing",
+          "home": 17,
+          "trailing": true
+        },
+        {
+          "alien": "wing",
+          "home": 18
+        },
+        {
+          "alien": "wing",
+          "home": 19,
+          "trailing": true
+        },
+        {
+          "alien": "drone",
+          "home": 36
+        },
+        {
+          "alien": "drone",
+          "home": 37,
+          "trailing": true
+        },
+        {
+          "alien": "drone",
+          "home": 38
+        },
+        {
+          "alien": "drone",
+          "home": 39,
+          "trailing": true
+        }
+      ]
+    },
+    {
+      "at": 175,
+      "entryPath": "entry-long-row",
+      "spacing": 9,
+      "slots": [
+        {
+          "alien": "warden",
+          "home": 0,
+          "mirror": true
+        },
+        {
+          "alien": "warden",
+          "home": 2,
+          "mirror": true,
+          "trailing": true
+        },
+        {
+          "alien": "warden",
+          "home": 3,
+          "mirror": true
+        },
+        {
+          "alien": "warden",
+          "home": 1,
+          "mirror": true,
+          "trailing": true
+        },
+        {
+          "alien": "wing",
+          "home": 12,
+          "mirror": true
+        },
+        {
+          "alien": "wing",
+          "home": 13,
+          "mirror": true,
+          "trailing": true
+        },
+        {
+          "alien": "wing",
+          "home": 14,
+          "mirror": true
+        },
+        {
+          "alien": "wing",
+          "home": 15,
+          "mirror": true,
+          "trailing": true
+        }
+      ]
+    },
+    {
+      "at": 350,
+      "entryPath": "entry-long-row",
+      "spacing": 10,
+      "slots": [
+        {
+          "alien": "wing",
+          "home": 5
+        },
+        {
+          "alien": "wing",
+          "home": 7,
+          "trailing": true
+        },
+        {
+          "alien": "wing",
+          "home": 4,
+          "mirror": true
+        },
+        {
+          "alien": "wing",
+          "home": 6,
+          "mirror": true,
+          "trailing": true
+        },
+        {
+          "alien": "wing",
+          "home": 9
+        },
+        {
+          "alien": "wing",
+          "home": 11,
+          "trailing": true
+        },
+        {
+          "alien": "wing",
+          "home": 8,
+          "mirror": true
+        },
+        {
+          "alien": "wing",
+          "home": 10,
+          "mirror": true,
+          "trailing": true
+        }
+      ]
+    },
+    {
+      "at": 525,
+      "entryPath": "entry-wide-arc",
+      "spacing": 11,
+      "slots": [
+        {
+          "alien": "drone",
+          "home": 29
+        },
+        {
+          "alien": "drone",
+          "home": 31,
+          "trailing": true
+        },
+        {
+          "alien": "drone",
+          "home": 32
+        },
+        {
+          "alien": "drone",
+          "home": 34,
+          "trailing": true
+        },
+        {
+          "alien": "drone",
+          "home": 33
+        },
+        {
+          "alien": "drone",
+          "home": 35,
+          "trailing": true
+        },
+        {
+          "alien": "drone",
+          "home": 28
+        },
+        {
+          "alien": "drone",
+          "home": 30,
+          "trailing": true
+        }
+      ]
+    },
+    {
+      "at": 700,
+      "entryPath": "entry-side-file",
+      "spacing": 12,
+      "slots": [
+        {
+          "alien": "drone",
+          "home": 20,
+          "mirror": true
+        },
+        {
+          "alien": "drone",
+          "home": 22
+        },
+        {
+          "alien": "drone",
+          "home": 25,
+          "mirror": true
+        },
+        {
+          "alien": "drone",
+          "home": 27
+        },
+        {
+          "alien": "drone",
+          "home": 24,
+          "mirror": true
+        },
+        {
+          "alien": "drone",
+          "home": 26
+        },
+        {
+          "alien": "drone",
+          "home": 21,
+          "mirror": true
+        },
+        {
+          "alien": "drone",
+          "home": 23
+        }
+      ]
+    }
+  ]
+}

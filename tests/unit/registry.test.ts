@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { loadPackOrThrow, packSourceFromRecord } from '../../src/content/loader.js';
 import type { LoadedPack } from '../../src/content/loader.js';
 import { composeManifest, composeRules, createRegistry } from '../../src/content/registry.js';
+import { resolveStageId } from '../../src/content/rules.js';
 import { classicPack, minimalRules } from '../helpers/rules.js';
 
 /**
@@ -26,47 +27,49 @@ function pack(name: string, files: Readonly<Record<string, unknown>>): LoadedPac
   return loadPackOrThrow(packSourceFromRecord(name, `test:${name}`, files));
 }
 
-const base = (): LoadedPack =>
-  pack('base', {
-    'pack.json': {
-      id: 'base',
-      name: 'Base',
-      palette: ['#0000', '#ffffff', '#ff2b2b'],
-      roles: { drone: { label: 'Drone' }, wing: {} },
-      formations: {
-        grid: {
-          id: 'grid',
-          slots: [
-            { column: 0, row: 0, role: 'drone' },
-            { column: 1, row: 0, role: 'wing' },
-          ],
-        },
+/** The base pack's documents, with the rules it ships replaceable. */
+const baseFiles = (rules: unknown = minimalRules('base-rules')): Record<string, unknown> => ({
+  'pack.json': {
+    id: 'base',
+    name: 'Base',
+    palette: ['#0000', '#ffffff', '#ff2b2b'],
+    roles: { drone: { label: 'Drone' }, wing: {} },
+    formations: {
+      grid: {
+        id: 'grid',
+        slots: [
+          { column: 0, row: 0, role: 'drone' },
+          { column: 1, row: 0, role: 'wing' },
+        ],
       },
-      sounds: { 'shot-fired': 'pew' },
-      stageBadges: [{ value: 1, sprite: 'badge' }],
-      stageSequence: { normal: { rows: ['one'], repeatLast: 1 } },
     },
-    'rules.json': minimalRules('base-rules'),
-    'sounds/pew.json': { id: 'pew', wave: 'square', freq: 440 },
-    'sprites/badge.json': {
-      id: 'badge',
-      size: 1,
-      palette: ['#ffffff'],
-      frames: [['0']],
-    },
-    'stages/one.json': {
-      id: 'one',
-      formation: 'grid',
-      waves: [{ at: 0, entryPath: 'in', slots: [{ alien: 'a', home: 0 }] }],
-    },
-    'paths/in.json': { id: 'in', start: [0, 0], segments: [{ type: 'toSlot', speed: 1 }] },
-    'aliens/a.json': {
-      id: 'a',
-      role: 'drone',
-      sprite: 'badge',
-      score: { base: 10 },
-    },
-  });
+    sounds: { 'shot-fired': 'pew' },
+    stageBadges: [{ value: 1, sprite: 'badge' }],
+    stageSequence: { normal: { rows: ['one'], repeatLast: 1 } },
+  },
+  'rules.json': rules,
+  'sounds/pew.json': { id: 'pew', wave: 'square', freq: 440 },
+  'sprites/badge.json': {
+    id: 'badge',
+    size: 1,
+    palette: ['#ffffff'],
+    frames: [['0']],
+  },
+  'stages/one.json': {
+    id: 'one',
+    formation: 'grid',
+    waves: [{ at: 0, entryPath: 'in', slots: [{ alien: 'a', home: 0 }] }],
+  },
+  'paths/in.json': { id: 'in', start: [0, 0], segments: [{ type: 'toSlot', speed: 1 }] },
+  'aliens/a.json': {
+    id: 'a',
+    role: 'drone',
+    sprite: 'badge',
+    score: { base: 10 },
+  },
+});
+
+const base = (): LoadedPack => pack('base', baseFiles());
 
 describe('a registry over one pack', () => {
   it('reports that pack’s own manifest, unchanged and identical', () => {
@@ -177,6 +180,105 @@ describe('a registry over a base pack and an overlay', () => {
     const registry = createRegistry([base(), overlay()]);
     expect(registry.manifest.id).toBe('tweak');
     expect(registry.active.id).toBe('tweak');
+  });
+
+  it('drops a rank’s sequence that a later pack’s own sequence supersedes', () => {
+    // The base's rules give rank B its own normal half. An overlay that ships its
+    // own stages states the normal half after those rules, so it wins at *every*
+    // rank — otherwise rank B of the overlaid game would play the base's stages.
+    const ranked = (): LoadedPack =>
+      pack(
+        'base',
+        baseFiles({
+          ...minimalRules('ranked-rules'),
+          difficulty: {
+            defaultRank: 'A',
+            ranks: {
+              A: { stageTable: { rows: [] } },
+              B: {
+                stageTable: { rows: [] },
+                stageSequence: { normal: { rows: ['one', 'one'], repeatLast: 1 } },
+              },
+            },
+          },
+        }),
+      );
+    const own = pack('own-stages', {
+      'pack.json': {
+        id: 'own-stages',
+        name: 'Own stages',
+        roles: { drone: {} },
+        formations: { pair: { id: 'pair', slots: [{ column: 0, row: 0, role: 'drone' }] } },
+        stageSequence: { normal: { rows: ['two'], repeatLast: 1 } },
+      },
+      'stages/two.json': {
+        id: 'two',
+        formation: 'pair',
+        waves: [{ at: 0, entryPath: 'drop', slots: [{ alien: 'b', home: 0 }] }],
+      },
+      'paths/drop.json': { id: 'drop', start: [0, 0], segments: [{ type: 'toSlot', speed: 1 }] },
+      'aliens/b.json': { id: 'b', role: 'drone', sprite: 'dot', score: { base: 10 } },
+      'sprites/dot.json': { id: 'dot', size: 1, palette: ['#ffffff'], frames: [['0']] },
+    });
+
+    const first = ranked();
+    const baseOnly = createRegistry([first]);
+    expect(resolveStageId(baseOnly.manifest, baseOnly.rules!, 1, 'B')).toBe('one');
+
+    const layered = createRegistry([first, own]);
+    const rules = layered.rules!;
+    for (const rank of ['A', 'B']) {
+      expect([rank, resolveStageId(layered.manifest, rules, 1, rank)]).toEqual([rank, 'two']);
+    }
+    // Only the superseded half goes, and nothing else is copied: every other part
+    // of the document is the base's own object.
+    const baseRules = baseOnly.rules!;
+    expect(rules.difficulty.ranks.B?.stageSequence?.normal).toBeUndefined();
+    expect(rules.difficulty.ranks.B?.stageTable).toBe(baseRules.difficulty.ranks.B?.stageTable);
+    expect(rules.difficulty.ranks.A).toBe(baseRules.difficulty.ranks.A);
+    expect(rules.player).toBe(baseRules.player);
+    expect(rules.id).toBe('ranked-rules');
+  });
+
+  it('keeps the rules identical when no later pack states a half a rank overrides', () => {
+    const ranked = (): LoadedPack =>
+      pack(
+        'base',
+        baseFiles({
+          ...minimalRules('ranked-rules'),
+          difficulty: {
+            defaultRank: 'A',
+            ranks: {
+              A: {
+                stageTable: { rows: [] },
+                stageSequence: { normal: { rows: ['one'], repeatLast: 1 } },
+              },
+            },
+          },
+        }),
+      );
+    const first = ranked();
+    // An art-only overlay, and one that states only the other half.
+    expect(createRegistry([first, overlay()]).rules).toBe(first.rules);
+    const challengeOnly = pack('challenge-only', {
+      'pack.json': {
+        id: 'challenge-only',
+        name: 'Challenge only',
+        roles: { drone: {} },
+        formations: { pair: { id: 'pair', slots: [{ column: 0, row: 0, role: 'drone' }] } },
+        stageSequence: { challenge: { rows: ['bonus'], repeatLast: 1 } },
+      },
+      'stages/bonus.json': {
+        id: 'bonus',
+        kind: 'challenge',
+        formation: 'pair',
+        waves: [{ at: 0, entryPath: 'pass', slots: [{ alien: 'b', home: 0 }] }],
+      },
+      'paths/pass.json': { id: 'pass', start: [0, 0], segments: [{ type: 'exitBottom' }] },
+      'aliens/b.json': { id: 'b', role: 'drone', sprite: 'dot', score: { base: 10 } },
+      'sprites/dot.json': { id: 'dot', size: 1, palette: ['#ffffff'], frames: [['0']] },
+    });
+    expect(createRegistry([first, challengeOnly]).rules).toBe(first.rules);
   });
 
   it('refuses to compose nothing', () => {

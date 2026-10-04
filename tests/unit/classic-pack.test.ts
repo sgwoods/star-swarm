@@ -61,13 +61,13 @@ describe('the pack itself', () => {
     expect(pack.id).toBe('classic');
     expect(rules.id).toBe('classic');
     // The three formation roles, the three transform types and the captured
-    // fighter; and five entry scripts for the normal stages through 8 — five
-    // rather than six because stage 8 replays stage 4's script row — plus the
-    // eight challenge scripts.
+    // fighter; and the thirteen combat script rows of reference section 5 — one
+    // document per row, however many stages and ranks play it — plus the eight
+    // challenge scripts.
     // `tests/unit/classic-content.test.ts` checks what is in them; here it is only
     // that they are there.
     expect(pack.aliens.size).toBe(7);
-    expect(pack.stages.size).toBe(13);
+    expect(pack.stages.size).toBe(13 + 8);
   });
 
   it('holds exactly the content its landed tasks put there, and loads all of it', () => {
@@ -171,12 +171,18 @@ describe('the pack itself', () => {
     // last three from stage 24, the challenge scripts cycle all eight — so the
     // periods are stated per table and never derived from one another.
     expect(pack.manifest.stageSequence.challenge.repeatLast).toBe(8);
-    // The normal half holds the six normal stages through 8, which is the first six
-    // of the reference's seventeen. Cycling the last three is a property of the
-    // whole table, so `repeatLast` stays 1 until rows 7–17 land rather than
-    // asserting a plateau three rows early.
-    expect(pack.manifest.stageSequence.normal.rows).toHaveLength(6);
-    expect(pack.manifest.stageSequence.normal.repeatLast).toBe(1);
+    // The normal half is rank A's seventeen entries, and every other rank states
+    // its own seventeen; all four cycle their last three, the ROM's fold of
+    // `adj >= 23` by 4. None of them overrides the challenge half, which all four
+    // ranks share.
+    expect(pack.manifest.stageSequence.normal.rows).toHaveLength(17);
+    expect(pack.manifest.stageSequence.normal.repeatLast).toBe(3);
+    expect(rules.difficulty.ranks.A?.stageSequence).toBeUndefined();
+    for (const rank of ['B', 'C', 'D']) {
+      const own = rules.difficulty.ranks[rank]?.stageSequence;
+      expect([rank, own?.normal?.rows.length, own?.normal?.repeatLast]).toEqual([rank, 17, 3]);
+      expect([rank, own?.challenge]).toEqual([rank, undefined]);
+    }
   });
 });
 
@@ -638,6 +644,9 @@ describe('how far each value may be trusted', () => {
       'extraLives.thresholdModulus',
       'challengeStages.firstStage',
       'challengeStages.everyStages',
+      'difficulty.ranks.B.stageSequence.normal',
+      'difficulty.ranks.C.stageSequence.normal',
+      'difficulty.ranks.D.stageSequence.normal',
       'scoring.movingMultiplier',
       'scoring.escortBonus',
       'scoring.transformGroupBonus',

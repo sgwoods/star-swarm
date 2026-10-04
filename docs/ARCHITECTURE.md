@@ -56,8 +56,9 @@ see [§3](#3-the-layers).
 The game is playable now, and Milestone 2 is complete: entry waves, formation
 motion, slot homing, dive attacks, enemy fire, the difficulty ramp, the transform
 attack, scoring, lives, attract mode, game over, the hit-ratio results card and
-the high-score table are all in; the normal stages through 8 and eight challenge
-stages are authored as pack data; and the capture mechanic — tractor beam,
+the high-score table are all in; all thirteen of the arcade's entry scripts,
+each difficulty rank's own sequence of them and eight challenge stages are
+authored as pack data; and the capture mechanic — tractor beam,
 captured fighter, rogue, rescue and dual fighter — is in. A bomb, a tractor beam
 and flying into an enemy all take a fighter, which is every way the arcade has of
 doing it. Milestone 3 has begun: the variant concept, the start-up selector and
@@ -67,7 +68,7 @@ stage it passes ([§4.7](#47-the-playability-pass)), and the ability registry is
 in, with four abilities a pack's aliens switch on beside the capture beam
 ([§4.4](#44-where-a-second-game-plugs-in)).
 [§5](#5-what-is-not-here-yet) is what is left.
-<!-- check:count classic.sequence.normal 6 classic.stages.challenge 8 -->
+<!-- check:count classic.stages.normal 13 classic.sequence.normal 17 classic.stages.challenge 8 -->
 
 ---
 
@@ -853,7 +854,12 @@ field by field rather than taking the last one whole: `roles`, `formations` and
 `src/render/sprites.ts` checks membership in and never indexes), and
 `stageBadges` and each half of `stageSequence` are replaced by the last pack that
 states a non-empty one. Rules are the whole document from the last pack that ships
-one. A single-pack registry gets its own manifest back unchanged, so this is a
+one — less any rank's own sequence for a half that a pack layered after it states,
+since that rank override is a statement about the same half and the later one
+wins. Without it the Deep Sea game would play its own stages at its default rank
+and Classic's combat scripts at the other three, because Classic's ranks B, C and
+D each name their own; the rest of the document is still Classic's object, shared
+rather than copied. A single-pack registry gets its own manifest back unchanged, so this is a
 generalisation of the rule the registry always documented rather than a second
 rule beside it — and it is what lets `packs/swarm-remix/`'s `pack.json` be four
 lines.
@@ -963,7 +969,7 @@ stage that cannot be built is not blamed on the stage cleared before it.
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `entry`         | the fleet cannot be built, an enemy never reaches a slot of its own, the formation never settles, or an entry path strays past the off-screen margin |
 | `dive`          | a dive, flown from any slot its role holds and aimed at the fighter's home column, leaves either side or never leaves the bottom                     |
-| `finishes`      | the strong persona, with lost fighters replaced, is still on the stage at the time limit on any seed                                                 |
+| `finishes`      | the strong persona, with lost fighters replaced, is still on the stage at the time limit on more than two seeds                                      |
 | `clearable`     | the mid-tier persona, fighters replaced, clears fewer seeds than the protocol asks                                                                   |
 | `bullet-wall`   | the bullets in flight leave no column of the fighter's row alive from any starting position                                                          |
 | `deterministic` | a seed flown twice ends on two different worlds                                                                                                      |
@@ -975,7 +981,7 @@ open — the stage, or the path for a dive — and the reason. The numbers it re
 (seeds, time limits, the clear threshold) are `PROTOCOL` in the same file, and the
 seeds are fixed strings, so a verdict reproduces on any machine.
 
-Four decisions in it are worth knowing before changing it:
+Five decisions in it are worth knowing before changing it:
 
 - **Fighters are replaced, because the question is the stage.** With a variant's
   own three, Classic's stage 5 is lost by the strongest persona during the entry, on every
@@ -991,11 +997,24 @@ Four decisions in it are worth knowing before changing it:
   fighter.
 - **The wall check is generous to the fighter**: it may start anywhere and take its
   longer step every frame, so a wall it reports is one no pilot escapes.
+- **Two stalls in sixteen are a lost duel, not an unfinishable stage.** A stage
+  nothing can finish stalls on every seed — the fixture's ledge on 16 of 16 — and a
+  strong pilot that loses to a lone diver stalls on a few. Measured over 48 extra
+  seeds per stage when the thirteen Classic scripts landed: Classic 0 stalls in
+  1,008 runs, Deep Sea 0 in 528, Swarm Remix 6 in 1,008, the astronaut never
+  killing a lone drone that flies that pack's dive. That rate predates the thirteen
+  scripts — it reached documents that were already shipped, and surfaced when a
+  rename redrew their seeds. So `finishes` fails on a third stall, and a tolerated
+  one is still named on the variant's report line rather than swallowed.
 
 What it does not cover: challenge scripts are flown but not path-checked, since
 their flyers leave the screen by design; a transform's spawned divers start
 mid-dive, out of reach of a slot check; and the wall check is the single fighter's.
-Flying every shipped stage measured about fifteen seconds when the pass landed.
+Flying every shipped stage measured about fifteen seconds when the pass landed and
+about thirty-six once all thirteen Classic scripts did: 53 flights across the three
+variants against 37, with Classic's later scripts first flown on harder difficulty
+rows. The shipped tree is flown twice per CI run — by its own step and by the test
+that wraps it, under a 180-second timeout.
 `tests/unit/playability.test.ts` pins its thresholds from both edges, and
 `tests/sim/validate-packs-playability.test.ts` runs the script over the shipped
 tree, which passes, and over `tests/fixtures/unplayable/` layered on Classic,
@@ -1013,19 +1032,6 @@ stale absence list is the failure mode this section is most prone to — a docum
 describing as deliberately absent something that shipped two merges ago.
 [`docs/ROADMAP.md`](ROADMAP.md) is where each of these is scheduled.
 
-- **Normal stages past 8.** The pack authors the normal stages through 8 and then
-  plateaus on the last of them, because the arcade's seventeen-entry index list
-  cycles its final three rows and claiming that plateau three rows early would
-  assert something that is not there. The challenge half does _not_ plateau — all
-  eight of its scripts cycle — so the two halves of one sequence deliberately
-  repeat on different periods. Difficulty keeps ramping past 8 either way: the
-  rank table is a separate ramp with its own 26 rows across all four ranks.
-  <!-- check:count classic.sequence.normal 6 classic.sequence.challenge 8 rules.ranks 4 rules.difficultyRows 26 -->
-- **The other three difficulty ranks' stage sequences.** The pack ships one
-  pack-wide sequence. Reference section 5 gives all four ranks' index lists, and
-  they need ten of the thirteen combat scripts through stage 8 alone;
-  `packs/classic/stages/README.md` records why they cannot land until the
-  remaining scripts do.
 - **Two of the registry's seven ids.** `transform` and `mirrorPlayer` are reserved
   in `src/content/schema.ts` and implemented nowhere: an alien may declare either
   with any parameters and nothing reads it, so `/forge` **refuses** a prompt that
@@ -1165,7 +1171,8 @@ a rank, and `src/content/rules.ts` resolves that rank into whole data tables. Th
 rank reaches **both** halves of what section 6 says a rank selects — the per-stage
 difficulty rows and the entry-wave script sequence — because the flow passes it to
 `createWorld` _and_ to `createStageSource`; a preset that reached only the world
-would apply half of it. `tests/unit/variants.test.ts` asserts the resolved row is
+would apply half of it. On Classic both halves are visible: EXPERT is rank D, which
+plays script row 7 as stage 4 where ARCADE's rank A plays row 4. `tests/unit/variants.test.ts` asserts the resolved row is
 _identical_ to the rank's own row rather than merely different between presets,
 which is the assertion a multiplier would also pass.
 

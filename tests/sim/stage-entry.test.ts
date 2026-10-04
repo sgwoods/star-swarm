@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { createRegistry } from '../../src/content/registry.js';
+import { resolveStageSequence } from '../../src/content/rules.js';
 import type { StageSource } from '../../src/content/stages.js';
 import { resolveStageContent } from '../../src/content/stages.js';
 import { EMPTY_FRAME } from '../../src/engine/input.js';
@@ -18,7 +19,7 @@ import { classicPack, classicRules } from '../helpers/rules.js';
  * composed and still strand an enemy, because whether a wave arrives depends on its
  * launch frames, its path and the sway it is homing into, none of which the schema
  * sees. `tests/sim/golden/stage-entry` covers stage 1 to the byte; this covers the
- * rest to the property, which is the part that generalises to stage 9 and beyond.
+ * rest to the property — all thirteen script rows, whichever ranks play them.
  *
  * Everything here is measured **on the frame the formation settles**, not at the end
  * of the run. Diving begins from that frame, so after it an enemy being away from
@@ -36,8 +37,14 @@ const registry = createRegistry([pack]);
 /** Long enough for the slowest entry plus its sway-to-zero exit, with room over. */
 const STEPS = 2_000;
 
-/** One stage source per stage document, so a case is one stage and nothing else. */
-const cases = [...new Set(pack.manifest.stageSequence.normal.rows)].map((id) => {
+/**
+ * One stage source per stage document, so a case is one stage and nothing else —
+ * every document any rank plays, since rank A never plays script row 5.
+ */
+const playedByAnyRank = Object.keys(rules.difficulty.ranks).flatMap(
+  (rank) => resolveStageSequence(pack.manifest, rules, rank).normal.rows,
+);
+const cases = [...new Set(playedByAnyRank)].map((id) => {
   const document = pack.stages.get(id);
   if (document === undefined) throw new Error(`the classic pack has no ${id}`);
   const content = resolveStageContent(registry, document);

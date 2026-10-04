@@ -43,7 +43,7 @@ import {
 } from '../../src/sim/paths.js';
 import { createWorld, fingerprintWorld, stepWorld } from '../../src/sim/world.js';
 import { autopilotSource } from '../../src/ui/autoplay.js';
-import { installedPack, shippedVariants } from '../helpers/variants.js';
+import { installedPack, shippedVariants, unsharedRules } from '../helpers/variants.js';
 
 const PACK_ID = 'deep-sea';
 
@@ -106,8 +106,31 @@ describe('the forged pack loads and is reachable', () => {
     expect(pack.rules).toBeUndefined();
     expect(variant().packs).toEqual(['classic', PACK_ID]);
     // Identity: the forged pack runs the base pack's rules document rather than a
-    // copy of it, which is what makes it an addition instead of a fork.
-    expect(variant().rules).toBe(installedPack('classic').rules);
+    // copy of it, which is what makes it an addition instead of a fork. The one
+    // thing it does not inherit is the ranks' own normal sequences, which name
+    // Classic's combat scripts: its own normal half supersedes them at every rank
+    // (`composeRules`), and everything else is still Classic's object.
+    const own = variant().rules;
+    const base = installedPack('classic').rules;
+    if (base === undefined) throw new Error('the classic pack has no rules.json');
+    expect(unsharedRules(own, base)).toEqual([]);
+    for (const rank of Object.values(own.difficulty.ranks)) {
+      expect(rank.stageSequence?.normal).toBeUndefined();
+    }
+  });
+
+  it('plays its own stages at every rank, not the base pack’s', () => {
+    // Classic's ranks B, C and D each select their own sequence of Classic's
+    // combat scripts. Without the rule above, choosing HARD in the forged game
+    // would put Classic's fleet on the field.
+    const own = new Set(forgedStageIds());
+    for (const preset of variant().presets) {
+      const stages = variant().stagesFor(preset.rank);
+      for (const stage of [1, 2, 4, 5, 6, 8, 9, 10, 12]) {
+        const id = stages.stageFor(stage)?.stage.id ?? '';
+        expect([preset.rank, stage, own.has(id)]).toEqual([preset.rank, stage, true]);
+      }
+    }
   });
 
   it('states the normal half of the sequence and inherits the challenge half', () => {

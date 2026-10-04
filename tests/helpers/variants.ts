@@ -14,6 +14,7 @@ import { resolve } from 'node:path';
 import { listPackDirs, readPackSource, readVariantSources } from '../../src/content/fs.js';
 import type { LoadedPack } from '../../src/content/loader.js';
 import { loadPackOrThrow } from '../../src/content/loader.js';
+import type { Rules } from '../../src/content/schema.js';
 import type { ResolvedVariant } from '../../src/content/variants.js';
 import { loadVariantsOrThrow } from '../../src/content/variants.js';
 
@@ -64,4 +65,29 @@ export function installedPack(id: string): LoadedPack {
     );
   }
   return pack;
+}
+
+/**
+ * What of `own` is not `base`'s own object, with the ranks' stage sequences set
+ * aside — empty when an overlay runs its base pack's rules document rather than a
+ * copy of it.
+ *
+ * The sequences are set aside because an overlay that states a half of its own
+ * supersedes every rank's override of that half (`composeRules`), so those are the
+ * one part of the document it may legitimately not share. Everything else is
+ * compared by identity, table by table.
+ */
+export function unsharedRules(own: Rules, base: Rules): string[] {
+  const unshared: string[] = (Object.keys(base) as (keyof Rules)[]).filter(
+    (key) => key !== 'difficulty' && own[key] !== base[key],
+  );
+  if (own.difficulty.defaultRank !== base.difficulty.defaultRank) {
+    unshared.push('difficulty.defaultRank');
+  }
+  for (const [id, rank] of Object.entries(base.difficulty.ranks)) {
+    const mine = own.difficulty.ranks[id];
+    if (mine?.stageTable !== rank.stageTable) unshared.push(`difficulty.ranks.${id}.stageTable`);
+    if (mine?.label !== rank.label) unshared.push(`difficulty.ranks.${id}.label`);
+  }
+  return unshared;
 }

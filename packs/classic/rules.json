@@ -1077,6 +1077,30 @@
             }
           ],
           "repeatLast": 4
+        },
+        "stageSequence": {
+          "normal": {
+            "rows": [
+              "script-0",
+              "script-1",
+              "script-2",
+              "script-3",
+              "script-0",
+              "script-4",
+              "script-6",
+              "script-5",
+              "script-4",
+              "script-6",
+              "script-0",
+              "script-7",
+              "script-9",
+              "script-8",
+              "script-10",
+              "script-12",
+              "script-11"
+            ],
+            "repeatLast": 3
+          }
         }
       },
       "C": {
@@ -1449,6 +1473,30 @@
             }
           ],
           "repeatLast": 4
+        },
+        "stageSequence": {
+          "normal": {
+            "rows": [
+              "script-0",
+              "script-1",
+              "script-4",
+              "script-6",
+              "script-5",
+              "script-7",
+              "script-9",
+              "script-0",
+              "script-7",
+              "script-12",
+              "script-11",
+              "script-10",
+              "script-12",
+              "script-11",
+              "script-10",
+              "script-12",
+              "script-11"
+            ],
+            "repeatLast": 3
+          }
         }
       },
       "D": {
@@ -1821,11 +1869,47 @@
             }
           ],
           "repeatLast": 4
+        },
+        "stageSequence": {
+          "normal": {
+            "rows": [
+              "script-0",
+              "script-1",
+              "script-7",
+              "script-9",
+              "script-8",
+              "script-7",
+              "script-12",
+              "script-11",
+              "script-10",
+              "script-12",
+              "script-11",
+              "script-10",
+              "script-12",
+              "script-11",
+              "script-10",
+              "script-12",
+              "script-11"
+            ],
+            "repeatLast": 3
+          }
         }
       }
     }
   },
   "provenance": {
+    "difficulty.ranks.B.stageSequence.normal": {
+      "confidence": "verified",
+      "note": "gg1-3.s c_25A2 and d_combat_stg_dat_idx: rank B\u2019s own 17-entry list of combat script rows, indexed adj \u2212 (adj >> 2) \u2212 1 after folding adj \u2265 23 by 4, so the last three cycle from stage 24. Arcade reference section 5. Rank A\u2019s list is the manifest\u2019s own stageSequence.normal."
+    },
+    "difficulty.ranks.C.stageSequence.normal": {
+      "confidence": "verified",
+      "note": "gg1-3.s c_25A2 and d_combat_stg_dat_idx: rank C\u2019s own 17-entry list of combat script rows, indexed adj \u2212 (adj >> 2) \u2212 1 after folding adj \u2265 23 by 4, so the last three cycle from stage 24. Arcade reference section 5. Rank A\u2019s list is the manifest\u2019s own stageSequence.normal."
+    },
+    "difficulty.ranks.D.stageSequence.normal": {
+      "confidence": "verified",
+      "note": "gg1-3.s c_25A2 and d_combat_stg_dat_idx: rank D\u2019s own 17-entry list of combat script rows, indexed adj \u2212 (adj >> 2) \u2212 1 after folding adj \u2265 23 by 4, so the last three cycle from stage 24. Arcade reference section 5. Rank A\u2019s list is the manifest\u2019s own stageSequence.normal."
+    },
     "playfield": {
       "confidence": "verified",
       "note": "MAME galaga.cpp:1508 set_raw plus the driver’s ROT90 — a 224-wide by 288-tall portrait raster. Arcade reference section 2."
