@@ -186,8 +186,8 @@ const HINT_COLOUR = '#7d8aa8';
  * formation is genuinely in the way.
  */
 const CARD_WIDTH = 200;
-/** Four hint rows at a 12-pixel pitch, plus the title and air at both ends. */
-const TITLE_CARD_HEIGHT = 76;
+/** Five hint rows at a 12-pixel pitch, plus the title and air at both ends. */
+const TITLE_CARD_HEIGHT = 88;
 const SCORES_CARD_WIDTH = 176;
 const SCORES_CARD_HEIGHT = 70;
 /** Row the "push start" prompt sits on, clear of the card and of the ship. */
@@ -228,6 +228,13 @@ export function drawAttract(ctx: CanvasRenderingContext2D, options: AttractOptio
     // find is half-shipped, and the pause card can only name itself once you
     // have already pressed the key that raises it.
     drawText(ctx, 'P  PAUSE   X  EXIT', centre, CARD_TOP + 66, {
+      colour: HINT_COLOUR,
+      align: 'center',
+    });
+    // The settings screen is where autoplay, difficulty and the rest live, and
+    // nothing on this card said how to reach it — a feature that was asked for and
+    // then could not be found. `M` opens it as well; one key is enough to name.
+    drawText(ctx, 'ESC  SETTINGS', centre, CARD_TOP + 78, {
       colour: HINT_COLOUR,
       align: 'center',
     });

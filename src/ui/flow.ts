@@ -858,7 +858,11 @@ export function createGameFlow(options: FlowOptions): GameFlow {
             enter('paused');
             break;
           }
-          if (wasPressed(previous, frame, 'fire')) {
+          // Start commits as well as fire: Return is the key a player reaches
+          // for on a yes-or-no card, and before it did anything here the card
+          // swallowed it and sat there. It is safe for the reason above — start
+          // never opens this card, so it cannot be the same press held twice.
+          if (wasPressed(previous, frame, 'fire') || wasPressed(previous, frame, 'start')) {
             const chosen = choice.choice;
             confirm = undefined;
             // Cancelling lands where an ordinary pause lands, so there is one

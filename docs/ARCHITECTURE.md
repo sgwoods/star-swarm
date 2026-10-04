@@ -279,12 +279,15 @@ the key was pressed wins: there is nothing left to hold.
 and raises the confirmation over a world that is no longer moving, so the question
 is never answered under fire. Cancelling lands in `paused` — where an ordinary
 pause lands — so there is one way to resume and not two. The cursor opens on
-`RESUME`, the exit key is also the cancel, and only `fire` commits, so no single
-stray press can end a run.
+`RESUME`, the exit key is also the cancel, and only `fire` or `start` commits —
+neither of which opens the card — so no single stray press can end a run. `start`
+is there because Return is the key a player reaches for on a yes-or-no card, and
+before it committed the card swallowed it without a sign.
 
 **The card says all of that on itself**, in two dim lines under the question:
-`L/R PICK   FIRE CHOOSE`, and then that the exit key cancels and is not the way
-out. The second line is the one the arrangement needs, and it is written as a
+`L/R PICK  ENTER CHOOSES`, and then that the exit key cancels and is not the way
+out. The first names Enter rather than Space because `start` is bound in every
+control scheme and `fire` is Space in only two of the three. The second line is the one the arrangement needs, and it is written as a
 negative: the pause card this one opens from says `X EXITS`, which is true of the
 pause and false here, so a player who takes that promise at face value presses the
 key, lands back on the pause card reading `X EXITS` again, and has seen nothing

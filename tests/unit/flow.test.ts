@@ -1116,6 +1116,23 @@ describe('X pauses first, then asks', () => {
     expect(flow.exitConfirm).toBeUndefined();
   });
 
+  it('commits on start too, because Return is the key a player reaches for', () => {
+    // The report: toggle to EXIT, press Return, nothing happens. `start` never
+    // opens this card, so letting it commit cannot make one press do both.
+    const leave = testFlow();
+    press(leave, START);
+    press(leave, EXIT);
+    press(leave, RIGHT);
+    press(leave, START);
+    expect(leave.phase).toBe('attract');
+
+    const stay = testFlow();
+    press(stay, START);
+    press(stay, EXIT);
+    press(stay, START);
+    expect(stay.phase).toBe('paused');
+  });
+
   it('goes home to attract in a cabinet with a choice of games too', () => {
     // "Home" is attract in both cabinets: the selector is a boot-time screen, and
     // with one variant installed it is never entered at all, so it cannot be what
