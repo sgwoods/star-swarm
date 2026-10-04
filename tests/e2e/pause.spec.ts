@@ -115,4 +115,16 @@ test.describe('exit', () => {
     // And start plays again from there, as it does between games.
     await press(page, 'Enter', 'playing');
   });
+
+  test('Return on EXIT ends the run too, which is the key a player reaches for', async ({
+    page,
+  }) => {
+    await startGame(page);
+    await press(page, 'x', 'exit-confirm');
+    await tap(page, 'ArrowRight');
+    await page.waitForFunction(() => window.starSwarm?.exitChoice === 'exit');
+    // Return is `start`, and the card used to commit only on `fire` — so this
+    // press was swallowed and the card simply sat there.
+    await press(page, 'Enter', 'attract');
+  });
 });

@@ -88,8 +88,17 @@ export const PAUSE_TEXT = Object.freeze({
   lost: 'THIS RUN IS LOST',
   /** Prefix of the line drawn when the score would have taken a place. */
   wouldRank: 'IT WOULD HAVE RANKED',
-  /** The same wording as the selector's, because it is the same mechanic. */
-  exitKeys: 'L/R PICK   FIRE CHOOSE',
+  /**
+   * The key that takes the highlighted choice, named as a **key**.
+   *
+   * This read `FIRE CHOOSE` once, which names an action rather than anything on
+   * the keyboard, and the key a player actually reaches for on a yes-or-no card —
+   * Return — did nothing at all. It now commits, and the card says so. Enter is
+   * the one to name because it is `start`, which every control scheme keeps;
+   * Space is `fire` only in two of the three, so naming it would be untrue on
+   * the WASD scheme. Fire still commits, unnamed.
+   */
+  exitKeys: 'L/R PICK  ENTER CHOOSES',
   /**
    * What the exit key does **here**, said as a negative on purpose.
    *

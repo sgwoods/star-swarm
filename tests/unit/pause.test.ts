@@ -127,7 +127,9 @@ describe('the card says how to answer it', () => {
     for (const rank of [undefined, 1]) {
       expect(help(rank)).toContain(PAUSE_TEXT.exitKeys);
       expect(PAUSE_TEXT.exitKeys).toContain('L/R');
-      expect(PAUSE_TEXT.exitKeys).toContain('FIRE');
+      // A key, not an action: `FIRE CHOOSE` named nothing on the keyboard, and
+      // the key a player did press — Return — was swallowed without a sign.
+      expect(PAUSE_TEXT.exitKeys).toContain('ENTER');
     }
   });
 
