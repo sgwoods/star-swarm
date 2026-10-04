@@ -171,7 +171,8 @@ afternoon.
 **Phase 2 — record the inputs of a live run.** `recordInput` in
 [`src/engine/replay.ts`](../src/engine/replay.ts) already wraps an input source
 so that every frame the simulation sees is also logged, run-length encoded; it is
-what the goldens are recorded with and what attract mode plays back. Wiring an
+what the goldens are recorded with, and its run-length log is the format attract
+mode plays back for a game that declares no autoplay personas. Wiring an
 opt-in version of it into a browser session would make a human's run into a
 `(seed, input log)` pair that phase 1 can then render at leisure. The seed is
 already derived rather than ambient — each game seeds from the session root and
