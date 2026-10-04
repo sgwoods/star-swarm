@@ -1,0 +1,7 @@
+{
+  "id": "drifter",
+  "role": "drone",
+  "sprite": "drifter",
+  "score": { "base": 50 },
+  "dive": { "paths": ["dive-overboard"] }
+}

@@ -1,0 +1,15 @@
+{
+  "id": "ledge",
+  "formation": "ledge",
+  "waves": [
+    {
+      "at": 0,
+      "entryPath": "entry-rise",
+      "slots": [
+        {
+          "alien": "anchor"
+        }
+      ]
+    }
+  ]
+}

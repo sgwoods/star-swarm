@@ -1,12 +1,17 @@
 /**
  * The forged pack, played.
  *
- * `npm run validate-packs` says a pack's documents are well formed and its
- * references resolve. It does not start the simulation, and the playability checks
- * `docs/DESIGN.md` section 8 step 2 asks for are not written yet — so "it
- * validates" is not an answer to "is it a game". This file is the substitute, and
- * `docs/content-guide.md` section 10 points a generator at it as the worked
- * example to copy for the next forged pack.
+ * `npm run validate-packs` now flies every stage of every variant
+ * (`scripts/playability.ts`), and its checks are this file's, generalised: the
+ * entry, the dives from every slot, a stage nothing can finish, determinism and the
+ * persona ordering all run over Deep Sea there too. This file stays because it is
+ * not the same claim. The gate is a floor any pack must clear, measured stage by
+ * stage with lost fighters replaced; this holds **one pack** to the numbers it was
+ * tuned against — whole games on the variant's own fighters, the strong persona
+ * past stage 1 on three seeds in four — and to the rules-layer couplings the gate
+ * does not judge (launchable roles, the breathe width, captive slots, wave lanes).
+ * `docs/content-guide.md` section 10 points a generator at it as the worked example
+ * of what a forge report measures.
  *
  * It lives in `tests/sim/` rather than `tests/unit/` for the reason
  * `./autoplay-personas.test.ts` does: the interesting questions are about whole
@@ -19,9 +24,8 @@
  * 4. does a run always end, rather than stalling until the clock runs out;
  * 5. is the same seed the same world.
  *
- * It is a test about **this pack**, deliberately not a validator pass: turning any
- * of it into `scripts/validate-packs.ts` is the Milestone 3 ship task, and doing it
- * here would put a half version of that gate somewhere nobody would look for it.
+ * It is a test about **this pack**, deliberately not a validator pass: a number
+ * here that every pack had to meet would belong in the gate's protocol instead.
  */
 
 import { describe, expect, it } from 'vitest';

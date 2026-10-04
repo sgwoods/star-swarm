@@ -1,0 +1,6 @@
+{
+  "id": "anchor",
+  "role": "drone",
+  "sprite": "drifter",
+  "score": { "base": 50 }
+}

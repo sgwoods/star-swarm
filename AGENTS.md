@@ -270,11 +270,11 @@ built around:
   breathes lopsidedly; `continuousBombingAt` is an absolute enemy count, so a small
   fleet gets nasty early; and a formation with no `captiveSlots` silently disables
   capture. `docs/content-guide.md` section 7 is the list.
-- **"Validated" is not "playable".** `npm run validate-packs` runs no simulation,
-  so a forged pack is flown by an autoplay persona instead —
-  `tests/sim/forged-pack.test.ts` is the shape to copy, and the five things it
-  measures are what a forge report has to carry. Building that into the validator
-  is the Milestone 3 task, not something to half-do in a test.
+- **"Validated" means flown, within a protocol.** `npm run validate-packs` flies
+  every stage every variant plays with autoplay personas (`scripts/playability.ts`),
+  the general form of `tests/sim/forged-pack.test.ts`. A forge report still carries
+  that test's five measurements for its own pack, because the gate's seeds and
+  thresholds are a floor, not a description.
 - **Section 2 is enforced on generated content**, by the scan in
   `tests/unit/forge-guard.test.ts` rather than by the generator's good behaviour,
   so a prompt cannot argue its way to the original's names.
@@ -549,7 +549,9 @@ Three consequences when working here:
   tree and on a pack whose content directories are empty. It calls the real
   `loadPack`, so the gate and the game cannot disagree; its tests in
   `tests/unit/validate-packs.test.ts` run the script against throwaway pack
-  trees. Section 8's playability checks are Milestone 3 and are not in it yet.
+  trees. Its fifth pass flies every stage (`docs/ARCHITECTURE.md` §4.7);
+  `tests/sim/validate-packs-playability.test.ts` holds it to passing the shipped
+  tree and failing `tests/fixtures/unplayable/`.
 - `tests/unit/classic-pack.test.ts` checks `packs/classic/` against
   `docs/reference/arcade-reference.md`. Plan, reference and data are three legs
   of one stool: change a number in any of them and that test is the third voice.

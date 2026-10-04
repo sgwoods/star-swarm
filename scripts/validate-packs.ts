@@ -2,7 +2,7 @@
  * `npm run validate-packs` — the gate from `docs/DESIGN.md` sections 8.2 and 11.
  * A pack that fails validation never loads, and CI runs this on every push.
  *
- * Four passes, reported per file:
+ * Five passes, reported per file:
  *
  *   1. **Layout** — content lives in the section 9 directories, a pack that has
  *      content has a `pack.json`, and no JSON is loose.
@@ -14,15 +14,15 @@
  *      rules to run on, every difficulty preset must name a rank those rules
  *      declare, and every autoplay persona must have its own id and be the one a
  *      `defaultPersona` names.
+ *   5. **Playability** — the playability checks of section 8 step 2, which start
+ *      the headless simulation: every stage every variant plays is flown, its
+ *      entry, its dives and its bullets checked, and autoplay personas fly it to
+ *      the end. `./playability.ts` holds the checks and the protocol they run on.
  *
  * Passes 2 and 3 are `loadPack` itself and pass 4 is `loadVariants`, so the script
  * and the game agree by construction rather than by two implementations staying in
- * step.
- *
- * Still to come: the **playability checks** of section 8 step 2 — paths staying
- * on screen, a stage being clearable, no unavoidable bullet walls, a stage
- * finishing inside a time limit. Those need the headless sim and are Milestone 3
- * work; nothing here runs the simulation.
+ * step. Pass 5 flies the variants pass 4 resolved, through the same `createWorld`
+ * the game runs.
  *
  * Succeeds on an empty or absent `packs/` tree, and on a pack whose content
  * directories are still empty. The variants root is `variants/` beside the packs
@@ -40,7 +40,9 @@ import { listPackDirs, readPackSource, readVariantSources } from '../src/content
 import type { LoadedPack } from '../src/content/loader.js';
 import { loadPack } from '../src/content/loader.js';
 import { CONTENT_DIRS } from '../src/content/schema.js';
+import type { ResolvedVariant } from '../src/content/variants.js';
 import { loadVariants } from '../src/content/variants.js';
+import { asContentErrors, checkPlayability } from './playability.js';
 
 /** Files that are bookkeeping rather than content. */
 const IGNORED_FILES = new Set(['.gitkeep', '.DS_Store', 'README.md']);
@@ -139,6 +141,9 @@ function validatePack(packDir: string): void {
   notes.push(`${pack}: OK — ${counts.join(', ')}`);
 }
 
+/** Every variant that resolved, for the playability pass to fly. */
+const resolvedVariants: ResolvedVariant[] = [];
+
 /**
  * Pass 4: the variants.
  *
@@ -163,6 +168,7 @@ function validateVariants(): void {
     problems.push(...result.errors);
     return;
   }
+  resolvedVariants.push(...result.variants);
   for (const variant of result.variants) {
     const marks = [
       `${String(variant.packs.length)} pack(s): ${variant.packs.join(' + ')}`,
@@ -200,6 +206,12 @@ function main(): void {
   for (const packDir of packDirs) validatePack(packDir);
 
   validateVariants();
+
+  // Pass 5. Only over variants that resolved, so a malformed pack is reported as
+  // malformed rather than as unplayable.
+  const playability = checkPlayability(resolvedVariants);
+  notes.push(...playability.notes.map((note) => `playability ${note}`));
+  problems.push(...asContentErrors(playability.findings));
 
   for (const note of notes) console.log(`validate-packs: ${note}`);
 

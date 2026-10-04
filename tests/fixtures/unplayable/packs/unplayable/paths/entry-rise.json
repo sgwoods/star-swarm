@@ -1,0 +1,5 @@
+{
+  "id": "entry-rise",
+  "start": [104, 300],
+  "segments": [{ "type": "toSlot", "speed": 1 }]
+}

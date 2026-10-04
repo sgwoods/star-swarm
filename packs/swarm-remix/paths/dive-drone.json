@@ -2,10 +2,11 @@
   "id": "dive-drone",
   "mirror": true,
   "segments": [
-    { "type": "loop", "radius": 16, "turns": 1, "dir": "ccw", "speed": 1.6 },
-    { "type": "arc", "radius": 44, "degrees": 120, "dir": "cw", "speed": 2 },
-    { "type": "sine", "amplitude": 22, "wavelength": 60, "duration": 48, "speed": 2 },
+    { "type": "loop", "radius": 12, "turns": 1, "dir": "ccw", "speed": 1.6 },
+    { "type": "arc", "radius": 28, "degrees": 50, "dir": "cw", "speed": 2 },
+    { "type": "arc", "radius": 28, "degrees": 50, "dir": "ccw", "speed": 2 },
     { "type": "aimAtPlayer", "speed": 2.2, "duration": 20 },
+    { "type": "sine", "amplitude": 10, "wavelength": 48, "duration": 40, "speed": 2.2 },
     { "type": "exitBottom", "speed": 2.2 }
   ]
 }

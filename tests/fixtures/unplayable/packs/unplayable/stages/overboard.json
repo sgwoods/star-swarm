@@ -1,0 +1,14 @@
+{
+  "id": "overboard",
+  "formation": "shoal",
+  "waves": [
+    {
+      "at": 0,
+      "entryPath": "entry-drop",
+      "slots": [
+        { "alien": "drifter", "mirror": false },
+        { "alien": "drifter", "mirror": true }
+      ]
+    }
+  ]
+}

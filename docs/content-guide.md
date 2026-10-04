@@ -61,23 +61,24 @@ So a prompt that needs splitting on hit, a shield, a teleport, spawned minions o
 a mirrored player cannot be satisfied by content. That is a **refusal**, not a
 near miss to be approximated with a flight path (§9).
 
-### 2.2 "Validated" does not mean "playable"
+### 2.2 "Validated" means flown, within a protocol
 
-`npm run validate-packs` runs two passes — schemas, then references — and nothing
-else. It never starts the simulation; the script says so in its own header. The
-four checks `docs/DESIGN.md` section 8 step 2 asks for (paths stay on screen, the
-stage is clearable, no unavoidable bullet walls, the stage finishes inside a time
-limit) are Milestone 3 work that has not been done.
+`npm run validate-packs` checks schemas and references, and then **flies** every
+stage every variant plays: its entry, its dives from every slot, autoplay personas
+playing it to the end with lost fighters replaced, and the bullets in flight
+(`docs/ARCHITECTURE.md` §4.7). The four ways this project measured a pack passing
+the old gate and still being unplayable are each a failure now:
 
-A pack can therefore pass the gate and still be unplayable in at least four ways
-this project has measured while forging one:
+| Failure                                                     | What the gate reports                         |
+| ----------------------------------------------------------- | --------------------------------------------- |
+| A dive leaves the side of the screen from the outer columns | `dive`, against the path file                 |
+| A stage the fleet cannot be cleared from                    | `finishes` and `clearable`, against the stage |
+| An enemy stranded because no slot was free for its role     | `entry`, with the engine's own reason         |
+| A stage that never ends                                     | `finishes`                                    |
 
-| Failure                                                     | What the gate sees              |
-| ----------------------------------------------------------- | ------------------------------- |
-| A dive leaves the side of the screen from the outer columns | nothing                         |
-| A stage the fleet cannot be cleared from                    | nothing                         |
-| An enemy stranded because no slot was free for its role     | nothing (it throws at run time) |
-| A stage that never ends                                     | nothing                         |
+What the gate measures is a fixed set of seeds and the variant's own personas,
+which is a floor rather than a verdict on the design: a stage can pass it and still
+be dull, unfair or not what was asked for. §10 is the rest.
 
 §10 is the substitute: play it.
 
@@ -359,18 +360,20 @@ was asked for.
 
 ## 10. Validate, then play
 
-Three steps, in this order, and the third is not optional while §2.2 holds:
+Three steps, in this order, and the third is not optional:
 
-1. `npm run validate-packs` — schemas and references, for every pack and every
-   variant. It is the same `loadPack` the game runs, so the gate and the game
-   cannot disagree.
+1. `npm run validate-packs` — schemas, references and the playability pass, for
+   every pack and every variant. It is the same `loadPack` and `createWorld` the
+   game runs, so the gate and the game cannot disagree. A variant that declares no
+   autoplay personas is flown by those of a variant running the same rules
+   document, and fails if there is none.
 2. `npm test` — the whole suite, including the documentation accuracy checks and
    `tests/unit/forge-guard.test.ts`.
-3. **Play it headlessly with an autoplay persona**, and report what happened. This
-   is the honest substitute for the playability checks that do not exist, and it
-   is available because `src/ui/autoplay.ts` landed in Milestone 3: a persona is
-   handed only what a player can see, so a run through forged content measures the
-   content rather than the pilot.
+3. **Play it headlessly with an autoplay persona**, and report what happened. The
+   gate says the pack clears a floor; the report says how it plays — clear rates,
+   scores, how long a stage takes — which is what a reviewer needs and the gate
+   does not print. A persona is handed only what a player can see, so a run
+   through forged content measures the content rather than the pilot.
 
 `tests/sim/forged-pack.test.ts` is the worked example, and what it measures is what
 a report should carry: whether every enemy a stage launches reaches its slot,

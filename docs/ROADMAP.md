@@ -43,9 +43,6 @@ was never a deployment question:
   per ability, and the capture beam will move into it from `src/sim/capture.ts`
   without changing what a pack writes — a path already names the ability by an id
   the schema reserves.
-- **Ship: playability checks in the validator.** `npm run validate-packs` will run
-  a headless simulation per stage: paths stay on screen, the stage is clearable,
-  no unavoidable bullet walls, and it finishes inside a time limit.
 
 Also in this milestone, because they are the same kind of work:
 
@@ -78,14 +75,9 @@ thing that exists is described. What the milestone still owes:
 - **Ship: `audio/music.ts`** — the jingles the plan's section 5 asks for, as pack
   data like every other sound. <!-- check:absent src/audio/music.ts -->
 
-Two things the forge **found** rather than built, both of which belong to Milestone
-3's validator work and are now written down for whoever takes it:
+One thing the forge **found** rather than built, which belongs to Milestone 3 and is
+written down for whoever takes it:
 
-- The playability checks have a worked specification. What a forged pack has to be
-  flown through to be believed — every enemy reaching its slot, every dive staying
-  on screen from every slot its alien can occupy, the stage being clearable, no run
-  stalling, one seed giving one world — exists as a test over one pack and would
-  become the validator pass.
 - The rules layer couples a pack to numbers it cannot change: which roles may
   attack at all, how wide a formation has to be for the breathe table it will run
   under, and the absolute enemy count at which bombing turns continuous. A pack
