@@ -38,11 +38,17 @@ was never a deployment question:
   installed packs and let a sequence be edited or played directly. The settings
   document already carries a per-variant pack-list override and the menu already
   shows the active list; what is left is writing to it.
-- **Ship: ability registry + the first four new abilities** (`splitOnHit`,
-  `shield`, `teleport`, `spawnMinions`). `src/sim/abilities/` will hold one file
-  per ability, and the capture beam will move into it from `src/sim/capture.ts`
-  without changing what a pack writes — a path already names the ability by an id
-  the schema reserves.
+- **Ship: the two reserved abilities, and a game that uses the new four.** The
+  ability registry and its first four new abilities have landed, and so have the
+  playability checks in the validator; both moved to
+  [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#44-where-a-second-game-plugs-in)
+  ([§4.4](ARCHITECTURE.md#44-where-a-second-game-plugs-in) and
+  [§4.7](ARCHITECTURE.md#47-the-playability-pass)), which is where a thing that
+  exists is described. `transform` and `mirrorPlayer` will each need a
+  specification before a module — what an alien turning into another one
+  mid-flight keeps, and what mirroring the player means for its controls — and no
+  installed pack will switch the four on until a variant does, along with the
+  sounds and effects their events want.
 
 Also in this milestone, because they are the same kind of work:
 
@@ -60,7 +66,8 @@ Also in this milestone, because they are the same kind of work:
 
 _Exit check:_ a player can change the rules from inside the game, a forged pack
 fails validation for being unplayable rather than merely malformed, and a pack
-with a new ability plays without an engine change.
+with a new ability plays without an engine change — the second met by the
+validator's playability pass, and the third by `tests/sim/ability-pack.test.ts`.
 
 ## Now: Milestone 4 — prompt forge
 

@@ -62,8 +62,10 @@ captured fighter, rogue, rescue and dual fighter — is in. A bomb, a tractor be
 and flying into an enemy all take a fighter, which is every way the arcade has of
 doing it. Milestone 3 has begun: the variant concept, the start-up selector and
 the player-settings menu are in ([§4.5](#45-variants-the-games-this-build-offers)
-and [§6](#6-settings-and-the-difficulty-preset)), and the validator flies every
-stage it passes ([§4.7](#47-the-playability-pass)).
+and [§6](#6-settings-and-the-difficulty-preset)), the validator flies every
+stage it passes ([§4.7](#47-the-playability-pass)), and the ability registry is
+in, with four abilities a pack's aliens switch on beside the capture beam
+([§4.4](#44-where-a-second-game-plugs-in)).
 [§5](#5-what-is-not-here-yet) is what is left.
 <!-- check:count classic.sequence.normal 6 classic.stages.challenge 8 -->
 
@@ -413,7 +415,7 @@ body — leaves a beam open over the column it died in, and the channel stays bu
 because the arcade's capture flag is not cleared by the player dying. The
 replacement fighter therefore waits: `resolveRespawn` serves the respawn timer as
 usual but holds the fighter off the field until the beam has retracted
-(`beamIsOut` in `src/sim/capture.ts`). Without that hold it arrives at its one
+(`beamIsOut` in `src/sim/abilities/capture-beam.ts`). Without that hold it arrives at its one
 fixed column underneath a beam already at full extension and is taken on the
 frame it appears. The hold is bounded — a beam that catches nothing always
 retracts and releases — and the beam stays on screen throughout, so the pause
@@ -456,7 +458,7 @@ flowchart TB
 
     subgraph deterministic["The deterministic half — headless, no host APIs"]
         engine["src/engine/<br/>fixed 60 Hz loop · seeded RNG<br/>abstract input · replay logs"]
-        sim["src/sim/<br/>world · player · shots · enemies<br/>formation · paths · dives<br/>challenge · capture"]
+        sim["src/sim/<br/>world · player · shots · enemies<br/>formation · paths · dives<br/>challenge · ability registry"]
     end
 
     subgraph presentation["The presentation half — subscribers"]
@@ -520,14 +522,14 @@ make the simulation bit-identical, and nothing here claims it does.
 
 ### The layers one at a time
 
-| Layer          | What it is                                                                                                                                                        |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/engine/`  | The fixed-step loop, the seeded RNG, abstract input, and input recording/replay. Knows nothing about this game or any game.                                       |
-| `src/sim/`     | The world and one step of it: player, shots, collisions, lives, enemies, formation, the path interpreter, dives, enemy fire, challenge stages and capture.        |
-| `src/content/` | The content platform: the Zod schemas, the loader, the registry, the module that interprets a rules document, and stage resolution.                               |
-| `src/render/`  | The 224×288 backbuffer presented at a whole-number scale, sprite rasterisation, the pixel font, the starfield, one-shot effect animations, and scene composition. |
-| `src/audio/`   | A parametric synth over Web Audio, and the mapping from simulation events to sounds.                                                                              |
-| `src/ui/`      | The game-flow state machine, attract mode, the HUD, the results card, the high-score table — and the dev-only `/lab`.                                             |
+| Layer          | What it is                                                                                                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/engine/`  | The fixed-step loop, the seeded RNG, abstract input, and input recording/replay. Knows nothing about this game or any game.                                                                 |
+| `src/sim/`     | The world and one step of it: player, shots, collisions, lives, enemies, formation, the path interpreter, dives, enemy fire, challenge stages, and the ability registry with capture in it. |
+| `src/content/` | The content platform: the Zod schemas, the loader, the registry, the module that interprets a rules document, and stage resolution.                                                         |
+| `src/render/`  | The 224×288 backbuffer presented at a whole-number scale, sprite rasterisation, the pixel font, the starfield, one-shot effect animations, and scene composition.                           |
+| `src/audio/`   | A parametric synth over Web Audio, and the mapping from simulation events to sounds.                                                                                                        |
+| `src/ui/`      | The game-flow state machine, attract mode, the HUD, the results card, the high-score table — and the dev-only `/lab`.                                                                       |
 
 Four properties worth knowing, because each one is load-bearing:
 
@@ -696,14 +698,36 @@ four segments of authored data, and the third of them is:
 ```
 
 The path says _when_ — a `trigger` segment on the flight's timeline, after the
-loop and the run at the player. `src/sim/capture.ts` is _what_, and it opens the
-beam when a flight passes that segment naming that ability. Neither knows the
+loop and the run at the player. `src/sim/abilities/capture-beam.ts` is _what_, and
+it opens the beam when a flight passes that segment naming that ability. Neither knows the
 other: the path names an id from the fixed registry in `src/content/schema.ts`,
 and the channel matches on the id. So moving the beam later in the dive is a
 one-line edit to a pack document, and a sibling game that wants a beam of its own
 authors the same `trigger` in its own path — while a sibling that wants none
 simply never writes one, which is why "no capture channel at all" is a property
 of a pack rather than a branch in the engine.
+
+The beam is the first module of the **ability registry** in `src/sim/abilities/`,
+and every other ability is on the same side of the same line. An ability is engine
+behaviour a pack switches on and tunes, never one it defines: `splitOnHit`,
+`shield`, `teleport` and `spawnMinions` are each a module of hooks the world calls
+at fixed points of a step, switched on by an entry in an alien's `abilities` whose
+parameters that ability's own schema validates — and `teleport` and `spawnMinions`
+can be told _when_ by the same kind of `trigger` the beam uses. `ABILITY_REGISTRY`
+is typed over exactly the ids the schema implements, so an id without a module, or
+a module for an id still reserved, does not build. The capture beam is the one
+registered ability that is a channel rather than something an enemy carries, which
+is why `rules.capture` switches it on and an alien may not. Content that declares no
+ability passes through the registry untouched and fingerprints byte for byte as it
+did before the registry existed, so every golden still reproduces.
+<!-- check:count sim.abilities.implemented 5 schema.reservedAbilityIds 2 -->
+
+The roadmap's test of all this is that a pack with a new ability plays without an
+engine change, and `tests/sim/ability-pack.test.ts` is that test rather than a
+claim about the loader: a pack of nothing but documents, layered over Classic the
+way `packs/deep-sea/` is, switches on all four and is played to the end of its
+stage by an autoplay persona — splitting, shielding, teleporting and spawning on
+the way.
 
 The split follows the classification in the rules-and-scoring scout report
 (section 9), not a fresh decision:
@@ -855,11 +879,13 @@ got wrong before it got them right.
 **Two limits shape what a forge can promise**, and both are measured rather than
 described:
 
-- **No ability can be composed.** `src/content/schema.ts` reserves seven ability
-  ids and `src/sim/abilities/` holds no modules, so an alien cannot _do_ anything
-  beyond moving, firing its configured pattern, taking hits and being worth points
-  ([§5](#5-what-is-not-here-yet)).
-  <!-- check:count schema.abilityIds 7 sim.abilities.modules 0 -->
+- **Only the registry's abilities can be composed.** `src/content/schema.ts` lists
+  seven ability ids: five are implemented in `src/sim/abilities/` and validate
+  their own parameters, and two are reserved, validate with anything and do
+  nothing ([§5](#5-what-is-not-here-yet)). So an alien can split, shield, teleport
+  and spawn as those modules specify, and a prompt that needs anything else an
+  alien might _do_ is refused.
+  <!-- check:count schema.abilityIds 7 sim.abilities.implemented 5 sim.abilities.modules 6 -->
 - **Passing the validator means the stage was flown, within a protocol.**
   `npm run validate-packs` starts the simulation for every stage every variant
   plays and fails a pack for being unplayable ([§4.7](#47-the-playability-pass)).
@@ -872,9 +898,11 @@ described:
 **Refusing is a feature of the skill, not a failure of it** — `docs/DESIGN.md`
 section 7.5 asks for it — and the reason it has to happen at generation time is
 machine-checked. `tests/unit/forge-guard.test.ts` asserts that a world plays
-_identically_ whether or not an alien declares an ability, whether or not a stage
-states `modifiers` or `diveRules`, and that an alien in a role no difficulty row
-names never launches. Each of those validates, passes the gate, and does nothing —
+_identically_ whether or not an alien declares a reserved ability, whether or not
+a stage states `modifiers` or `diveRules`, and that an alien in a role no
+difficulty row names never launches — and, the other way round, that an
+implemented ability does change the world, so the line between the two cannot
+quietly move. Each of those validates, passes the gate, and does nothing —
 so a pack that improvised around a missing capability would be indistinguishable
 from one that worked until somebody played it. The same file holds every pack and
 every variant to `docs/DESIGN.md` section 2: a scan for the original's name and for
@@ -963,16 +991,18 @@ describing as deliberately absent something that shipped two merges ago.
   they need ten of the thirteen combat scripts through stage 8 alone;
   `packs/classic/stages/README.md` records why they cannot land until the
   remaining scripts do.
-- **The ability registry.** `src/sim/abilities/` is a placeholder README and holds
-  no code. The one ability the game needs is implemented directly in
-  `src/sim/capture.ts`, which matches on the `captureBeam` id a path's `trigger`
-  segment names ([§4.4](#44-where-a-second-game-plugs-in)); splitting the registry
-  out, and the six other ids `src/content/schema.ts` already reserves, is
-  Milestone 3. The consequence for generated content is that an alien cannot _do_
-  anything: `abilities` validates with any reserved id and is read by nothing, so
-  `/forge` **refuses** a prompt that needs one rather than producing something
-  adjacent ([§4.6](#46-the-forge)).
-  <!-- check:count sim.abilities.modules 0 schema.abilityIds 7 -->
+- **Two of the registry's seven ids.** `transform` and `mirrorPlayer` are reserved
+  in `src/content/schema.ts` and implemented nowhere: an alien may declare either
+  with any parameters and nothing reads it, so `/forge` **refuses** a prompt that
+  needs one rather than producing something adjacent ([§4.6](#46-the-forge)). The
+  other five are in `src/sim/abilities/` ([§4.4](#44-where-a-second-game-plugs-in)).
+  <!-- check:count schema.abilityIds 7 schema.reservedAbilityIds 2 sim.abilities.implemented 5 -->
+- **Nothing in a shipped game uses the four new abilities.** They are reached only
+  by a pack that switches them on, and no installed pack does yet; the one that
+  plays them is the test's (`tests/sim/ability-pack.test.ts`). Their events —
+  `shield-hit`, `shield-restored`, `enemy-split`, `enemy-teleported` and
+  `minions-spawned` — are ones a pack may bind a sound or an effect to, and none
+  does, so a shield hit is not yet visible on screen.
 - **The optional CRT filter and music** are named in the design plan and are not
   written yet. The CRT **option** is in: the
   settings menu shows it, it persists, and the menu row says on screen that no

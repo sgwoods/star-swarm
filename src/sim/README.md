@@ -2,14 +2,15 @@
 
 Pure game simulation. What is here: `world.ts`, `player.ts`, `shots.ts`,
 `collision.ts`, `lives.ts`, `events.ts`, `enemies.ts`, `formation.ts`, `paths.ts`
-(segment interpreter), `dive.ts`, `challenge.ts` and `capture.ts`. What
-`docs/DESIGN.md` section 9 also lists and is not here: `abilities/` is a
-placeholder README until Milestone 3, and `scoring.ts` and `stages.ts` were never
-written — scoring lives in `enemies.ts` and `world.ts`, and resolving a stage
-number to its documents is content work in `src/content/stages.ts`.
-`docs/ARCHITECTURE.md` §5 records both divergences.
+(segment interpreter), `dive.ts` and `challenge.ts`, and the ability registry in
+`abilities/` — which holds the capture channel as `abilities/capture-beam.ts`
+beside the four abilities a pack's aliens switch on (its own README). What
+`docs/DESIGN.md` section 9 also lists and is not here: `scoring.ts` and
+`stages.ts` were never written — scoring lives in `enemies.ts` and `world.ts`, and
+resolving a stage number to its documents is content work in
+`src/content/stages.ts`. `docs/ARCHITECTURE.md` §5 records both divergences.
 <!-- check:absent src/sim/scoring.ts src/sim/stages.ts -->
-<!-- check:count sim.modules 12 sim.abilities.modules 0 -->
+<!-- check:count sim.modules 11 sim.abilities.modules 6 -->
 
 Milestone 1 landed the player half: `world.ts`, `player.ts`, `shots.ts`,
 `collision.ts`, `lives.ts` and `events.ts`. Milestone 2's first task replaced
@@ -17,8 +18,9 @@ the static stand-in with real enemies: `enemies.ts` (entry waves, the four-phase
 update, slot homing) and `formation.ts` (the coordinate axes, sway and breathe).
 The dive task added `dive.ts` — dive attacks, enemy fire and the difficulty ramp
 that drives both — `challenge.ts` followed with challenge stages and their three
-awards, and `capture.ts` with the tractor beam, the captured fighter, the rogue,
-rescue and the dual fighter. The one pairing `collision.ts` had never been asked
+awards, and the capture channel with the tractor beam, the captured fighter, the
+rogue, rescue and the dual fighter — since moved, unchanged, into the ability
+registry as `abilities/capture-beam.ts`. The one pairing `collision.ts` had never been asked
 for — an enemy's **body** against the fighter — is wired in `world.ts`.
 
 **Three ways to lose a fighter, two events.** A bomb and a body are the same loss:
@@ -37,7 +39,7 @@ the diver limit and its later bump, the continuous-bombing threshold. Diving
 begins from `formation-settled` and nowhere else, launch decisions are taken once
 per round robin, and each enemy's own bombing decision is taken on its own phase.
 A captor's dive is an ordinary dive with a beam on it: the director asks
-`capture.ts` one question when a captor-role launch comes up — is this one an
+`abilities/capture-beam.ts` one question when a captor-role launch comes up — is this one an
 attempt? — and launches it through the same credit, the same diver limit and the
 same `beginDive` whichever way the answer goes. All that differs is the path.
 
@@ -50,7 +52,7 @@ therefore not a special case anywhere; it falls out of the flag. The complete se
 of ways the channel is released is the list of `releaseCapture`'s callers, and
 each one is an arcade release site the rules-and-scoring report traced.
 
-Three consequences worth knowing before editing `capture.ts`:
+Three consequences worth knowing before editing `abilities/capture-beam.ts`:
 
 - **The captured fighter is an `Enemy`.** It sits in the formation, dives with its
   captor, is shot for 500 or 1,000 by the ordinary doubling rule, and re-enters as

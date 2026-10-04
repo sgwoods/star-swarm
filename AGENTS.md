@@ -259,8 +259,9 @@ what the engine will actually honour. Neither copies `src/content/schema.ts`.
 Four things to know before touching either, because each is a trap the forge was
 built around:
 
-- **Four schema fields validate and are read by nothing**: `alien.abilities`,
-  `alien.sounds`, `stage.diveRules` and `stage.modifiers`. That is why a prompt the
+- **Four schema fields validate and are read by nothing**: `alien.abilities` for
+  the two reserved ids (`transform`, `mirrorPlayer`), `alien.sounds`,
+  `stage.diveRules` and `stage.modifiers`. That is why a prompt the
   engine cannot satisfy has to be **refused** rather than approximated — nothing
   downstream can tell the difference. `tests/unit/forge-guard.test.ts` pins each
   one as an identity between a world that states it and a world that does not, so
@@ -368,7 +369,7 @@ observation the reference asks for; it would let a collision clear a stage.
 
 ## Capture is one channel, and the flag is the rule
 
-`src/sim/capture.ts` holds the tractor beam, the captured fighter, the rogue, the
+`src/sim/abilities/capture-beam.ts` holds the tractor beam, the captured fighter, the rogue, the
 rescue and the dual fighter. There is **exactly one captured fighter in a run,
 ever**, and a captor may only be chosen while the channel is idle. A successful
 capture does not free it, so while a fighter is held — including parked as a

@@ -38,8 +38,10 @@ import {
   CONTENT_DIRS,
   formationAxes,
   pathSegmentSchema,
+  RESERVED_ABILITY_TYPES,
   STAGE_KINDS,
 } from '../../../src/content/schema.js';
+import { ABILITY_REGISTRY } from '../../../src/sim/abilities/registry.js';
 import {
   REVERSE_PIXELS_PER_FRAME,
   SPEED_BYTE_UNIT,
@@ -666,9 +668,16 @@ export function counters(root = REPO_ROOT): ReadonlyMap<string, () => number> {
     ],
     ['sim.modules', () => filesIn(join(root, 'src', 'sim'), '.ts').length],
     ['sim.abilities.modules', () => filesIn(join(root, 'src', 'sim', 'abilities'), '.ts').length],
+    /**
+     * The abilities the engine implements, read off the registry itself rather
+     * than off the file count: the directory also holds the registry, and a module
+     * nobody registered is not an ability anything can switch on.
+     */
+    ['sim.abilities.implemented', () => Object.keys(ABILITY_REGISTRY).length],
 
     /* What the schema reserves, as against what a pack uses. */
     ['schema.abilityIds', () => ABILITY_TYPES.length],
+    ['schema.reservedAbilityIds', () => RESERVED_ABILITY_TYPES.length],
     ['schema.stageKinds', () => STAGE_KINDS.length],
     ['schema.contentDirs', () => CONTENT_DIRS.length],
     ['schema.pathSegments', () => pathSegmentSchema.options.length],

@@ -19,7 +19,7 @@ this project's own. For anyone checking a number against
 
 One further role, `captive`, is not an alien the pack invented: it is the
 player's own fighter after a capture, which sits in the formation, attacks and
-can be shot down for points (`src/sim/capture.ts`). It is a role so that the rest
+can be shot down for points (`src/sim/abilities/capture-beam.ts`). It is a role so that the rest
 of the pack — the formation's captive slots, the dive lottery, the score — can
 address it the same way it addresses everything else, and its art is `player-captured`
 rather than a sprite of its own name, because that is what it is.

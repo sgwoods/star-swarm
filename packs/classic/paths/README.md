@@ -126,7 +126,7 @@ Three things about their shape are not free choices:
   the one confirmed exception.
 
 `dive-capture.json` is the only file here with a `trigger` segment, and it is
-what opens the tractor beam (`src/sim/capture.ts`). That is deliberate: **where
+what opens the tractor beam (`src/sim/abilities/capture-beam.ts`). That is deliberate: **where
 in the dive the beam comes out is authored here**, not a depth threshold in the
 engine. The original's captor "loops just once at the top of the formation,
 slides down to roughly mid-screen, then emits the beam"
