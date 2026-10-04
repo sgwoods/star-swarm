@@ -588,8 +588,9 @@ Three consequences when working here:
   calls `flow.step(frame)` and draws the phase. Anything driving the browser has
   to get past the selector and push start — that is what `startGame()` in
   `tests/e2e/smoke.spec.ts` is for — and every phase timer counts **simulation
-  steps**, never the wall clock. The attract demo is the real simulation played
-  through `src/engine/replay.ts`, so it cannot drift from the game.
+  steps**, never the wall clock. The attract demo is the real simulation, flown by
+  the variant's personas in turn or, with none, played through
+  `src/engine/replay.ts`, so it cannot drift from the game.
 - **An autoplay persona is data, and the pilot may only see what is drawn.**
   `variants/<id>.json` declares the personas; `src/content/personas.ts` is the only
   place one is interpreted and nothing under `src/` names one. The pilot in

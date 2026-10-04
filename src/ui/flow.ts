@@ -266,6 +266,12 @@ export interface GameFlow {
    * persona the current game does not offer reads as off rather than as stale.
    */
   readonly autoplay: Persona | undefined;
+  /**
+   * Who is flying the world on screen, when it is not a human: the demo's persona
+   * while the demo is on screen, the autoplay persona otherwise. `undefined` for a
+   * human, and for the script, which is nobody.
+   */
+  readonly flying: Persona | undefined;
   /** The player's settings, as they stand. */
   readonly settings: Settings;
   /** The start-up list, present only during `variant-select`. */
@@ -361,7 +367,10 @@ export function createGameFlow(options: FlowOptions): GameFlow {
 
   /**
    * The demo is the real game, so it has to be *this* game: the active variant's
-   * rules, and the stages that variant resolves at the rank now in force.
+   * rules, at the rank now in force, flown by that variant's own personas — its
+   * `defaultPersona` first — or by the script when it declares none
+   * (`./attract.ts`). Which personas exist is read from the variant and nowhere
+   * else, so nothing here names one.
    */
   let demoRank: string | undefined;
   const buildDemo = (): AttractDemo => {
@@ -371,6 +380,9 @@ export function createGameFlow(options: FlowOptions): GameFlow {
       createAttractDemo({
         rules: variant.rules,
         seed: `${seed}:attract`,
+        rank: demoRank,
+        personas: variant.personas,
+        first: variant.defaultPersona,
         ...stageOption(),
       })
     );
@@ -657,6 +669,10 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     enter('attract');
   };
 
+  /** Is the demo what is on screen? In attract, and on the two menus over it. */
+  const onDemo = (): boolean =>
+    phase === 'attract' || phase === 'settings' || phase === 'variant-select';
+
   if (phase === 'variant-select') openVariantSelect();
 
   return {
@@ -667,9 +683,7 @@ export function createGameFlow(options: FlowOptions): GameFlow {
       // In attract — and on the two menu screens, which sit over it — the demo is
       // what is on screen; the finished run stays on screen behind the game-over,
       // results and entry cards.
-      if (phase === 'attract' || phase === 'settings' || phase === 'variant-select') {
-        return demo.world;
-      }
+      if (onDemo()) return demo.world;
       return game ?? demo.world;
     },
     get stats(): RunStats {
@@ -703,6 +717,9 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     },
     get autoplay(): Persona | undefined {
       return personaNow();
+    },
+    get flying(): Persona | undefined {
+      return onDemo() ? demo.persona : personaNow();
     },
     get settings(): Settings {
       return settingsValue();
@@ -789,9 +806,9 @@ export function createGameFlow(options: FlowOptions): GameFlow {
         }
 
         case 'attract': {
-          // The demo world takes its input from the log, never from the player;
-          // the only things the player's frame can do here are start a game and
-          // open the settings screen.
+          // The demo world takes its input from its own pilot or the script, never
+          // from the player; the only things the player's frame can do here are
+          // start a game and open the settings screen.
           if (wasPressed(previous, frame, 'start')) {
             events = startGame();
           } else if (wasPressed(previous, frame, 'menu')) {
@@ -918,7 +935,7 @@ export function createGameFlow(options: FlowOptions): GameFlow {
         phase,
         previousPhase,
         events,
-        demo: phase === 'attract' || phase === 'settings' || phase === 'variant-select',
+        demo: onDemo(),
       };
     },
   };

@@ -473,6 +473,7 @@ function flowVariant(
     /** Records the rank each `stagesFor` call was made with. */
     readonly ranks?: string[];
     readonly personas?: readonly Persona[];
+    readonly defaultPersona?: Persona;
   } = {},
 ): FlowVariant {
   const presets =
@@ -490,6 +491,7 @@ function flowVariant(
     presets,
     defaultPreset: presets.find((preset) => preset.rank === rules.difficulty.defaultRank) ?? first,
     personas: options.personas ?? [],
+    ...(options.defaultPersona === undefined ? {} : { defaultPersona: options.defaultPersona }),
     stagesFor: (rank) => {
       options.ranks?.push(rank ?? '(none)');
       return stages;
@@ -845,6 +847,52 @@ describe('the attract demo follows the game it is demonstrating', () => {
     // wrong entry sequence.
     expect(flow.demo).not.toBe(before);
     expect(ranks).toContain('D');
+  });
+
+  it('is flown by the variant’s own personas, its default first', () => {
+    const second = watcher('second');
+    const flow = createGameFlow({
+      variants: [
+        flowVariant('only', quickRunRules(), {
+          personas: [watcher('first'), second],
+          defaultPersona: second,
+        }),
+      ],
+      seed: 'own-demo-personas',
+    });
+    expect(flow.phase).toBe('attract');
+    // Nobody armed autoplay: the demo's pilot is the demo's, not a setting.
+    expect(flow.autoplay).toBeUndefined();
+    expect(flow.demo.persona?.id).toBe('second');
+    expect(flow.flying?.id).toBe('second');
+  });
+
+  it('names nobody for a variant that declares no personas, which the script flies', () => {
+    const flow = createGameFlow({
+      variants: [flowVariant('only', quickRunRules())],
+      seed: 'own-demo-script',
+    });
+    expect(flow.demo.persona).toBeUndefined();
+    expect(flow.flying).toBeUndefined();
+  });
+
+  it('runs its world at the rank in force, not only its stages', () => {
+    const flow = createGameFlow({
+      variants: [
+        flowVariant('only', quickRunRules(), {
+          presets: [
+            { id: 'gentle', label: 'GENTLE', rank: 'A' },
+            { id: 'brutal', label: 'BRUTAL', rank: 'D' },
+          ],
+        }),
+      ],
+      seed: 'demo-world-rank',
+    });
+    expect(flow.demo.world.rank).toBe('A');
+    press(flow, MENU);
+    press(flow, RIGHT);
+    press(flow, MENU);
+    expect(flow.demo.world.rank).toBe('D');
   });
 
   it('is left alone when nothing that reaches it changed', () => {
@@ -1318,6 +1366,18 @@ describe('watching the cabinet play itself', () => {
   it('is off unless a persona has been chosen, and reports who is flying', () => {
     expect(watchableFlow(undefined).flow.autoplay).toBeUndefined();
     expect(watchableFlow('watcher').flow.autoplay?.id).toBe('watcher');
+  });
+
+  it('says who is flying the game on screen: the armed persona, or nobody for a human', () => {
+    const armed = watchableFlow('watcher').flow;
+    armed.step(EMPTY_FRAME);
+    expect(armed.phase).toBe('playing');
+    expect(armed.flying?.id).toBe('watcher');
+
+    const human = watchableFlow(undefined).flow;
+    press(human, START);
+    expect(human.phase).toBe('playing');
+    expect(human.flying).toBeUndefined();
   });
 
   it('reads as off for a persona this game does not offer', () => {

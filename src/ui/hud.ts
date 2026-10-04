@@ -79,6 +79,14 @@ const BADGE_SIZE = 8;
 const BADGE_GAP = 2;
 /** Most badges that fit along the bottom-right before they are dropped. */
 const MAX_BADGES = 8;
+/** Right edge the badge row is laid out from. */
+const BADGE_RIGHT = LOGICAL_WIDTH - 2;
+
+/** Reserve-fighter glyphs: where the row starts, their pitch and width, and the most drawn. */
+const LIFE_X = 2;
+const LIFE_PITCH = 14;
+const LIFE_WIDTH = 12;
+const MAX_LIVES_SHOWN = 5;
 
 /**
  * Six digits, as the original's player-1 display has. Scores below 10 show as
@@ -110,48 +118,95 @@ export function drawHud(ctx: CanvasRenderingContext2D, state: HudState): void {
 
   // Bottom-left: one glyph per fighter in reserve.
   const glyphY = LOGICAL_HEIGHT - 14;
-  const shown = Math.min(state.lives, 5);
+  const shown = Math.min(state.lives, MAX_LIVES_SHOWN);
   for (let i = 0; i < shown; i += 1) {
-    drawLifeGlyph(ctx, 2 + i * 14, glyphY);
+    drawLifeGlyph(ctx, LIFE_X + i * LIFE_PITCH, glyphY);
   }
 
-  drawStageBadges(ctx, state, LOGICAL_WIDTH - 2, LOGICAL_HEIGHT - 12);
+  drawStageBadges(ctx, state, BADGE_RIGHT, LOGICAL_HEIGHT - 12);
 }
 
 /**
- * Row the autoplay marker sits on, in logical pixels.
+ * Who is flying, when it is not the person in front of the cabinet — the attract
+ * demo's persona, or the one a watcher armed from the `AUTOPLAY` row.
  *
- * Above the fighter and below the card band, which is the same strip
- * `src/ui/build-stamp.ts` puts the attract build line on and for the same reason:
- * it is the part of the playfield nothing of the game's own occupies for long.
+ * In the **bottom band**, centred between the reserve fighters and the stage
+ * badges, on the badges' own row. That band is the HUD's and never the
+ * playfield's, so nothing the tag says can sit over a diver, a bomb or the
+ * fighter, and it is the one stretch of the screen the game itself leaves empty
+ * in every phase. The playfield row above the fighter that held it first is the
+ * attract build line's (`src/ui/build-stamp.ts`), so a demo that named its pilot
+ * there would have had to write over one or the other.
+ *
+ * The dim ink the cards use for their hints, because it is a caption rather than
+ * a reading: the score is the thing to look at. Steady rather than blinking,
+ * because a marker that is absent half the time is a marker that is absent in
+ * half the frames of a recording.
  */
-export const AUTOPLAY_LINE_Y = 238;
+export const PERSONA_TAG_Y = LOGICAL_HEIGHT - 12;
 
-const AUTOPLAY_COLOUR = '#7d8aa8';
+const PERSONA_TAG_COLOUR = '#7d8aa8';
 
-/** What the marker says before the persona's own label. */
+/** What the tag says before the persona's own label, when there is room for it. */
 const PREFIX = 'AUTO  ';
 
-/**
- * Say who is flying.
- *
- * A watcher has to be able to tell a persona from a person without opening the
- * menu — and, when a clip of two of them is cut side by side, to tell which is
- * which. Steady rather than blinking, because a marker that is absent half the
- * time is a marker that is absent in half the frames of a recording.
- */
-export function autoplayLine(label: string): string {
-  // A persona's label comes from a document this code has never seen, and
-  // `drawText` clips nothing — it keeps drawing off the plate. The playfield is 224
-  // pixels at a fixed 8 per character, so the line gets 26 of them and the label
-  // gets what is left after the prefix.
-  const cells = Math.floor(LOGICAL_WIDTH / CELL) - PREFIX.length;
-  return `${PREFIX}${label.slice(0, Math.max(0, cells))}`;
+/** Pixels kept clear between the tag and the glyphs either side of it. */
+const PERSONA_TAG_GAP = 4;
+
+/** Right edge of the reserve-fighter glyphs drawn for this many fighters. */
+function livesRight(lives: number): number {
+  const shown = Math.max(0, Math.min(Math.trunc(lives), MAX_LIVES_SHOWN));
+  return shown === 0 ? 0 : LIFE_X + (shown - 1) * LIFE_PITCH + LIFE_WIDTH;
 }
 
-export function drawAutoplayLine(ctx: CanvasRenderingContext2D, label: string): void {
-  drawText(ctx, autoplayLine(label), LOGICAL_WIDTH / 2, AUTOPLAY_LINE_Y, {
-    colour: AUTOPLAY_COLOUR,
+/** Left edge of the badge row drawn for this stage, or the plate's edge for none. */
+function badgesLeft(state: Pick<HudState, 'stage' | 'badges' | 'sheet'>): number {
+  const { sheet, badges } = state;
+  if (sheet === undefined || badges === undefined) return LOGICAL_WIDTH;
+  const shown = Math.min(badgesForStage(state.stage, badges).length, MAX_BADGES);
+  return shown === 0 ? LOGICAL_WIDTH : BADGE_RIGHT - shown * (BADGE_SIZE + BADGE_GAP);
+}
+
+/**
+ * Cells the tag may use, centred on the plate, without touching the reserve
+ * fighters or the badges.
+ *
+ * Counted from what is actually drawn, because both rows grow during a run: a
+ * fixed width that cleared the opening stage would run into the badges of a long
+ * one.
+ */
+export function personaTagCells(
+  state: Pick<HudState, 'lives' | 'stage' | 'badges' | 'sheet'>,
+): number {
+  const centre = LOGICAL_WIDTH / 2;
+  const half = Math.min(
+    centre - (livesRight(state.lives) + PERSONA_TAG_GAP),
+    badgesLeft(state) - PERSONA_TAG_GAP - centre,
+  );
+  return Math.max(0, Math.floor((2 * half) / CELL));
+}
+
+/**
+ * The words, fitted to `cells`: the prefix and the label when both fit, the label
+ * alone when only it does, and as much of the label as fits when nothing else
+ * will. A persona's label comes from a document this code has never seen, and
+ * `drawText` clips nothing.
+ */
+export function personaTag(label: string, cells: number): string {
+  const room = Math.max(0, Math.floor(cells));
+  if (PREFIX.length + label.length <= room) return `${PREFIX}${label}`;
+  return label.slice(0, room);
+}
+
+export function drawPersonaTag(
+  ctx: CanvasRenderingContext2D,
+  label: string,
+  state: Pick<HudState, 'lives' | 'stage' | 'badges' | 'sheet'>,
+): void {
+  const text = personaTag(label, personaTagCells(state));
+  if (text.length === 0) return;
+  drawText(ctx, text, LOGICAL_WIDTH / 2, PERSONA_TAG_Y, {
+    colour: PERSONA_TAG_COLOUR,
     align: 'center',
   });
 }
