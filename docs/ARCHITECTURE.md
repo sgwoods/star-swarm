@@ -62,7 +62,8 @@ captured fighter, rogue, rescue and dual fighter — is in. A bomb, a tractor be
 and flying into an enemy all take a fighter, which is every way the arcade has of
 doing it. Milestone 3 has begun: the variant concept, the start-up selector and
 the player-settings menu are in ([§4.5](#45-variants-the-games-this-build-offers)
-and [§6](#6-settings-and-the-difficulty-preset)).
+and [§6](#6-settings-and-the-difficulty-preset)), and the validator flies every
+stage it passes ([§4.7](#47-the-playability-pass)).
 [§5](#5-what-is-not-here-yet) is what is left.
 <!-- check:count classic.sequence.normal 6 classic.stages.challenge 8 -->
 
@@ -94,17 +95,17 @@ end on Node 25.9.0, where the whole check suite below passes.
 
 ### The commands
 
-| Command                  | What it does                                                 |
-| ------------------------ | ------------------------------------------------------------ |
-| `npm run dev`            | Vite dev server, with the `/lab` route (see [§4.3](#43-lab)) |
-| `npm run build`          | Typecheck, then build to `dist/`                             |
-| `npm run preview`        | Serve the built bundle                                       |
-| `npm run lint`           | ESLint and Prettier                                          |
-| `npm run typecheck`      | `tsc --noEmit`                                               |
-| `npm test`               | Vitest: the `unit` and `sim` suites, both headless           |
-| `npm run test:e2e`       | Playwright against the dev server                            |
-| `npm run validate-packs` | Schema- and reference-check everything under `packs/`        |
-| `npm run sprite-sheet`   | Render a pack's art to `docs/media/classic-sprite-sheet.png` |
+| Command                  | What it does                                                       |
+| ------------------------ | ------------------------------------------------------------------ |
+| `npm run dev`            | Vite dev server, with the `/lab` route (see [§4.3](#43-lab))       |
+| `npm run build`          | Typecheck, then build to `dist/`                                   |
+| `npm run preview`        | Serve the built bundle                                             |
+| `npm run lint`           | ESLint and Prettier                                                |
+| `npm run typecheck`      | `tsc --noEmit`                                                     |
+| `npm test`               | Vitest: the `unit` and `sim` suites, both headless                 |
+| `npm run test:e2e`       | Playwright against the dev server                                  |
+| `npm run validate-packs` | Schema-, reference- and playability-check `packs/` and `variants/` |
+| `npm run sprite-sheet`   | Render a pack's art to `docs/media/classic-sprite-sheet.png`       |
 
 CI runs lint, typecheck, both test suites, pack validation, the build and the
 Playwright smoke test on every push and pull request.
@@ -851,7 +852,7 @@ got wrong before it got them right.
 
 ![The forged Deep Sea game: chosen from the start-up selector, then played by an autoplay persona](media/m4-forge.gif)
 
-**Two gaps shape what a forge can promise**, and both are measured rather than
+**Two limits shape what a forge can promise**, and both are measured rather than
 described:
 
 - **No ability can be composed.** `src/content/schema.ts` reserves seven ability
@@ -859,14 +860,14 @@ described:
   beyond moving, firing its configured pattern, taking hits and being worth points
   ([§5](#5-what-is-not-here-yet)).
   <!-- check:count schema.abilityIds 7 sim.abilities.modules 0 -->
-- **Passing the validator does not mean the stage is playable.**
-  `npm run validate-packs` runs schemas and references and never starts the
-  simulation; the four playability checks `docs/DESIGN.md` section 8 step 2 asks for
-  are not written. So the forge's last step is to fly the content with an autoplay
-  persona and report the outcomes, which is what `tests/sim/forged-pack.test.ts`
-  does: every enemy reaching its slot, every dive staying on screen from every slot
-  its alien can occupy, the stage being clearable, no run stalling, and one seed
-  giving one world.
+- **Passing the validator means the stage was flown, within a protocol.**
+  `npm run validate-packs` starts the simulation for every stage every variant
+  plays and fails a pack for being unplayable ([§4.7](#47-the-playability-pass)).
+  What it measures is a fixed set of seeds and personas, so a forge still reports
+  its own numbers: `tests/sim/forged-pack.test.ts` is the worked example — every
+  enemy reaching its slot, every dive staying on screen from every slot its alien
+  can occupy, the stage being clearable, no run stalling, and one seed giving one
+  world — and it holds Deep Sea to measured numbers tighter than the gate's.
 
 **Refusing is a feature of the skill, not a failure of it** — `docs/DESIGN.md`
 section 7.5 asks for it — and the reason it has to happen at generation time is
@@ -879,6 +880,63 @@ from one that worked until somebody played it. The same file holds every pack an
 every variant to `docs/DESIGN.md` section 2: a scan for the original's name and for
 the arcade's own enemy-type words as ids, which is what makes "original by rule"
 something a prompt cannot argue with.
+
+### 4.7 The playability pass
+
+`docs/DESIGN.md` section 8 step 2 asks the validator for four checks the schema
+cannot make: paths stay on screen, the stage is clearable, no unavoidable bullet
+walls, and it finishes inside a time limit. They are the fifth pass of
+`npm run validate-packs`, in `scripts/playability.ts`, and they generalise what
+`tests/sim/forged-pack.test.ts` proved over one pack by hand.
+
+**The unit is a stage document as a variant plays it.** A stage runs under a
+variant's rules, layered content and rank, so every document a variant's sequence
+plays is flown at the first stage number that plays it — under the difficulty row a
+player meets it with. Nothing is sampled: every stage of every variant, every slot
+of every role. Each flight's stage source answers only the stage being flown, so a
+stage that cannot be built is not blamed on the stage cleared before it.
+
+| Check           | What fails it                                                                                                                                        |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `entry`         | the fleet cannot be built, an enemy never reaches a slot of its own, the formation never settles, or an entry path strays past the off-screen margin |
+| `dive`          | a dive, flown from any slot its role holds and aimed at the fighter's home column, leaves either side or never leaves the bottom                     |
+| `finishes`      | the strong persona, with lost fighters replaced, is still on the stage at the time limit on any seed                                                 |
+| `clearable`     | the mid-tier persona, fighters replaced, clears fewer seeds than the protocol asks                                                                   |
+| `bullet-wall`   | the bullets in flight leave no column of the fighter's row alive from any starting position                                                          |
+| `deterministic` | a seed flown twice ends on two different worlds                                                                                                      |
+| `ordered`       | once per variant: the strong persona does not outscore the mid-tier one over whole games                                                             |
+| `personas`      | a variant has stages to fly and no persona to fly them                                                                                               |
+
+Each failure names the variant, the stage number, the document an author would
+open — the stage, or the path for a dive — and the reason. The numbers it rests on
+(seeds, time limits, the clear threshold) are `PROTOCOL` in the same file, and the
+seeds are fixed strings, so a verdict reproduces on any machine.
+
+Four decisions in it are worth knowing before changing it:
+
+- **Fighters are replaced, because the question is the stage.** With a variant's
+  own three, Classic's stage 5 is lost by the strongest persona during the entry, on every
+  seed — a fact about the pilot. Topped up, it clears every time; a run that
+  still cannot clear is a stage nothing can finish.
+- **A variant without personas borrows them** from a variant running the same
+  rules document, because a persona's units are that document's pixels and steps.
+  Swarm Remix declares none and is flown by Classic's. With nothing to borrow, the
+  variant fails `personas` rather than passing unflown.
+- **Dives are aimed at the home column.** Aimed at a fighter parked in a corner,
+  Classic's own dives overshoot a side by up to 36 px, and the reference does not
+  say that is wrong — so the check asks about a path's shape, not about a cornered
+  fighter.
+- **The wall check is generous to the fighter**: it may start anywhere and take its
+  longer step every frame, so a wall it reports is one no pilot escapes.
+
+What it does not cover: challenge scripts are flown but not path-checked, since
+their flyers leave the screen by design; a transform's spawned divers start
+mid-dive, out of reach of a slot check; and the wall check is the single fighter's.
+Flying every shipped stage measured about fifteen seconds when the pass landed.
+`tests/unit/playability.test.ts` pins its thresholds from both edges, and
+`tests/sim/validate-packs-playability.test.ts` runs the script over the shipped
+tree, which passes, and over `tests/fixtures/unplayable/` layered on Classic,
+which loads cleanly and fails for being unplayable.
 
 ---
 
@@ -915,8 +973,8 @@ describing as deliberately absent something that shipped two merges ago.
   `/forge` **refuses** a prompt that needs one rather than producing something
   adjacent ([§4.6](#46-the-forge)).
   <!-- check:count sim.abilities.modules 0 schema.abilityIds 7 -->
-- **The optional CRT filter, music** and the validator's playability checks are
-  named in the design plan and are not written yet. The CRT **option** is in: the
+- **The optional CRT filter and music** are named in the design plan and are not
+  written yet. The CRT **option** is in: the
   settings menu shows it, it persists, and the menu row says on screen that no
   filter reads it. <!-- check:absent src/render/crt.ts src/audio/music.ts -->
 - **No stage is a boss stage.** `boss` is one of the three stage kinds the schema

@@ -2,8 +2,9 @@
 
 **The first forged pack, and the proof that the loop closes.** It was written by
 the `/forge` skill from one sentence, validated by the gate, and then played
-headlessly by an autoplay persona — because the validator's playability checks do
-not exist yet, which is the gap `docs/content-guide.md` section 2.2 is about.
+headlessly by an autoplay persona. The validator had no playability checks when it
+was forged; it has since been flown by them too (`docs/content-guide.md` section
+2.2), and passes.
 
 The sentence:
 

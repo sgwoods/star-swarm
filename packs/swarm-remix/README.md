@@ -7,11 +7,11 @@ under `src/`.
 
 It states three documents and nothing else:
 
-| Document                   | What it changes                                                 |
-| -------------------------- | --------------------------------------------------------------- |
-| `paths/dive-drone.json`    | A different drone dive — a loop out, an arc, then a weave       |
-| `sounds/fire.json`         | A different shot: a falling triangle instead of a rising square |
-| `sprites/shot-player.json` | A green shot, in colours the base palette already declares      |
+| Document                   | What it changes                                                            |
+| -------------------------- | -------------------------------------------------------------------------- |
+| `paths/dive-drone.json`    | A different drone dive — a loop out, a swerve, then a weave at the fighter |
+| `sounds/fire.json`         | A different shot: a falling triangle instead of a rising square            |
+| `sprites/shot-player.json` | A green shot, in colours the base palette already declares                 |
 
 Everything else it inherits: the three enemy roles, the forty-slot formation, the
 stage sequence, the stage badges, the palette, every other sprite, path, sound,

@@ -24,8 +24,8 @@ carries the two things that decide most prompts:
 
 - **there is no ability registry**, so an alien cannot _do_ anything beyond moving,
   firing its configured pattern, taking hits and being worth points; and
-- **passing the validator does not mean the stage is playable**, so step 5 below is
-  not optional.
+- **passing the validator means the stage was flown, within a protocol** — a floor,
+  not a report — so step 5 below is not optional.
 
 Then read `src/content/schema.ts` for field names and `packs/classic/` for
 documents that really load. Those two are the only authority on what a document
@@ -92,18 +92,21 @@ exists only in a `rules.json`, which a forged overlay does not ship.
 npm run validate-packs
 ```
 
-Schemas, then references, for every pack and every variant, through the same
-loader the game uses. Fix what it names: the report carries the pack, the file and
-the field.
+Schemas, references and then the playability pass, for every pack and every
+variant, through the same loader and simulation the game uses. Fix what it names:
+the report carries the pack, the file and the field, and a playability failure
+names the stage, the check and why. A forged variant with no personas of its own
+is flown by those of a variant on the same rules document.
 
 Then `npm test`, which adds the documentation accuracy checks and the ground-rules
 scan. If the pack's own README states a count, derive it with a counter in
 `tests/unit/helpers/docs.ts` rather than typing a number.
 
-## Step 5 — play it, because the validator cannot
+## Step 5 — play it, and report what the validator does not print
 
-The validator runs no simulation (guide section 2.2). The substitute is to fly the
-content headlessly with an autoplay persona and measure five things:
+The validator flies every stage and fails one that is unplayable (guide section
+2.2), but it prints a verdict, not measurements. Fly the content headlessly with an
+autoplay persona and measure five things:
 
 1. **every enemy reaches its slot** — step a stage with no input and dives
    disarmed, and assert every enemy ends `home`;

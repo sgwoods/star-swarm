@@ -1,0 +1,9 @@
+{
+  "id": "entry-drop",
+  "mirror": true,
+  "start": [104, -16],
+  "segments": [
+    { "type": "line", "to": [104, 120], "speed": 2 },
+    { "type": "toSlot", "speed": 2 }
+  ]
+}

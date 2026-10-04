@@ -1,0 +1,55 @@
+{
+  "id": "unplayable",
+  "name": "Unplayable",
+  "description": "A fixture, never shipped: three stages that load, validate their schemas and references, and cannot be played. tests/sim/validate-packs-playability.test.ts layers it over Classic and holds the playability pass to failing each one.",
+  "roles": {
+    "drone": {
+      "label": "Drifter"
+    }
+  },
+  "formations": {
+    "shoal": {
+      "id": "shoal",
+      "grid": {
+        "originX": 32,
+        "originY": 60,
+        "columnSpacing": 8,
+        "rowSpacing": 5
+      },
+      "slots": [
+        {
+          "row": 0,
+          "column": 6,
+          "role": "drone"
+        },
+        {
+          "row": 0,
+          "column": 12,
+          "role": "drone"
+        }
+      ]
+    },
+    "ledge": {
+      "id": "ledge",
+      "grid": {
+        "originX": 104,
+        "originY": 270,
+        "columnSpacing": 8,
+        "rowSpacing": 5
+      },
+      "slots": [
+        {
+          "row": 0,
+          "column": 0,
+          "role": "drone"
+        }
+      ]
+    }
+  },
+  "stageSequence": {
+    "normal": {
+      "rows": ["overboard", "ledge", "crowded"],
+      "repeatLast": 1
+    }
+  }
+}

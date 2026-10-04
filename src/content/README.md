@@ -55,5 +55,6 @@ pack, so an overlay may replace a self-contained document and may not add one th
 names the base pack's content.
 
 `npm run validate-packs` runs the same passes the game does — it calls `loadPack`
-and `loadVariants` rather than reimplementing either. Section 8's playability
-checks are Milestone 3 and are not here.
+and `loadVariants` rather than reimplementing either — and then flies what they
+resolved: section 8's playability checks are `scripts/playability.ts`, outside this
+directory because they run the simulation.

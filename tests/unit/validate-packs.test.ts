@@ -151,14 +151,6 @@ describe('empty and absent trees', () => {
   });
 });
 
-describe('the real packs/ tree in this repo', () => {
-  it('passes', () => {
-    const result = validate(join(REPO_ROOT, 'packs'));
-    expect(result.code).toBe(0);
-    expect(result.output).toContain('classic: OK');
-  });
-});
-
 describe('a well-formed pack', () => {
   it('passes and reports what it found', () => {
     const root = makePacksRoot();
@@ -366,6 +358,20 @@ function writeVariant(packsRoot: string, name: string, contents: unknown): void 
   );
 }
 
+/** A persona as a variant document states one: every field is required. */
+const PERSONA = {
+  id: 'ace',
+  label: 'ACE',
+  reactionSteps: 1,
+  aimTolerance: 2,
+  threatHorizon: 288,
+  dodgeMargin: 24,
+  shotDiscipline: 1,
+  panic: 0,
+  engage: 1,
+  rescue: false,
+};
+
 describe('the variant pass', () => {
   /**
    * The good pack plus a `rules.json`, because a variant needs rules to run on —
@@ -376,13 +382,53 @@ describe('the variant pass', () => {
     goodExcept({ 'rules.json': minimalRules('good-rules') });
 
   it('passes, and says so, on a variant naming an installed pack', () => {
+    // A variant is a game, so this one is flown by the playability pass too, and
+    // has to be one: a formation that sways (settling is what arms the attack), an
+    // entry that ends in its slot, and a persona to fly it. The shipped tree and a
+    // tree that fails for playability alone are `tests/sim/validate-packs-playability.test.ts`.
     const root = makePacksRoot();
-    writePack(root, 'good', withRules());
-    writeVariant(root, 'shipped', { id: 'shipped', name: 'Shipped', packs: ['good'] });
+    writePack(
+      root,
+      'good',
+      goodExcept({
+        'rules.json': {
+          ...minimalRules('good-rules'),
+          formation: { sway: { amplitude: 4, stepPixels: 1, stepFrames: 4 } },
+        },
+        'paths/left-hook.json': {
+          id: 'left-hook',
+          start: [112, -16],
+          segments: [
+            { type: 'line', to: [112, 120], speed: 1.5 },
+            { type: 'toSlot', speed: 1.5 },
+          ],
+        },
+      }),
+    );
+    writeVariant(root, 'shipped', {
+      id: 'shipped',
+      name: 'Shipped',
+      packs: ['good'],
+      autoplay: { personas: [PERSONA] },
+    });
     const result = validate(root);
-    expect(result.code).toBe(0);
+    expect(result.code, result.output).toBe(0);
     expect(result.output).toContain('variants/shipped.json: OK');
     expect(result.output).toContain('1 pack(s): good');
+    expect(result.output).toContain('playability shipped: 1 stage(s) flown');
+  });
+
+  it('fails a variant with stages to fly and no persona to fly them', () => {
+    // An empty persona list is the normal case for a variant, and the pass borrows
+    // one from a variant running the same rules document. With none to borrow, a
+    // pass that went quiet would report a game nobody had played as playable.
+    const root = makePacksRoot();
+    writePack(root, 'good', withRules());
+    writeVariant(root, 'pilotless', { id: 'pilotless', name: 'Pilotless', packs: ['good'] });
+    const result = validate(root);
+    expect(result.code).toBe(1);
+    expect(result.output).toContain('variants/pilotless.json:');
+    expect(result.output).toContain('playability personas: 1 stage(s) to fly and no persona');
   });
 
   it('says so when there are no variants, rather than failing', () => {

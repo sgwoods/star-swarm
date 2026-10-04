@@ -1,0 +1,8 @@
+{
+  "id": "dive-overboard",
+  "mirror": true,
+  "segments": [
+    { "type": "arc", "radius": 80, "degrees": 180, "dir": "cw", "speed": 2 },
+    { "type": "exitBottom", "speed": 2 }
+  ]
+}
