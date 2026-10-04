@@ -44,7 +44,7 @@ import type { Persona } from '../content/personas.js';
 import { maxXFor } from '../content/rules.js';
 import { type Action, EMPTY_FRAME, frameOf, type InputFrame } from '../engine/input.js';
 import { createRng, type Rng } from '../engine/rng.js';
-import { beamCaptor, beamWindow } from '../sim/capture.js';
+import { beamCaptor, beamWindow } from '../sim/abilities/capture-beam.js';
 import type { World } from '../sim/world.js';
 
 /* -------------------------------------------------------------------------- */

@@ -29,7 +29,7 @@
  * 5. **A capture attempt is one of these dives.** The captor launches through the
  *    same credit, the same diver limit and the same `beginDive`; all that differs
  *    is the path, which the capture channel hands back when it takes the launch
- *    (`src/sim/capture.ts`). There is no second kind of motion for it.
+ *    (`src/sim/abilities/capture-beam.ts`). There is no second kind of motion for it.
  * 6. **Homing is `toSlot` and nothing else.** A diver that leaves the bottom
  *    re-enters at the top and flies the pack's return path, which ends in the
  *    same segment the entry waves use. There is one homing implementation in the
@@ -56,8 +56,8 @@ import {
 import type { DifficultyRow, Rules } from '../content/schema.js';
 import type { StageContent } from '../content/stages.js';
 import type { Rng } from '../engine/rng.js';
-import type { CaptureState } from './capture.js';
-import { beginCaptureDive } from './capture.js';
+import type { CaptureState } from './abilities/capture-beam.js';
+import { beginCaptureDive } from './abilities/capture-beam.js';
 import type { Enemy, Fleet, ScriptedFire } from './enemies.js';
 import { beginDive, fleetEnemies, spawnDiver } from './enemies.js';
 import type { FormationState } from './formation.js';
@@ -180,7 +180,7 @@ export interface AttackContext {
    * The director asks it one question, on one kind of launch: is this captor's
    * dive a capture attempt? A capture attempt is a dive with a beam on it, so it
    * shares the credit, the diver limit and `beginDive` with everything else — the
-   * only difference is which path it flies (`src/sim/capture.ts`).
+   * only difference is which path it flies (`src/sim/abilities/capture-beam.ts`).
    */
   readonly capture: CaptureState | undefined;
   /** The fighter's anchor, or `undefined` while it is off the field. */

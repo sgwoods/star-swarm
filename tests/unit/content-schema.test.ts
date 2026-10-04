@@ -59,6 +59,52 @@ describe('7.1 alien', () => {
     expect(result.success).toBe(false);
   });
 
+  it('validates each implemented ability’s parameters with its own schema', () => {
+    const parse = (ability: Record<string, unknown>) =>
+      alienSchema.safeParse({ ...minimal, abilities: [ability] });
+    // Defaults come from the ability's schema, not from the simulation.
+    const shielded = alienSchema.parse({ ...minimal, abilities: [{ type: 'shield', hits: 2 }] });
+    expect(shielded.abilities).toEqual([{ type: 'shield', hits: 2 }]);
+    const spawner = alienSchema.parse({
+      ...minimal,
+      abilities: [{ type: 'spawnMinions', alien: 'mite', maxAlive: 2, everyFrames: 60 }],
+    });
+    expect(spawner.abilities).toEqual([
+      { type: 'spawnMinions', alien: 'mite', count: 1, everyFrames: 60, maxAlive: 2, spacing: 8 },
+    ]);
+    expect(parse({ type: 'teleport', everyFrames: 30 }).success).toBe(true);
+    // Strict: a misspelt or a missing parameter is an error, not a no-op.
+    expect(parse({ type: 'shield', hits: 2, recharge: 30 }).success).toBe(false);
+    expect(parse({ type: 'shield' }).success).toBe(false);
+    expect(parse({ type: 'splitOnHit', into: 'jellyling' }).success).toBe(false);
+    expect(parse({ type: 'spawnMinions', alien: 'mite' }).success).toBe(false);
+    expect(parse({ type: 'teleport', everyFrames: 0 }).success).toBe(false);
+  });
+
+  it('keeps the reserved ids loose, because nothing reads them', () => {
+    for (const type of ['transform', 'mirrorPlayer']) {
+      const result = alienSchema.safeParse({ ...minimal, abilities: [{ type, anything: 1 }] });
+      expect([type, result.success]).toEqual([type, true]);
+    }
+  });
+
+  it('refuses captureBeam on an alien, and says where its switch is', () => {
+    const result = alienSchema.safeParse({ ...minimal, abilities: [{ type: 'captureBeam' }] });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toMatch(/switched on by "capture" in rules\.json/);
+  });
+
+  it('allows each ability once per alien', () => {
+    const result = alienSchema.safeParse({
+      ...minimal,
+      abilities: [
+        { type: 'shield', hits: 1 },
+        { type: 'shield', hits: 2 },
+      ],
+    });
+    expect(result.success).toBe(false);
+  });
+
   it('rejects a score with no base', () => {
     const result = alienSchema.safeParse({ ...minimal, score: { formation: 50, diving: 100 } });
     expect(result.success).toBe(false);

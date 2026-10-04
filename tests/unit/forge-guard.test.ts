@@ -11,28 +11,37 @@
  *    rule fails the build before anybody reviews it.
  * 2. **Refusing is a required feature, because nothing downstream catches the
  *    alternative.** `docs/DESIGN.md` section 7.5 asks the generator to decline a
- *    prompt the ability registry cannot satisfy. The registry does not exist yet,
- *    and the rest of this file is the reason that matters: the schema *accepts* an
- *    ability, the loader is happy, the gate passes, and the simulation does
- *    nothing — so a pack that improvised one would be indistinguishable from a
- *    pack that worked, right up to somebody playing it. The same is true of two
- *    stage fields and of a role the difficulty rows do not name. Each is asserted
- *    here as an *identity* between a world that states the thing and a world that
- *    does not, which is the only form of "silently nothing" that cannot rot.
+ *    prompt the ability registry cannot satisfy. The registry implements five of
+ *    the seven ids the schema reserves, and the rest of this file is the reason
+ *    the other two matter: the schema *accepts* a reserved ability, the loader is
+ *    happy, the gate passes, and the simulation does nothing — so a pack that
+ *    improvised one would be indistinguishable from a pack that worked, right up
+ *    to somebody playing it. The same is true of two stage fields and of a role
+ *    the difficulty rows do not name. Each is asserted here as an *identity*
+ *    between a world that states the thing and a world that does not, which is
+ *    the only form of "silently nothing" that cannot rot — and an implemented
+ *    ability is asserted as the opposite, so the day one stops acting, this says
+ *    so.
  *
  * `docs/content-guide.md` sections 2 and 9 are the author-facing statement of all
  * of it; this is the machine-checked one.
  */
 
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
 import { readPackSource, readVariantSources } from '../../src/content/fs.js';
 import { loadPackOrThrow, packSourceFromRecord } from '../../src/content/loader.js';
-import { alienSchema, ABILITY_TYPES } from '../../src/content/schema.js';
+import {
+  alienSchema,
+  ABILITY_TYPES,
+  isImplementedAbility,
+  RESERVED_ABILITY_TYPES,
+} from '../../src/content/schema.js';
 import { resolveStageContent } from '../../src/content/stages.js';
+import { ABILITY_REGISTRY } from '../../src/sim/abilities/registry.js';
 import { createFleet } from '../../src/sim/enemies.js';
 import { createWorld, fingerprintWorld, stepWorld } from '../../src/sim/world.js';
 import { classicRules, quickRunRules } from '../helpers/rules.js';
@@ -177,6 +186,15 @@ describe('the ground rules are enforced on every pack, however it was authored',
 /* 2. Why the refusal has to happen at generation time                         */
 /* -------------------------------------------------------------------------- */
 
+/** A second alien for an ability to put on the field: it can dive, and does nothing else. */
+const SHARD_ALIEN = {
+  id: 'shard',
+  role: 'drone',
+  sprite: 'dot',
+  score: { base: 10 },
+  dive: { paths: ['dive'] },
+} as const;
+
 /** The smallest pack that puts one shootable enemy in a formation. */
 function probePack(alien: Record<string, unknown>, stage: Record<string, unknown>) {
   return loadPackOrThrow(
@@ -211,6 +229,7 @@ function probePack(alien: Record<string, unknown>, stage: Record<string, unknown
         ],
       },
       'aliens/probe.json': alien,
+      'aliens/shard.json': SHARD_ALIEN,
       'stages/probe.json': stage,
     }),
   );
@@ -255,54 +274,85 @@ function fingerprintOf(alien: Record<string, unknown>, stage: Record<string, unk
 }
 
 describe('the engine accepts content it cannot honour, which is why /forge must refuse', () => {
-  it('loads an alien carrying every reserved ability, with parameters nobody validates', () => {
-    // `docs/DESIGN.md` section 7.5's registry is reserved in the schema and
-    // implemented nowhere, and `abilitySchema` is deliberately loose about
-    // parameters until it is. So this passes — which is the problem.
+  it('loads an alien carrying a reserved ability, with parameters nobody validates', () => {
+    // `docs/DESIGN.md` section 7.5's registry reserves these ids and implements
+    // them nowhere, and their schema is deliberately loose about parameters until
+    // something can say what one would mean. So this passes — which is the problem.
     const parsed = alienSchema.parse({
       ...PLAIN_ALIEN,
-      abilities: ABILITY_TYPES.map((type) => ({ type, into: 'nothing', count: 99 })),
+      abilities: RESERVED_ABILITY_TYPES.map((type) => ({ type, into: 'nothing', count: 99 })),
     });
-    expect(parsed.abilities.map((ability) => ability.type)).toEqual([...ABILITY_TYPES]);
+    expect(parsed.abilities.map((ability) => ability.type)).toEqual([...RESERVED_ABILITY_TYPES]);
     expect(() => probePack({ ...parsed }, PLAIN_STAGE)).not.toThrow();
   });
 
-  it('holds no ability module, and reads an alien’s `abilities` nowhere', () => {
-    const abilities = resolve(REPO_ROOT, 'src', 'sim', 'abilities');
-    expect(readdirSync(abilities).filter((name) => name.endsWith('.ts'))).toEqual([]);
-
-    // A textual scan, like `tests/unit/sim-boundary.test.ts`: the claim is that no
-    // module *reads* the field, and the only mention of it anywhere under `src/` is
-    // the schema that declares it.
-    const mentions: string[] = [];
-    const walk = (dir: string): void => {
-      for (const name of readdirSync(dir)) {
-        const path = join(dir, name);
-        if (statSync(path).isDirectory()) walk(path);
-        else if (name.endsWith('.ts') && /\babilities\b/.test(readFileSync(path, 'utf8'))) {
-          mentions.push(
-            path
-              .slice(REPO_ROOT.length + 1)
-              .split(/[\\/]/)
-              .join('/'),
-          );
-        }
+  it('refuses an implemented ability whose parameters are wrong or lead nowhere', () => {
+    // The other half of the line: an implemented id validates its own parameters
+    // and its references, so the same improvisation that a reserved id swallows is
+    // a load error the gate reports.
+    const bad = [
+      { type: 'shield' },
+      { type: 'splitOnHit', into: 'nothing', count: 2 },
+      { type: 'splitOnHit', into: 'probe', count: 2 },
+      { type: 'teleport' },
+      { type: 'spawnMinions', alien: 'shard' },
+      { type: 'captureBeam' },
+    ];
+    for (const ability of bad) {
+      let refused = false;
+      try {
+        probePack({ ...PLAIN_ALIEN, abilities: [ability] }, PLAIN_STAGE);
+      } catch {
+        refused = true;
       }
-    };
-    walk(resolve(REPO_ROOT, 'src'));
-    expect(mentions).toEqual(['src/content/schema.ts']);
+      // Paired with the entry, so a failure names the one that loaded.
+      expect([ability, refused]).toEqual([ability, true]);
+    }
   });
 
-  it('plays a world identically whether or not an alien declares an ability', () => {
-    // The identity is the whole point: `splitOnHit` on an alien that is shot dead
-    // changes nothing at all, so a forged pack that improvised one would look
+  it('registers one module per implemented ability, and none for a reserved one', () => {
+    const implemented = ABILITY_TYPES.filter(isImplementedAbility);
+    expect(Object.keys(ABILITY_REGISTRY).sort()).toEqual([...implemented].sort());
+    expect(implemented.length + RESERVED_ABILITY_TYPES.length).toBe(ABILITY_TYPES.length);
+
+    // One file per ability plus the registry that dispatches to them, and no file
+    // for a reserved id — a module nobody registered would be a mechanic that
+    // never runs.
+    const abilities = resolve(REPO_ROOT, 'src', 'sim', 'abilities');
+    const modules = readdirSync(abilities).filter((name) => name.endsWith('.ts'));
+    expect(modules.length).toBe(implemented.length + 1);
+    expect(modules).toContain('registry.ts');
+    for (const reserved of RESERVED_ABILITY_TYPES) {
+      const file = `${reserved.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}.ts`;
+      expect(modules).not.toContain(file);
+    }
+  });
+
+  it('plays a world identically whether or not an alien declares a reserved ability', () => {
+    // The identity is the whole point: a reserved ability on an alien that is shot
+    // dead changes nothing at all, so a forged pack that improvised one would look
     // exactly like a forged pack that worked.
     const plain = fingerprintOf(PLAIN_ALIEN, PLAIN_STAGE);
-    const withAbility = fingerprintOf(
-      { ...PLAIN_ALIEN, abilities: [{ type: 'splitOnHit', into: 'probe', count: 2 }] },
+    for (const type of RESERVED_ABILITY_TYPES) {
+      const withAbility = fingerprintOf(
+        { ...PLAIN_ALIEN, abilities: [{ type, into: 'shard', count: 2 }] },
+        PLAIN_STAGE,
+      );
+      expect([type, withAbility]).toEqual([type, plain]);
+    }
+  });
+
+  it('plays a world differently when an alien declares an implemented ability', () => {
+    // And the converse, which is what makes the line above worth drawing: the same
+    // probe, shot dead the same way, with `splitOnHit` switched on puts fragments
+    // on the field. If this ever comes out equal, the registry has stopped acting
+    // and `/forge` would be back to refusing it.
+    const plain = fingerprintOf(PLAIN_ALIEN, PLAIN_STAGE);
+    const split = fingerprintOf(
+      { ...PLAIN_ALIEN, abilities: [{ type: 'splitOnHit', into: 'shard', count: 2 }] },
       PLAIN_STAGE,
     );
-    expect(withAbility).toBe(plain);
+    expect(split).not.toBe(plain);
   });
 
   it('plays a world identically whether or not a stage states `modifiers` or `diveRules`', () => {

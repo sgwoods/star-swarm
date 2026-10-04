@@ -227,7 +227,7 @@ describe('a dive, end to end', () => {
     // And every enemy back at home is standing in its own slot, not in a
     // neighbour's: homing resolves the slot the enemy owns for the whole stage.
     // Keyed on the whole address, because a home index names a slot in one of two
-    // tables — a captured fighter's names a captive slot (`src/sim/capture.ts`).
+    // tables — a captured fighter's names a captive slot (`src/sim/abilities/capture-beam.ts`).
     const homes = world.fleet.enemies.filter((enemy) => enemy.state === 'home');
     const addresses = homes.map((enemy) => `${String(enemy.inCaptiveSlot)}:${String(enemy.home)}`);
     expect(new Set(addresses).size).toBe(homes.length);

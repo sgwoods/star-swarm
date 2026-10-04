@@ -32,7 +32,12 @@ import { createLoop, STEP_MS } from '../src/engine/loop.js';
 import type { Recorder } from '../src/engine/replay.js';
 import { recordInput, serializeReplay } from '../src/engine/replay.js';
 import { createRng } from '../src/engine/rng.js';
-import { beamCaptor, capturedFighter, captorOfCaptive, holdsFighter } from '../src/sim/capture.js';
+import {
+  beamCaptor,
+  capturedFighter,
+  captorOfCaptive,
+  holdsFighter,
+} from '../src/sim/abilities/capture-beam.js';
 import type { Enemy } from '../src/sim/enemies.js';
 import { createWorld, fingerprintWorld, stepWorld, type World } from '../src/sim/world.js';
 

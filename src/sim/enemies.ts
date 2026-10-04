@@ -30,11 +30,12 @@
  */
 
 import { resolveEscortBonus } from '../content/rules.js';
-import type { Alien, Rules, Wave } from '../content/schema.js';
+import type { Alien, AlienAbility, Rules, Wave } from '../content/schema.js';
 import type { StageContent } from '../content/stages.js';
+import type { Rng } from '../engine/rng.js';
 import type { HitPadding } from './collision.js';
 import type { FormationState } from './formation.js';
-import { completeEntry, homePosition, homePositionAhead } from './formation.js';
+import { completeEntry, homePosition, homePositionAhead, isRightOfCentre } from './formation.js';
 import type { CompiledPath, PathPose, PathSample, TargetResolver, Vec2 } from './paths.js';
 import { compilePath, pathEventsBetween, samplePath } from './paths.js';
 
@@ -57,7 +58,7 @@ import { compilePath, pathEventsBetween, samplePath } from './paths.js';
  * still on the field, still shootable, and still worth the attacking value — which
  * is the whole reason it is a state rather than a flag. Its flight resumes from the
  * frame it paused on, because a `beaming` enemy is simply one `stepFleet` does not
- * advance (`src/sim/capture.ts`).
+ * advance (`src/sim/abilities/capture-beam.ts`).
  *
  * `dead` is the one terminal state, and it holds **two** endings: shot down, and
  * flown off the field alive — a diver that does not return, or a challenge-stage
@@ -94,7 +95,7 @@ export interface Enemy {
    * row the arcade keeps above the captors. Everything else about it is an
    * ordinary enemy — it flies in, sits in its slot, dives, and can be shot for
    * points — so one flag on the home address is cheaper and truer than a second
-   * kind of object (`src/sim/capture.ts`).
+   * kind of object (`src/sim/abilities/capture-beam.ts`).
    */
   readonly inCaptiveSlot: boolean;
   /** Which frame of the update round robin advances this enemy's state. */
@@ -161,6 +162,15 @@ export interface Enemy {
   returnsFromDive: boolean;
   /** How this alien bombs, or `undefined` for one that never does. */
   readonly fire: EnemyFire | undefined;
+  /**
+   * The engine abilities its alien switches on, with their parameters.
+   *
+   * Copied off the alien like everything else here, so the registry
+   * (`./abilities/registry.ts`) works on the enemy and never looks an alien up.
+   * Left out of {@link enemyFingerprint}: it never changes, and what an ability
+   * *does* is carried in the world's ability state, which is fingerprinted.
+   */
+  readonly abilities: readonly AlienAbility[];
 
   state: EnemyState;
   /** Sprite anchor, matching every other anchor in the simulation. */
@@ -408,6 +418,7 @@ function createEnemy(alien: Alien, seed: EnemySeed, rules: Rules): Enemy {
             cooldownFrames: fire.cooldownFrames ?? 0,
             spreadOffsets: fire.spreadOffsets,
           },
+    abilities: alien.abilities,
     state: 'standby',
     x: 0,
     y: 0,
@@ -661,6 +672,13 @@ export interface SpawnOptions {
   readonly pathId: string;
   readonly mirror?: boolean;
   readonly playerAt?: Vec2 | undefined;
+  /**
+   * Whether it comes back to `home` once its dive ends. Defaults to what its alien
+   * says. An ability's fragment or minion borrows its parent's slot only so that a
+   * `toSlot` in its dive has somewhere to aim, and says `false` here: it owns no
+   * slot to rejoin.
+   */
+  readonly returns?: boolean;
 }
 
 /** Where and how an enemy joins a fleet that is already running. */
@@ -754,6 +772,7 @@ export function spawnDiver(
     ...(options.wave !== undefined && { wave: options.wave }),
     state: 'home',
   });
+  if (options.returns !== undefined) enemy.returnsFromDive = options.returns;
   beginDive(
     fleet,
     enemy,
@@ -765,6 +784,56 @@ export function spawnDiver(
     options.playerAt,
   );
   return enemy;
+}
+
+/**
+ * Put `count` of one alien on the field abreast of `parent`, each diving along
+ * one of its own dive paths, and none of them ever returning.
+ *
+ * What an ability leaves behind — a split's fragments, a spawner's minions. They
+ * appear where the parent is, `spacing` pixels apart and centred on it, and fan
+ * the way a dive from the parent's side of the formation does. Which path each
+ * flies is a draw from the world's seeded generator. They borrow the parent's
+ * slot so that a `toSlot` inside their dive has somewhere to aim, and own no slot
+ * to come back to: a fragment or a minion leaves at the end of its dive.
+ */
+export function spawnAbreast(
+  fleet: Fleet,
+  alien: Alien,
+  content: StageContent,
+  formation: FormationState,
+  rules: Rules,
+  rng: Rng,
+  parent: Enemy,
+  count: number,
+  spacing: number,
+  playerAt: Vec2 | undefined,
+): Enemy[] {
+  const paths = alien.dive?.paths ?? [];
+  if (paths.length === 0) return [];
+  // A parent with no slot of its own cannot ask the formation which side it is
+  // on, so it asks the playfield instead.
+  const mirror =
+    parent.home === NO_SLOT
+      ? parent.x * 2 >= rules.playfield.width
+      : isRightOfCentre(formation, parent.home);
+  const middle = (count - 1) / 2;
+  const spawned: Enemy[] = [];
+  for (let index = 0; index < count; index += 1) {
+    spawned.push(
+      spawnDiver(fleet, alien, content, formation, rules, {
+        at: [parent.x + (index - middle) * spacing, parent.y],
+        heading: parent.heading,
+        home: parent.home,
+        wave: parent.wave,
+        pathId: rng.pick(paths),
+        mirror,
+        playerAt,
+        returns: false,
+      }),
+    );
+  }
+  return spawned;
 }
 
 /**
@@ -808,7 +877,7 @@ export interface ScriptedFire {
  * Surfaced rather than acted on here, because an ability is not the fleet's
  * business. It is how a pack says *where* in a dive something happens — the
  * tractor beam comes out at the `captureBeam` trigger in the captor's own path
- * (`src/sim/capture.ts`), so the descent depth is authored content rather than a
+ * (`src/sim/abilities/capture-beam.ts`), so the descent depth is authored content rather than a
  * threshold in the engine.
  */
 export interface ScriptedTrigger {

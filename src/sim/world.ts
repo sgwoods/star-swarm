@@ -13,11 +13,12 @@
  * `src/content/`; neither is a pack, a registry or a file, which is what keeps the
  * simulation free of the content layer's plumbing.
  *
- * Milestone 2 scope so far: entry waves, formation sway and breathe, slot homing,
- * dive attacks, enemy fire and the difficulty ramp that drives both
- * (`src/sim/dive.ts`), the capture channel — beam, captured fighter, rogue,
- * rescue and dual fighter (`src/sim/capture.ts`) — challenge stages and their
- * three awards (`src/sim/challenge.ts`), and extra lives. A captor's dive is an
+ * In scope: entry waves, formation sway and breathe, slot homing, dive attacks,
+ * enemy fire and the difficulty ramp that drives both (`src/sim/dive.ts`), the
+ * capture channel — beam, captured fighter, rogue, rescue and dual fighter
+ * (`src/sim/abilities/capture-beam.ts`) — challenge stages and their three
+ * awards (`src/sim/challenge.ts`), extra lives, and the per-enemy abilities a
+ * pack switches on (`src/sim/abilities/registry.ts`). A captor's dive is an
  * ordinary dive with a beam on it, so it launches through the same director and
  * the same `beginDive`.
  *
@@ -36,7 +37,16 @@ import type { StageContent, StageSource } from '../content/stages.js';
 import { EMPTY_STAGE_SOURCE } from '../content/stages.js';
 import { isDown, type InputFrame } from '../engine/input.js';
 import { createRng, type Rng, type RngState } from '../engine/rng.js';
-import type { CaptureState } from './capture.js';
+import type { AbilityContext, AbilityState } from './abilities/registry.js';
+import {
+  abilitiesAbsorbShot,
+  abilitiesNoteDestroyed,
+  abilityFingerprint,
+  createAbilityState,
+  shieldRemaining,
+  stepAbilities,
+} from './abilities/registry.js';
+import type { CaptureState } from './abilities/capture-beam.js';
 import {
   beamHasFighter,
   beamIsOut,
@@ -47,7 +57,7 @@ import {
   createCaptureState,
   enterStageCapture,
   stepCapture,
-} from './capture.js';
+} from './abilities/capture-beam.js';
 import type { ChallengeStage } from './challenge.js';
 import { createChallengeStage, endChallengeStage, recordChallengeHit } from './challenge.js';
 import { hitWindowIndex } from './collision.js';
@@ -142,9 +152,14 @@ export interface World {
    *
    * Carried across stages rather than rebuilt with the stage, because a captured
    * fighter stays with its captor for the rest of the game
-   * (`src/sim/capture.ts`).
+   * (`src/sim/abilities/capture-beam.ts`).
    */
   capture: CaptureState;
+  /**
+   * What the enemies' own abilities are doing — shields, timers, minions.
+   * Replaced every stage, because it is keyed by enemy id and ids are per stage.
+   */
+  abilities: AbilityState;
   rng: Rng;
   /** Events raised by the step just run. Replaced every step, never appended to across steps. */
   events: SimEvent[];
@@ -210,6 +225,7 @@ export function createWorld(options: WorldOptions): World {
     fleet: content === undefined ? NO_FLEET() : createFleet(content, rules),
     dive: createDiveState(rules, stage, options.rank),
     capture: createCaptureState(rules, stage, options.rank),
+    abilities: createAbilityState(),
     rng,
     events: [],
   };
@@ -299,6 +315,19 @@ function resolvePlayerShots(world: World): void {
       if (hitWindowIndex(shot, enemy, shot.windows, enemy.hitPadding) < 0) continue;
 
       shot.active = false;
+      // An ability may take the hit instead — a shield — in which case the shot is
+      // spent and the enemy is exactly as it was.
+      if (abilitiesAbsorbShot(world.abilities, enemy) !== undefined) {
+        world.events.push({
+          type: 'shield-hit',
+          targetId: enemy.id,
+          alienId: enemy.alienId,
+          x: enemy.x,
+          y: enemy.y,
+          shieldRemaining: shieldRemaining(world.abilities, enemy) ?? 0,
+        });
+        break;
+      }
       enemy.hitsRemaining -= 1;
       if (enemy.hitsRemaining > 0) {
         // A two-hit enemy's first hit scores nothing and only changes its
@@ -339,6 +368,8 @@ function resolvePlayerShots(world: World): void {
         addScore(world, award.score);
         addScore(world, transformBonus);
         payChallengeGroup(world, enemy, award.groupBonus);
+        // Whatever the kill leaves behind arrives after it: a split's fragments.
+        resolveAbilityKill(world, enemy);
       }
       break; // One shot, one target.
     }
@@ -374,6 +405,43 @@ function resolveCaptureKill(world: World, enemy: Enemy, priorState: EnemyState):
   // Shot after the beam had the ship but before it was pulled in: the arcade does
   // not rescue, and the fighter is lost (report acceptance test R10).
   if (kill.captured) capturePlayer(world);
+}
+
+/**
+ * Route a kill through the ability registry, and report what it left.
+ *
+ * Content that declares no ability gets here and leaves nothing, which is the
+ * guarantee that every recorded replay still plays as it was recorded.
+ */
+function resolveAbilityKill(world: World, enemy: Enemy): void {
+  const ctx = abilityContext(world);
+  if (ctx === undefined) return;
+  const left = abilitiesNoteDestroyed(world.abilities, ctx, enemy);
+  if (left.length === 0) return;
+  world.events.push({
+    type: 'enemy-split',
+    targetId: enemy.id,
+    alienId: enemy.alienId,
+    x: enemy.x,
+    y: enemy.y,
+    group: left.map((fragment) => fragment.id),
+  });
+}
+
+/** What the registry is handed for one step, or `undefined` with no stage on. */
+function abilityContext(world: World): AbilityContext | undefined {
+  const { content, formation } = world;
+  if (content === undefined || formation === undefined) return undefined;
+  return {
+    fleet: world.fleet,
+    content,
+    formation,
+    rules: world.rules,
+    rng: world.rng,
+    playerAt: playerTarget(world),
+    attacks: world.dive.attacks,
+    armed: world.dive.armed,
+  };
 }
 
 /**
@@ -566,6 +634,7 @@ function enterStage(world: World, stage: number): void {
   world.challenge = createChallengeStage(world.rules, stage, world.content);
   world.fleet = world.content === undefined ? NO_FLEET() : createFleet(world.content, world.rules);
   world.dive = createDiveState(world.rules, stage, world.rank);
+  world.abilities = createAbilityState();
   // The capture channel is *not* replaced: a captured fighter stays with its
   // captor for the rest of the game, and re-enters as the last ship of this
   // stage's wave.
@@ -755,6 +824,51 @@ function stepEnemies(world: World): void {
   }
 
   resolveCapture(world, content, formation, step.triggered, playerAt);
+  resolveAbilities(world, step.triggered);
+}
+
+/**
+ * The enemies' own abilities, stepped last.
+ *
+ * Last so that each reads where its enemy has just flown to and what the
+ * director and the capture channel have already done this frame — and so that a
+ * stage whose aliens declare nothing passes through here untouched.
+ */
+function resolveAbilities(world: World, triggered: readonly ScriptedTrigger[]): void {
+  const ctx = abilityContext(world);
+  if (ctx === undefined) return;
+  const step = stepAbilities(world.abilities, ctx, triggered);
+
+  for (const { enemy, from } of step.teleported) {
+    world.events.push({
+      type: 'enemy-teleported',
+      targetId: enemy.id,
+      alienId: enemy.alienId,
+      fromX: from[0],
+      fromY: from[1],
+      x: enemy.x,
+      y: enemy.y,
+    });
+  }
+  for (const { parent, minions } of step.spawned) {
+    world.events.push({
+      type: 'minions-spawned',
+      targetId: parent.id,
+      alienId: parent.alienId,
+      x: parent.x,
+      y: parent.y,
+      group: minions.map((minion) => minion.id),
+    });
+  }
+  for (const enemy of step.restored) {
+    world.events.push({
+      type: 'shield-restored',
+      targetId: enemy.id,
+      alienId: enemy.alienId,
+      x: enemy.x,
+      y: enemy.y,
+    });
+  }
 }
 
 /**
@@ -961,6 +1075,8 @@ export function fingerprintWorld(world: World): string {
       ]),
       dive: diveFingerprint(world.dive),
       capture: captureFingerprint(world.capture),
+      // Absent, not empty, while no ability has acted: see `abilityFingerprint`.
+      abilities: abilityFingerprint(world.abilities),
       formation: world.formation && [
         world.formation.frame,
         world.formation.motion,

@@ -418,7 +418,13 @@ function bezierParamAt(table: readonly number[], s: number): number {
  */
 const COMPILED = new WeakMap<
   CompiledPath,
-  { timeline: readonly Timed[]; mirrored: boolean; playfield: Playfield }
+  {
+    timeline: readonly Timed[];
+    mirrored: boolean;
+    playfield: Playfield;
+    /** World-space displacement added after mirroring; see {@link shiftPath}. */
+    shift?: Vec2;
+  }
 >();
 
 function resolveTarget(
@@ -878,15 +884,52 @@ export function samplePath(path: CompiledPath, frame: number): PathSample {
   const point = found.evaluate(elapsed > 0 ? elapsed : 0);
   const mirrored = entry?.mirrored ?? false;
   const playfield = entry?.playfield ?? path.playfield;
+  const x = mirrored ? mirrorX(point.x, playfield) : point.x;
+  // Added only when there is a shift, rather than adding zero: an unshifted path
+  // must sample to the very same numbers it always has, because the golden
+  // replays are recorded from them.
+  const shift = entry?.shift;
 
   return {
-    x: mirrored ? mirrorX(point.x, playfield) : point.x,
-    y: point.y,
+    x: shift === undefined ? x : x + shift[0],
+    y: shift === undefined ? point.y : point.y + shift[1],
     heading: mirrored ? mirrorHeading(point.heading) : normaliseHeading(point.heading),
     speed: found.compiled.to.speed,
     segment: found.compiled.index,
     done: false,
   };
+}
+
+/**
+ * The same flight, displaced by `(dx, dy)` in world space from start to end.
+ *
+ * What a teleport is: the flyer blinks to another place and carries on the
+ * flight it was already flying — same timeline, same frame, same events — from
+ * there. A new {@link CompiledPath} rather than a mutation, because a compiled
+ * path is a value other code may be holding, and shifts compose, so a flyer that
+ * blinks twice is shifted by the sum.
+ */
+export function shiftPath(path: CompiledPath, dx: number, dy: number): CompiledPath {
+  const entry = COMPILED.get(path);
+  const move = (pose: PathPose): PathPose => ({ ...pose, x: pose.x + dx, y: pose.y + dy });
+  const shifted: CompiledPath = {
+    ...path,
+    segments: path.segments.map((segment) => ({
+      ...segment,
+      from: move(segment.from),
+      to: move(segment.to),
+    })),
+    start: move(path.start),
+    end: move(path.end),
+  };
+  const before = entry?.shift ?? [0, 0];
+  COMPILED.set(shifted, {
+    timeline: entry?.timeline ?? [],
+    mirrored: entry?.mirrored ?? path.mirrored,
+    playfield: entry?.playfield ?? path.playfield,
+    shift: [before[0] + dx, before[1] + dy],
+  });
+  return shifted;
 }
 
 /**

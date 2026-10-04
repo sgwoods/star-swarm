@@ -8,8 +8,13 @@ import {
 import type { Rules } from '../../src/content/schema.js';
 import { isChallengeStage } from '../../src/content/rules.js';
 import { EMPTY_FRAME, frameOf } from '../../src/engine/input.js';
-import type { CapturePhase } from '../../src/sim/capture.js';
-import { beamIsOut, beamWindow, capturedFighter, captorOfCaptive } from '../../src/sim/capture.js';
+import type { CapturePhase } from '../../src/sim/abilities/capture-beam.js';
+import {
+  beamIsOut,
+  beamWindow,
+  capturedFighter,
+  captorOfCaptive,
+} from '../../src/sim/abilities/capture-beam.js';
 import { hitsAny, windowGapsX } from '../../src/sim/collision.js';
 import { armDives } from '../../src/sim/dive.js';
 import type { Enemy } from '../../src/sim/enemies.js';
@@ -19,7 +24,7 @@ import { createWorld, stepWorld, type World } from '../../src/sim/world.js';
 import { classicRules, classicStages } from '../helpers/rules.js';
 
 /**
- * The capture mechanic — `src/sim/capture.ts`.
+ * The capture mechanic — `src/sim/abilities/capture-beam.ts`.
  *
  * Everything here runs against the **shipped Classic pack**, read through the real
  * loader, and reaches every state by *playing* rather than by assigning to the

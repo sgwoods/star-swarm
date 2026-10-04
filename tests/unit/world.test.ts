@@ -49,6 +49,7 @@ function enemyAt(overrides: Partial<Enemy> = {}): Enemy {
     diveWeight: 0,
     returnsFromDive: true,
     fire: undefined,
+    abilities: [],
     state: 'returning',
     x: 0,
     y: 0,
