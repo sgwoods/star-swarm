@@ -22,8 +22,9 @@ Read `docs/content-guide.md` end to end. It is the state document for what a pac
 may say, and its section numbers are referenced throughout this file. It also
 carries the two things that decide most prompts:
 
-- **there is no ability registry**, so an alien cannot _do_ anything beyond moving,
-  firing its configured pattern, taking hits and being worth points; and
+- **the ability registry is small**: an alien can split, shield, teleport and spawn
+  minions exactly as guide section 5 specifies, two more ids are reserved and do
+  nothing, and anything else an alien might _do_ is a refusal; and
 - **passing the validator means the stage was flown, within a protocol** — a floor,
   not a report — so step 5 below is not optional.
 
@@ -35,8 +36,8 @@ looks like; this file and the guide never restate them.
 
 Before writing a single file, work out whether the sentence is satisfiable with
 the schemas that exist. Section 9 of the guide lists what has to be refused:
-abilities, per-stage rules, new engine behaviours, and anything the ground rules
-forbid.
+abilities the registry does not implement, per-stage rules, new engine behaviours,
+and anything the ground rules forbid.
 
 If it is not satisfiable, **stop and refuse** — see [Refusing](#refusing) below.
 Do not write a nearby pack and mention the difference afterwards. A pack that
@@ -151,11 +152,13 @@ Proposed task: <a one-line ship task for the thing that is missing>.
 Two refusals are worth recognising on sight because they look forgeable and are
 not:
 
-- **"an alien that splits when you shoot it"**, and every other ability. The schema
-  accepts `abilities: [{ "type": "splitOnHit", … }]`, the loader is happy, and
-  nothing reads it — so this one validates and silently does nothing, which is
-  worse than failing. `src/sim/abilities/` is where it would live and it holds no
-  code.
+- **"an alien that turns into another one mid-flight"**, or one that mirrors the
+  player — the two reserved abilities. The schema accepts
+  `abilities: [{ "type": "transform", … }]` with any parameters, the loader is
+  happy, and nothing reads it — so this one validates and silently does nothing,
+  which is worse than failing. `src/sim/abilities/` is where it would live, beside
+  the five that are implemented. (A splitting, shielded, teleporting or spawning
+  alien is forgeable — as the guide specifies each, and no further.)
 - **"a stage where the bullets are faster"**, and every other per-stage rule.
   `stage.modifiers` looks exactly like the place for it and is read by nothing. The
   real home is a `rules.json`, and a variant may not override one.

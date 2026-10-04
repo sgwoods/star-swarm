@@ -43,23 +43,32 @@ because the synth is not on the fixed step.
 
 ## 2. Two gaps, and you must not paper over either
 
-### 2.1 No ability can be composed
+### 2.1 Only the registry's abilities can be composed
 
 `docs/DESIGN.md` section 7.5 describes abilities as a fixed registry of engine
-behaviours that packs switch on and tune. The registry **does not exist**:
-`src/content/schema.ts` reserves seven ability ids and `src/sim/abilities/` holds
-no modules at all. <!-- check:count schema.abilityIds 7 sim.abilities.modules 0 -->
+behaviours that packs switch on and tune. `src/content/schema.ts` lists seven
+ability ids. Five are implemented by modules in `src/sim/abilities/`, and two —
+`transform` and `mirrorPlayer` — are **reserved and implemented nowhere**.
+<!-- check:count schema.abilityIds 7 sim.abilities.implemented 5 schema.reservedAbilityIds 2 -->
 
-The consequence is sharper than "unfinished", because the loader does not mind.
-`alien.abilities` passes validation with any reserved id and arbitrary parameters,
-and then nothing reads it. The one id anything acts on is `captureBeam`, and only
-`src/sim/capture.ts` does, and only for the one enemy the capture channel has
-already chosen as captor on its capture dive — a `trigger` naming it anywhere else
-compiles into an event nobody is listening for.
+The two halves behave in opposite ways, and the difference is the whole hazard:
 
-So a prompt that needs splitting on hit, a shield, a teleport, spawned minions or
-a mirrored player cannot be satisfied by content. That is a **refusal**, not a
-near miss to be approximated with a flight path (§9).
+- An **implemented** ability is strict. Its parameters are validated by a schema
+  of its own, and the loader checks what it names and refuses one that could never
+  act (§5, **Abilities**). A mistake is a load error with a file and a field.
+- A **reserved** ability is not. `alien.abilities` accepts either reserved id with
+  any parameters at all, and then nothing reads it.
+
+`captureBeam` cannot be declared on an alien at all: it is the capture channel,
+switched on by `capture` in a `rules.json`, and a path's `trigger` naming it says
+where in the captor's dive the beam opens (`src/sim/abilities/capture-beam.ts`).
+That trigger acts only for the enemy the channel has already chosen as captor on
+its capture dive; anywhere else it compiles into an event nobody acts on.
+
+So a prompt that needs an alien to turn into something else mid-flight, a mirrored
+player, or anything the five implemented abilities do not do, cannot be satisfied
+by content. That is a **refusal**, not a near miss to be approximated with a
+flight path or a reserved id (§9).
 
 ### 2.2 "Validated" means flown, within a protocol
 
@@ -88,7 +97,7 @@ Spelt correctly, accepted by the schema, read by no code in `src/`:
 
 | Field             | What happens instead                                                                                                                                              |
 | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `alien.abilities` | §2.1 — there is no registry                                                                                                                                       |
+| `alien.abilities` | only for a reserved id, `transform` or `mirrorPlayer` (§2.1); the implemented ones act                                                                            |
 | `alien.sounds`    | the manifest's `sounds` map is what plays; `src/audio/sfx.ts` has a `resolve` hook for this and no caller supplies one, because events do not yet carry the alien |
 | `stage.diveRules` | the attack director reads the rules layer's per-stage difficulty row                                                                                              |
 | `stage.modifiers` | nothing; there is no mechanism for a per-stage multiplier                                                                                                         |
@@ -196,6 +205,35 @@ attack. `score` carries the **base** value only; the diving value is the rules
 layer's multiplier applied to it. `hp` above 1 wants `hitSprites`, one entry per
 hit already taken.
 
+**Abilities.** An alien switches an ability on by listing it in `abilities`, at
+most once each, with the parameters that ability's schema names; the engine owns
+everything else. What each one does, and what it will not do whatever the pack
+says:
+
+- `splitOnHit` — destroyed by a shot, the enemy breaks into `count` of the `into`
+  alien, diving. Only a shot splits; nothing splits on a stage where nothing may
+  attack; and the loader refuses a chain of splits that leads back to an alien
+  already in it.
+- `shield` — `hits` shots are spent on the shield before any reach `hp`. A shield
+  hit scores nothing and does not change the sprite. With `rechargeFrames`, a
+  shield left unhit that long is whole again (§7.6).
+- `teleport` — a **diving** enemy blinks to another column and carries on the same
+  flight from there; the column is a seeded draw at least `margin` inside the
+  playfield. It fires every `everyFrames` of a dive, at a path `trigger` naming
+  `teleport`, or both.
+- `spawnMinions` — the enemy launches `count` of the `alien` it names, diving,
+  never more than `maxAlive` of its own at once. It fires every `everyFrames`, at
+  a path `trigger`, or both — and only once the formation has settled, on a stage
+  where anything may attack.
+
+Two rules hold for all of them. An alien that an ability puts on the field — a
+fragment or a minion — flies one of its **own** dive paths and leaves at the end
+of it, because it owns no slot; so the loader refuses one with no dive paths. And
+a timed ability with neither a timer nor a `trigger` on one of the alien's own
+dive paths would never fire, so the loader refuses that too. A `trigger` may not
+carry `params` for an implemented ability: every one of them is tuned on the
+alien.
+
 **Stage.** A wave is an ordered list of slots, and the two flags are the ones a
 generator skips:
 
@@ -241,11 +279,12 @@ Replacing only one half of the stage sequence is the useful middle: a pack can
 state `stageSequence.normal` and inherit the challenge half from the pack it is
 layered over, because the two halves are composed independently.
 
-## 7. Five couplings the schema does not show
+## 7. Six couplings the schema does not show
 
 The schema validates a pack on its own. The rules layer it will run under is a
 different document, and these are the places the two meet. Every one of them was
-found by playing a forged pack rather than by reading the code.
+found by playing a pack — the first five a forged one — rather than by reading the
+code.
 
 ### 7.1 Only roles the difficulty rows name can attack
 
@@ -297,6 +336,21 @@ decides which kind stage _n_ is, so `stageSequence.normal` row 2 is not stage 3.
 `src/content/stages.ts` is the only place that walk happens; read it rather than
 guessing, and check the mapping by printing it (§10).
 
+### 7.6 A recharging shield can strand a weak pilot
+
+`rechargeFrames` is measured against how often the player connects, and that is a
+property of the player rather than of the pack. Flown under Classic's rules, the
+mid-tier autoplay persona went thousands of frames without hitting a lone diver,
+so a last enemy whose shield recharged faster than that could not be broken and
+the stage never ended. `tests/sim/ability-pack.test.ts` found it, and ships its
+shield without a recharge for that reason. A recharging shield wants either a
+recharge far longer than the stage's last minute or company: it is dangerous on
+the last enemy and harmless on the first.
+
+Fragments and minions are the opposite risk: they are attackers like any other,
+counted against the difficulty row's simultaneous-diver limit, and they keep a
+stage open until they are gone.
+
 ## 8. Determinism survives, and not by being careful
 
 `docs/DESIGN.md` pillar 4 is a fixed 60 Hz step, a seeded RNG and replayable input
@@ -306,10 +360,11 @@ rather than of care taken by an author:
 - There is nowhere in a pack to put a wall-clock time. Every duration in the
   schema is a count of simulation frames. Sound envelopes are in seconds, and the
   synth they drive is not the simulation.
-- There is nowhere in a pack to put a random number. The only randomness a pack
-  influences is `alien.dive.weight`, which biases a draw taken from the world's
-  own seeded generator — so it is part of what a replay reproduces, not an escape
-  from it.
+- There is nowhere in a pack to put a random number. The randomness a pack
+  influences is all drawn from the world's own seeded generator — `alien.dive.weight`
+  biases which enemy dives, and an ability that needs a draw takes one there, such
+  as the column a `teleport` lands in or the dive path a fragment flies — so it is
+  part of what a replay reproduces, not an escape from it.
 - `src/sim/` is handed a resolved `Rules` value and a `StageSource` and holds no
   constants, so content changes what the simulation does without changing how it
   steps.
@@ -323,15 +378,18 @@ Classic's goldens fly through does**. Forge into a new pack, not into
 
 `docs/DESIGN.md` section 7.5 is explicit: when a prompt needs something the
 registry lacks, the generator says so and proposes a new-ability task rather than
-improvising. With no registry at all (§2.1) that is the common case, not the edge
-case.
+improvising. With five abilities implemented and two reserved (§2.1), most of
+what a prompt can ask an alien to _do_ is still outside it.
 
 Refuse when the prompt needs any of these:
 
-- An **ability**: anything an alien _does_ beyond moving, firing its configured
-  pattern, taking `hp` hits and being worth points. Splitting, shielding,
-  teleporting, spawning, growing, healing, reflecting, stealing anything other
-  than the one capture the channel already implements.
+- An **ability** the registry does not implement: anything an alien _does_ beyond
+  moving, firing its configured pattern, taking `hp` hits, being worth points,
+  and the five abilities of §5 as they are specified there. Transforming,
+  mirroring the player, growing, healing, reflecting, stealing anything other than
+  the one capture the channel already implements — and a variation the
+  implemented ones do not offer, such as a shield that blocks from one side only
+  or minions that join the formation.
 - A **per-stage rule**: different lives, different bullet speeds, a different shot
   cap, a different diver limit for one stage. `stage.modifiers` and
   `stage.diveRules` look like the place and are read by nothing (§2.3); the real

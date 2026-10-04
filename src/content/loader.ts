@@ -23,7 +23,9 @@ import type { ContentError } from './errors.js';
 import { ContentValidationError, fromZodError } from './errors.js';
 import { unknownProvenancePaths } from './rules.js';
 import type {
+  AbilityType,
   Alien,
+  AlienAbility,
   ContentDir,
   Formation,
   MovementPath,
@@ -213,6 +215,68 @@ export function loadPack(source: PackSource): LoadResult {
     }
   };
 
+  /**
+   * An ability's references, and the two ways a correctly spelt one could still
+   * do nothing at all — which is the failure this registry exists to refuse
+   * rather than to tolerate.
+   *
+   * - An alien an ability puts on the field has to be able to fly: fragments and
+   *   minions take one of their own dive paths, so one with none is refused here
+   *   rather than appearing frozen.
+   * - `teleport` and `spawnMinions` fire on a timer, at a path trigger, or both.
+   *   With no timer, one of the alien's own dive paths has to carry the trigger,
+   *   or it never fires.
+   */
+  const checkAbility = (file: string, field: string, alien: Alien, ability: AlienAbility): void => {
+    const flies = (id: string, at: string): void => {
+      const other = aliens.get(id);
+      if (other === undefined) missing(file, at, 'alien', id);
+      else if ((other.dive?.paths.length ?? 0) === 0) {
+        errors.push({
+          pack,
+          file,
+          field: at,
+          message: `alien "${id}" has no dive paths, so it could not fly once it is on the field`,
+        });
+      }
+    };
+    const triggered = (type: AbilityType): boolean =>
+      (alien.dive?.paths ?? []).some((id) =>
+        (paths.get(id)?.segments ?? []).some(
+          (segment) => segment.type === 'trigger' && segment.ability === type,
+        ),
+      );
+
+    switch (ability.type) {
+      case 'splitOnHit':
+        flies(ability.into, `${field}.into`);
+        return;
+      case 'spawnMinions':
+        flies(ability.alien, `${field}.alien`);
+        if (ability.everyFrames === undefined && !triggered(ability.type)) {
+          errors.push({
+            pack,
+            file,
+            field: `${field}.everyFrames`,
+            message: `spawnMinions never fires: there is no "everyFrames" and none of this alien's dive paths has a trigger naming it`,
+          });
+        }
+        return;
+      case 'teleport':
+        if (ability.everyFrames === undefined && !triggered(ability.type)) {
+          errors.push({
+            pack,
+            file,
+            field: `${field}.everyFrames`,
+            message: `teleport never fires: there is no "everyFrames" and none of this alien's dive paths has a trigger naming it`,
+          });
+        }
+        return;
+      default:
+        return;
+    }
+  };
+
   // Formations live in the manifest, keyed by id (see schema.ts for why).
   const formations = new Map<string, Formation>();
   for (const [key, formation] of Object.entries(manifest.formations)) {
@@ -257,6 +321,29 @@ export function loadPack(source: PackSource): LoadResult {
     alien.dive?.paths.forEach((path, index) => {
       requireRef(file, `dive.paths[${String(index)}]`, 'paths', path);
     });
+    alien.abilities.forEach((ability, index) => {
+      checkAbility(file, `abilities[${String(index)}]`, alien, ability);
+    });
+  }
+
+  // A split chain has to end. An alien that splits into itself, or into one that
+  // splits back, would put fragments on the field for every fragment shot, for
+  // ever, so the chain is walked from every splitter and a repeat is refused.
+  for (const [id, alien] of aliens) {
+    const seen = [id];
+    let next = splitTarget(alien);
+    while (next !== undefined && !seen.includes(next)) {
+      seen.push(next);
+      next = splitTarget(aliens.get(next));
+    }
+    if (next !== undefined) {
+      errors.push({
+        pack,
+        file: fileOf('aliens', id),
+        field: 'abilities',
+        message: `splitOnHit never ends: ${[...seen, next].join(' → ')}`,
+      });
+    }
   }
 
   for (const [id, path] of paths) {
@@ -466,4 +553,9 @@ export function loadPackOrThrow(source: PackSource): LoadedPack {
   const result = loadPack(source);
   if (!result.ok) throw new ContentValidationError(result.errors);
   return result.pack;
+}
+
+/** The alien `alien` splits into, if it splits at all. */
+function splitTarget(alien: Alien | undefined): string | undefined {
+  return alien?.abilities.find((ability) => ability.type === 'splitOnHit')?.into;
 }

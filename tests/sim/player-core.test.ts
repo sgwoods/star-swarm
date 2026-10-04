@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { resolveDifficultyRow } from '../../src/content/rules.js';
 import { EMPTY_FRAME, frameOf, isDown } from '../../src/engine/input.js';
 import { createReplaySource, parseReplay } from '../../src/engine/replay.js';
-import { capturedFighter } from '../../src/sim/capture.js';
+import { capturedFighter } from '../../src/sim/abilities/capture-beam.js';
 import { eventsOfType, type SimEvent } from '../../src/sim/events.js';
 import { startX } from '../../src/sim/player.js';
 import type { World } from '../../src/sim/world.js';

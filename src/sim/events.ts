@@ -294,6 +294,65 @@ export interface ChallengeEndedEvent {
   readonly endBonus: number;
 }
 
+/**
+ * A shot connected with an enemy's shield rather than with the enemy
+ * (`src/sim/abilities/shield.ts`). Scores nothing and leaves its `hp` alone.
+ */
+export interface ShieldHitEvent {
+  readonly type: 'shield-hit';
+  readonly targetId: number;
+  readonly alienId: string;
+  readonly x: number;
+  readonly y: number;
+  /** Hits the shield will still take; 0 means the next shot reaches the enemy. */
+  readonly shieldRemaining: number;
+}
+
+/** An enemy's shield went long enough unhit to be whole again. */
+export interface ShieldRestoredEvent {
+  readonly type: 'shield-restored';
+  readonly targetId: number;
+  readonly alienId: string;
+  readonly x: number;
+  readonly y: number;
+}
+
+/**
+ * A destroyed enemy broke into fragments (`src/sim/abilities/split-on-hit.ts`).
+ * Raised after the `target-destroyed` of the kill that split it.
+ */
+export interface EnemySplitEvent {
+  readonly type: 'enemy-split';
+  readonly targetId: number;
+  readonly alienId: string;
+  readonly x: number;
+  readonly y: number;
+  /** The fragments, already diving. */
+  readonly group: readonly number[];
+}
+
+/** A diving enemy blinked to another column (`src/sim/abilities/teleport.ts`). */
+export interface EnemyTeleportedEvent {
+  readonly type: 'enemy-teleported';
+  readonly targetId: number;
+  readonly alienId: string;
+  readonly fromX: number;
+  readonly fromY: number;
+  readonly x: number;
+  readonly y: number;
+}
+
+/** An enemy launched minions (`src/sim/abilities/spawn-minions.ts`). */
+export interface MinionsSpawnedEvent {
+  readonly type: 'minions-spawned';
+  readonly targetId: number;
+  readonly alienId: string;
+  readonly x: number;
+  readonly y: number;
+  /** The minions, already diving. */
+  readonly group: readonly number[];
+}
+
 export type SimEvent =
   | StageStartedEvent
   | ShotFiredEvent
@@ -322,7 +381,12 @@ export type SimEvent =
   | ChallengeGroupClearedEvent
   | ChallengeBonusEvent
   | ChallengePerfectEvent
-  | ChallengeEndedEvent;
+  | ChallengeEndedEvent
+  | ShieldHitEvent
+  | ShieldRestoredEvent
+  | EnemySplitEvent
+  | EnemyTeleportedEvent
+  | MinionsSpawnedEvent;
 
 export type SimEventType = SimEvent['type'];
 

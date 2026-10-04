@@ -32,7 +32,7 @@ import { createEffects, type Effects } from './render/effects.js';
 import { drawScene } from './render/scene.js';
 import { createSpriteSheet, type SpriteSheet } from './render/sprites.js';
 import { createStarfield } from './render/starfield.js';
-import { beamCaptor, capturedFighter } from './sim/capture.js';
+import { beamCaptor, capturedFighter } from './sim/abilities/capture-beam.js';
 import { aliveEnemies } from './sim/enemies.js';
 import type { SimEvent } from './sim/events.js';
 import { drawAttract } from './ui/attract.js';

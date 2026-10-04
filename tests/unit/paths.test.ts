@@ -13,6 +13,7 @@ import {
   pathBounds,
   pathEventsBetween,
   samplePath,
+  shiftPath,
   tryCompilePath,
   vectorToHeading,
 } from '../../src/sim/paths.js';
@@ -392,13 +393,15 @@ describe('exitBottom', () => {
 });
 
 describe('fire and trigger', () => {
+  // A reserved id, because only a reserved one may carry `params` (`src/content/schema.ts`):
+  // the interpreter's job is to carry them to the timeline untouched either way.
   const path = makePath({
     start: [100, 10],
     segments: [
       { type: 'line', to: [100, 30], speed: 1 },
       { type: 'fire', count: 2 },
       { type: 'line', to: [100, 50], speed: 1 },
-      { type: 'trigger', ability: 'captureBeam', params: { width: 24 } },
+      { type: 'trigger', ability: 'transform', params: { width: 24 } },
       { type: 'exitBottom' },
     ],
   });
@@ -414,7 +417,7 @@ describe('fire and trigger', () => {
     const compiled = compilePath(path);
     expect(compiled.events).toEqual([
       { kind: 'fire', frame: 20, segment: 1, count: 2, sound: undefined },
-      { kind: 'trigger', frame: 40, segment: 3, ability: 'captureBeam', params: { width: 24 } },
+      { kind: 'trigger', frame: 40, segment: 3, ability: 'transform', params: { width: 24 } },
     ]);
   });
 
@@ -630,5 +633,49 @@ describe('content bugs', () => {
       },
     );
     expect(compiled.totalFrames).toBe(5);
+  });
+});
+
+describe('shiftPath', () => {
+  // What a teleport does to a flight: the same path, frame for frame, displaced.
+  const path = makePath({
+    start: [60, 20],
+    segments: [
+      { type: 'line', to: [60, 80], speed: 2 },
+      { type: 'arc', radius: 20, degrees: 90, dir: 'cw', speed: 2 },
+      { type: 'trigger', ability: 'teleport' },
+      { type: 'exitBottom', speed: 2 },
+    ],
+  });
+
+  it('samples every frame displaced by exactly the shift, mirrored or not', () => {
+    for (const mirror of [false, true]) {
+      const compiled = compilePath(path, { mirror });
+      const shifted = shiftPath(compiled, 30, -4);
+      for (const frame of [0, 1, 15.5, 30, 41, compiled.totalFrames, compiled.totalFrames + 9]) {
+        const a = samplePath(compiled, frame);
+        const b = samplePath(shifted, frame);
+        expect(b.x - a.x).toBeCloseTo(30, 9);
+        expect(b.y - a.y).toBeCloseTo(-4, 9);
+        expect(b.heading).toBe(a.heading);
+        expect(b.done).toBe(a.done);
+      }
+    }
+  });
+
+  it('keeps the timeline and its events, and composes', () => {
+    const compiled = compilePath(path);
+    const twice = shiftPath(shiftPath(compiled, 10, 0), 5, 2);
+    expect(twice.totalFrames).toBe(compiled.totalFrames);
+    expect(twice.events).toEqual(compiled.events);
+    expect(samplePath(twice, 20).x - samplePath(compiled, 20).x).toBeCloseTo(15, 9);
+    expect(twice.segments[1]?.from.x).toBeCloseTo((compiled.segments[1]?.from.x ?? 0) + 15, 9);
+  });
+
+  it('leaves the path it was given exactly as it was', () => {
+    const compiled = compilePath(path);
+    const before = samplePath(compiled, 33);
+    shiftPath(compiled, 99, 99);
+    expect(samplePath(compiled, 33)).toEqual(before);
   });
 });

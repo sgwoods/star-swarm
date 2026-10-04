@@ -3,6 +3,13 @@
  * rescue and the dual fighter (`docs/DESIGN.md` section 4, "Capture and rescue";
  * `docs/reference/arcade-reference.md` section 7).
  *
+ * It is the `captureBeam` module of the ability registry (`./registry.ts`), and
+ * the one registered ability that is a **channel** rather than something an
+ * enemy carries: `rules.capture` switches it on for the whole run, a path's
+ * `trigger` naming `captureBeam` says where in the captor's dive the beam
+ * opens, and the world steps it directly because a captured fighter outlives
+ * the stage it was taken in. So it hands the registry no per-enemy hooks.
+ *
  * This is the mechanic the original is remembered for, and five ideas hold it
  * together. Each is something a plausible implementation gets wrong, and the
  * first is the one everything else hangs off:
@@ -42,18 +49,19 @@
  * No constants: every number arrives in the `Rules` value.
  */
 
-import { allowsAttacks, resolveBeamStepFrames, resolveDifficultyRow } from '../content/rules.js';
-import type { ABILITY_TYPES, HitWindow, Rules } from '../content/schema.js';
-import type { StageContent } from '../content/stages.js';
-import type { Rng } from '../engine/rng.js';
-import { withinWindow } from './collision.js';
-import type { Enemy, EnemyState, Fleet, ScriptedTrigger } from './enemies.js';
-import { addEnemy, beginDive, beginReturn, waveLaunchFrames } from './enemies.js';
-import type { FormationState } from './formation.js';
-import { captiveSlotOf, homePosition, isRightOfCentre } from './formation.js';
-import type { Vec2 } from './paths.js';
-import type { PlayerState } from './player.js';
-import { shipAnchors } from './player.js';
+import { allowsAttacks, resolveBeamStepFrames, resolveDifficultyRow } from '../../content/rules.js';
+import type { AbilityType, HitWindow, Rules } from '../../content/schema.js';
+import type { StageContent } from '../../content/stages.js';
+import type { Rng } from '../../engine/rng.js';
+import { withinWindow } from '../collision.js';
+import type { Enemy, EnemyState, Fleet, ScriptedTrigger } from '../enemies.js';
+import { addEnemy, beginDive, beginReturn, waveLaunchFrames } from '../enemies.js';
+import type { FormationState } from '../formation.js';
+import { captiveSlotOf, homePosition, isRightOfCentre } from '../formation.js';
+import type { Vec2 } from '../paths.js';
+import type { PlayerState } from '../player.js';
+import { shipAnchors } from '../player.js';
+import type { AbilityModule } from './registry.js';
 
 /**
  * The engine ability a path's `trigger` segment names to open the beam.
@@ -61,7 +69,13 @@ import { shipAnchors } from './player.js';
  * Typed against the fixed registry in `schema.ts`, so renaming the registry entry
  * is a build error here rather than a mechanic that silently stops happening.
  */
-const BEAM_ABILITY: (typeof ABILITY_TYPES)[number] = 'captureBeam';
+const BEAM_ABILITY: AbilityType = 'captureBeam';
+
+/**
+ * The registry's entry: a channel, so no hooks. Everything it does is the
+ * exported functions below, which `src/sim/world.ts` and `src/sim/dive.ts` call.
+ */
+export const captureBeam: AbilityModule<'captureBeam'> = Object.freeze({ type: 'captureBeam' });
 
 /**
  * Where the one channel is.

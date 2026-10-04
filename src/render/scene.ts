@@ -22,7 +22,7 @@
  * fleet drew as squares for a release behind exactly that ambiguity.
  */
 
-import { beamCaptor, beamWindow } from '../sim/capture.js';
+import { beamCaptor, beamWindow } from '../sim/abilities/capture-beam.js';
 import { enemySprite } from '../sim/enemies.js';
 import { shipAnchors } from '../sim/player.js';
 import type { World } from '../sim/world.js';

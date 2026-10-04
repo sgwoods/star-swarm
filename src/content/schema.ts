@@ -296,6 +296,155 @@ export const soundSchema = z
 export type Sound = z.infer<typeof soundSchema>;
 
 /* -------------------------------------------------------------------------- */
+/* 7.5 Abilities                                                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The ability registry of `docs/DESIGN.md` section 7.5: engine behaviours a
+ * pack switches on and tunes, and never defines.
+ *
+ * Declared ahead of the path segments because a path's `trigger` names one of
+ * these ids, and ahead of the alien because an alien lists them. Every id here
+ * is either implemented by a module under `src/sim/abilities/` and validates its
+ * own parameters below, or is in {@link RESERVED_ABILITY_TYPES}; the registry in
+ * `src/sim/abilities/registry.ts` is typed against the difference, so the two
+ * lists cannot disagree without a build error.
+ */
+export const ABILITY_TYPES = [
+  'captureBeam',
+  'splitOnHit',
+  'transform',
+  'shield',
+  'teleport',
+  'spawnMinions',
+  'mirrorPlayer',
+] as const;
+
+export type AbilityType = (typeof ABILITY_TYPES)[number];
+
+/**
+ * Ids the schema reserves and no module implements.
+ *
+ * Kept loose — any parameters validate — because there is nothing yet to say
+ * what a parameter would mean, and kept *visibly* separate so nothing implies
+ * the registry is seven abilities deep. `transform` here is an alien ability; the
+ * arcade's transform attack is a rules-layer mechanic (`rules.transform`) and is
+ * not it. `tests/unit/forge-guard.test.ts` pins that declaring one of these on an
+ * alien changes nothing at all, which is why `/forge` refuses a prompt needing
+ * one.
+ */
+export const RESERVED_ABILITY_TYPES = [
+  'transform',
+  'mirrorPlayer',
+] as const satisfies readonly AbilityType[];
+
+export type ReservedAbilityType = (typeof RESERVED_ABILITY_TYPES)[number];
+export type ImplementedAbilityType = Exclude<AbilityType, ReservedAbilityType>;
+
+/** Is `type` one a module implements? */
+export function isImplementedAbility(type: AbilityType): type is ImplementedAbilityType {
+  return !(RESERVED_ABILITY_TYPES as readonly AbilityType[]).includes(type);
+}
+
+/**
+ * `captureBeam` is the capture channel, which is global and switched on by
+ * `rules.capture`, so an alien has nothing to declare. Accepting the entry and
+ * ignoring it would be one more field that validates and does nothing, which is
+ * the trap `docs/content-guide.md` exists to keep a forged pack out of; refusing
+ * it says where the switch really is.
+ */
+const captureBeamAbilitySchema = z
+  .strictObject({ type: z.literal('captureBeam') })
+  .refine(() => false, {
+    message:
+      'captureBeam is not declared on an alien: it is switched on by "capture" in rules.json, and a path\'s trigger says where the beam opens',
+  });
+
+/**
+ * Destroyed by a shot, the enemy breaks into `count` of another alien, already
+ * diving. A fragment flies one of its own alien's dive paths and leaves the
+ * field at the end of it: it owns no slot to return to.
+ */
+const splitOnHitAbilitySchema = z.strictObject({
+  type: z.literal('splitOnHit'),
+  /** The alien each fragment is. It must have dive paths, and may not split back into this one. */
+  into: refSchema,
+  count: z.number().int().positive(),
+  /** Pixels between neighbouring fragments as they appear, abreast. */
+  spacing: z.number().nonnegative().default(8),
+});
+
+/**
+ * Shots spent on the shield before any reach the enemy's `hp`.
+ *
+ * A hit on the shield scores nothing and does not change the sprite. With
+ * `rechargeFrames`, a shield left unhit for that long is whole again.
+ */
+const shieldAbilitySchema = z.strictObject({
+  type: z.literal('shield'),
+  hits: z.number().int().positive(),
+  /** Frames without a hit after which the shield is restored. Omitted means never. */
+  rechargeFrames: framesSchema.positive().optional(),
+});
+
+/**
+ * While diving, the enemy blinks to another column and carries on the same
+ * flight from there. The column is a draw from the world's seeded generator, so
+ * a seed still gives one world.
+ *
+ * It happens every `everyFrames` frames of a dive, at every `trigger` segment
+ * naming `teleport` on the path it is flying, or both. One of the two is
+ * required — the loader refuses an alien that would never teleport.
+ */
+const teleportAbilitySchema = z.strictObject({
+  type: z.literal('teleport'),
+  everyFrames: framesSchema.positive().optional(),
+  /** The blink lands at least this far inside either side of the playfield. */
+  margin: z.number().nonnegative().default(16),
+});
+
+/**
+ * The enemy launches `count` of another alien, diving, from wherever it is.
+ *
+ * Every `everyFrames` frames while it is home or diving, at every `trigger`
+ * segment naming `spawnMinions` on its path, or both — the loader refuses an
+ * alien that would never spawn. Never more than `maxAlive` of one spawner's
+ * minions on the field at once. A minion flies one of its own alien's dive paths
+ * and leaves at the end of it.
+ */
+const spawnMinionsAbilitySchema = z.strictObject({
+  type: z.literal('spawnMinions'),
+  /** The alien each minion is. It must have dive paths. */
+  alien: refSchema,
+  count: z.number().int().positive().default(1),
+  everyFrames: framesSchema.positive().optional(),
+  maxAlive: z.number().int().positive(),
+  /** Pixels between neighbouring minions as they appear, abreast. */
+  spacing: z.number().nonnegative().default(8),
+});
+
+/** A reserved id: accepted with any parameters, and read by nothing. */
+const reservedAbilitySchema = <T extends ReservedAbilityType>(type: T) =>
+  z.looseObject({ type: z.literal(type) });
+
+export const abilitySchema = z
+  .discriminatedUnion('type', [
+    captureBeamAbilitySchema,
+    splitOnHitAbilitySchema,
+    shieldAbilitySchema,
+    teleportAbilitySchema,
+    spawnMinionsAbilitySchema,
+    reservedAbilitySchema('transform'),
+    reservedAbilitySchema('mirrorPlayer'),
+  ])
+  .describe('an entry in the engine ability registry, plus its parameters');
+
+export type AlienAbility = z.infer<typeof abilitySchema>;
+
+/** The parameters one implemented ability is tuned with. */
+export type AbilityParams<T extends ImplementedAbilityType> = Extract<AlienAbility, { type: T }>;
+
+/* -------------------------------------------------------------------------- */
 /* 7.2 Movement path                                                            */
 /* -------------------------------------------------------------------------- */
 
@@ -360,11 +509,24 @@ export const pathSegmentSchema = z.discriminatedUnion('type', [
     count: z.number().int().positive().default(1),
     sound: refSchema.optional(),
   }),
-  z.strictObject({
-    type: z.literal('trigger'),
-    ability: idSchema,
-    params: z.record(z.string(), z.unknown()).optional(),
-  }),
+  /**
+   * Where in a flight an ability fires. Which ability is a registry id, so a
+   * misspelt one is a load error rather than an event nobody listens for; whether
+   * it does anything is the flyer's business — `captureBeam` acts only for the
+   * captor the channel chose, `teleport` and `spawnMinions` only for an alien that
+   * declares them. No implemented ability reads `params` (it is tuned on the
+   * alien), so stating any on one is refused rather than ignored.
+   */
+  z
+    .strictObject({
+      type: z.literal('trigger'),
+      ability: z.enum(ABILITY_TYPES),
+      params: z.record(z.string(), z.unknown()).optional(),
+    })
+    .refine((segment) => segment.params === undefined || !isImplementedAbility(segment.ability), {
+      message: 'no implemented ability reads trigger params: tune it on the alien instead',
+      path: ['params'],
+    }),
 ]);
 
 export type PathSegment = z.infer<typeof pathSegmentSchema>;
@@ -386,25 +548,6 @@ export type MovementPath = z.infer<typeof pathSchema>;
 /* -------------------------------------------------------------------------- */
 /* 7.1 Alien                                                                    */
 /* -------------------------------------------------------------------------- */
-
-/**
- * The ability registry of `docs/DESIGN.md` section 7.5: engine behaviours a
- * pack switches on and tunes. Parameters are passed through unvalidated here —
- * each ability validates its own when the registry lands in Milestone 3.
- */
-export const ABILITY_TYPES = [
-  'captureBeam',
-  'splitOnHit',
-  'transform',
-  'shield',
-  'teleport',
-  'spawnMinions',
-  'mirrorPlayer',
-] as const;
-
-export const abilitySchema = z
-  .looseObject({ type: z.enum(ABILITY_TYPES) })
-  .describe('an entry in the engine ability registry, plus its parameters');
 
 export const FIRE_PATTERNS = ['none', 'straight', 'aimed', 'spread'] as const;
 
@@ -481,7 +624,16 @@ export const alienSchema = z.strictObject({
       returns: z.boolean().default(true),
     })
     .optional(),
-  abilities: z.array(abilitySchema).default([]),
+  /**
+   * Engine abilities this alien switches on, each at most once. An alien does not
+   * define one; it picks from the registry above and tunes it.
+   */
+  abilities: z
+    .array(abilitySchema)
+    .default([])
+    .refine((list) => new Set(list.map((ability) => ability.type)).size === list.length, {
+      message: 'an ability may be declared once per alien',
+    }),
   /** Event name → sound id. Open-keyed so a pack can name its own events. */
   sounds: z.record(z.string(), refSchema).default({}),
 });
