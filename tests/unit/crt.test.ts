@@ -28,14 +28,42 @@ function planAt(scale: number): ReturnType<typeof planCrt> {
 
 const SCALES = [1, 2, 3, 4, 5, 6, 8];
 
+/**
+ * Every device pixel in a region where `wrong` says the shade is not what it
+ * should be, as `scale x,y=shade`.
+ *
+ * The scan collects and the test asserts once: these regions run to hundreds of
+ * thousands of pixels, and an `expect` per pixel costs enough to time a test out
+ * on a slower machine. The list is also the better failure — it names the pixels.
+ */
+function offenders(
+  plan: ReturnType<typeof planCrt>,
+  xs: readonly [number, number, number],
+  ys: readonly [number, number, number],
+  wrong: (shade: number, x: number, y: number) => boolean,
+): string[] {
+  const found: string[] = [];
+  for (let y = ys[0]; y < ys[1]; y += ys[2]) {
+    for (let x = xs[0]; x < xs[1]; x += xs[2]) {
+      const shade = crtShade(plan, x, y);
+      if (wrong(shade, x, y)) found.push(`${plan.scale}x ${x},${y}=${shade}`);
+    }
+  }
+  return found;
+}
+
 describe('scanlines', () => {
   it('has none at 1x, where a logical row is a single device row', () => {
     expect(scanlineRowsFor(1)).toBe(0);
     const plan = planAt(1);
     const mid = Math.floor(plan.width / 2);
-    for (let y = plan.height / 4; y < (plan.height * 3) / 4; y += 1) {
-      expect(crtShade(plan, mid, y)).toBe(0);
-    }
+    const lit = offenders(
+      plan,
+      [mid, mid + 1, 1],
+      [plan.height / 4, (plan.height * 3) / 4, 1],
+      (shade) => shade !== 0,
+    );
+    expect(lit).toEqual([]);
   });
 
   it('never darkens more than half of a logical row', () => {
@@ -49,15 +77,11 @@ describe('scanlines', () => {
       const plan = planAt(scale);
       const x = Math.floor(plan.width / 2);
       // The middle third, where the vignette is zero and only scanlines remain.
-      for (let row = 96; row < 192; row += 1) {
-        for (let offset = 0; offset < scale; offset += 1) {
-          const dark = offset >= scale - plan.scanlineRows;
-          expect(crtShade(plan, x, row * scale + offset)).toBeCloseTo(
-            dark ? SCANLINE_DARKEN : 0,
-            12,
-          );
-        }
-      }
+      const wrong = offenders(plan, [x, x + 1, 1], [96 * scale, 192 * scale, 1], (shade, _, y) => {
+        const dark = y % scale >= scale - plan.scanlineRows;
+        return Math.abs(shade - (dark ? SCANLINE_DARKEN : 0)) > 1e-12;
+      });
+      expect(wrong).toEqual([]);
     }
   });
 });
@@ -66,11 +90,13 @@ describe('readable at arcade resolution', () => {
   it('leaves the middle of the screen pixel-exact on the lit rows', () => {
     for (const scale of SCALES) {
       const plan = planAt(scale);
-      for (let y = 112 * scale; y < 176 * scale; y += scale) {
-        for (let x = 80 * scale; x < 144 * scale; x += 1) {
-          expect(crtShade(plan, x, y)).toBe(0);
-        }
-      }
+      const shaded = offenders(
+        plan,
+        [80 * scale, 144 * scale, 1],
+        [112 * scale, 176 * scale, scale],
+        (shade) => shade !== 0,
+      );
+      expect(shaded).toEqual([]);
     }
   });
 
@@ -115,11 +141,13 @@ describe('readable at arcade resolution', () => {
 
   it('only ever removes light, and never in colour', () => {
     const bitmap = rasteriseCrt(planAt(3));
-    for (let at = 0; at < bitmap.data.length; at += 4) {
-      expect(bitmap.data[at]).toBe(0);
-      expect(bitmap.data[at + 1]).toBe(0);
-      expect(bitmap.data[at + 2]).toBe(0);
+    // Scanned, then asserted once: the first coloured byte, if there is one.
+    let coloured: string | undefined;
+    for (let at = 0; at < bitmap.data.length && coloured === undefined; at += 4) {
+      const rgb = [bitmap.data[at], bitmap.data[at + 1], bitmap.data[at + 2]];
+      if (rgb.some((channel) => channel !== 0)) coloured = `offset ${at}: rgb ${rgb.join(',')}`;
     }
+    expect(coloured).toBeUndefined();
   });
 });
 
