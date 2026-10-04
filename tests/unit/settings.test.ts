@@ -276,6 +276,22 @@ describe('the control schemes', () => {
     expect(wasd.Space).toBeUndefined();
   });
 
+  it('narrow up and down with left and right, so a card is worked with one set of keys', () => {
+    // On the WASD scheme a settings card that moved rows with the arrows and
+    // changed them only with A and D would be two schemes at once.
+    const arrows = bindingsFor('arrows');
+    expect(arrows.ArrowUp).toBe('up');
+    expect(arrows.ArrowDown).toBe('down');
+    expect(arrows.KeyW).toBeUndefined();
+    expect(arrows.KeyS).toBeUndefined();
+
+    const wasd = bindingsFor('wasd');
+    expect(wasd.KeyW).toBe('up');
+    expect(wasd.KeyS).toBe('down');
+    expect(wasd.ArrowUp).toBeUndefined();
+    expect(wasd.ArrowDown).toBeUndefined();
+  });
+
   it('leave `both` as the default map itself, so nothing is lost by filtering', () => {
     const both = bindingsFor('both');
     expect(both.ArrowLeft).toBe('left');

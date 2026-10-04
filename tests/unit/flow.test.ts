@@ -30,6 +30,8 @@ const START = frameOf('start');
 const FIRE = frameOf('fire');
 const LEFT = frameOf('left');
 const RIGHT = frameOf('right');
+const UP = frameOf('up');
+const DOWN = frameOf('down');
 const MENU = frameOf('menu');
 
 /**
@@ -292,6 +294,28 @@ describe('the game-state machine', () => {
     expect(top?.score).toBe(score);
     expect(top?.initials[0]).toBe('B');
     expect(flow.lastRank).toBe(0);
+  });
+
+  it('works like every other card: every direction spins, start takes, menu steps back', () => {
+    const flow = testFlow();
+    playUntilGameOver(flow);
+    runPhase(flow);
+    runPhase(flow);
+    expect(flow.phase).toBe('high-score-entry');
+
+    press(flow, DOWN); // A -> B, as right would
+    press(flow, START); // takes one letter, as fire does — not the whole entry
+    expect(flow.phase).toBe('high-score-entry');
+    expect(flow.entry?.index).toBe(1);
+    press(flow, UP); // A -> the last letter, as left would
+    press(flow, MENU); // back to the first letter, still reading B
+    expect(flow.entry?.index).toBe(0);
+    press(flow, RIGHT); // B -> C
+    press(flow, START);
+    press(flow, START);
+    press(flow, START);
+    expect(flow.phase).toBe('attract');
+    expect(flow.highScores.entries()[0]?.initials.slice(0, 1)).toBe('C');
   });
 
   it('files whatever is showing when entry times out', () => {
@@ -563,7 +587,18 @@ describe('the start-up selector', () => {
     expect(moved).toBe(true);
   });
 
-  it('walks the list with left and right', () => {
+  it('walks the list with up and down', () => {
+    const flow = twoVariantFlow();
+    press(flow, DOWN);
+    expect(flow.variantMenu?.chosen.id).toBe('second');
+    press(flow, UP);
+    expect(flow.variantMenu?.chosen.id).toBe('first');
+    // Wrapping, so up from the top is the bottom rather than nothing.
+    press(flow, UP);
+    expect(flow.variantMenu?.chosen.id).toBe('second');
+  });
+
+  it('walks it with left and right as well, because it is one column', () => {
     const flow = twoVariantFlow();
     press(flow, RIGHT);
     expect(flow.variantMenu?.chosen.id).toBe('second');
@@ -571,18 +606,18 @@ describe('the start-up selector', () => {
     expect(flow.variantMenu?.chosen.id).toBe('first');
   });
 
-  it('fire chooses and leaves the cabinet in attract', () => {
+  it.each([
+    ['start', START],
+    ['fire', FIRE],
+  ])('%s chooses and lands on that game’s attract screen', (_name, frame) => {
+    // One meaning for both, as on every card: take what is highlighted. Playing
+    // is the next screen's start, which is where a player meets the chosen game.
     const flow = twoVariantFlow();
-    press(flow, RIGHT);
-    press(flow, FIRE);
+    press(flow, DOWN);
+    press(flow, frame);
     expect(flow.phase).toBe('attract');
     expect(flow.variant.id).toBe('second');
     expect(flow.variantMenu).toBeUndefined();
-  });
-
-  it('start chooses and plays straight away', () => {
-    const flow = twoVariantFlow();
-    press(flow, RIGHT);
     press(flow, START);
     expect(flow.phase).toBe('playing');
     expect(flow.variant.id).toBe('second');
@@ -599,6 +634,8 @@ describe('the start-up selector', () => {
 
     press(flow, RIGHT);
     press(flow, START);
+    press(flow, START);
+    expect(flow.phase).toBe('playing');
     expect(flow.variant.id).toBe('barren');
     // The chosen variant's stage source answers with nothing, so the field is
     // empty — which only happens if the *chosen* source was the one used.
@@ -646,6 +683,7 @@ describe('the start-up selector', () => {
   it('does not come back between games: later games begin from attract', () => {
     const flow = twoVariantFlow();
     press(flow, START);
+    press(flow, START);
     expect(flow.phase).toBe('playing');
     bombThePlayer(flow);
     flow.step(EMPTY_FRAME);
@@ -690,7 +728,7 @@ describe('the settings phase', () => {
     expect(flow.variantMenu).toBeDefined();
   });
 
-  it('walks rows with fire and changes values with left and right', () => {
+  it('walks rows with up and down and changes values with left and right', () => {
     const storage = createMemoryStorage();
     const flow = testFlow({ settings: createSettingsStore({ storage }) });
     press(flow, MENU);
@@ -698,10 +736,37 @@ describe('the settings phase', () => {
     expect(menu?.row.id).toBe('difficulty');
     press(flow, RIGHT);
     expect(flow.settings.difficulty).toBe('B');
-    press(flow, FIRE);
+    press(flow, DOWN);
     expect(flow.settingsMenu?.row.id).toBe('volume');
     press(flow, LEFT);
     expect(flow.settings.volume).toBeLessThan(DEFAULT_SETTINGS.volume);
+    // The row above is one press away, which fire-for-next never offered.
+    press(flow, UP);
+    expect(flow.settingsMenu?.row.id).toBe('difficulty');
+    expect(flow.settings.difficulty).toBe('B');
+  });
+
+  it('wraps from the top row to the bottom one', () => {
+    const flow = testFlow();
+    press(flow, MENU);
+    const rows = flow.settingsMenu?.rows ?? [];
+    press(flow, UP);
+    expect(flow.settingsMenu?.row.id).toBe(rows[rows.length - 1]?.id);
+  });
+
+  it.each([
+    ['start', START],
+    ['fire', FIRE],
+    ['menu', MENU],
+  ])('closes on %s, keeping what was changed', (_name, frame) => {
+    // Every row applies as it changes, so done and back are one exit — and fire
+    // means what it means on every other card, rather than "next row" here alone.
+    const flow = testFlow();
+    press(flow, MENU);
+    press(flow, RIGHT);
+    press(flow, frame);
+    expect(flow.phase).toBe('attract');
+    expect(flow.settings.difficulty).toBe('B');
   });
 
   it('persists what was changed', () => {
@@ -1135,6 +1200,38 @@ describe('X pauses first, then asks', () => {
     expect(flow.exitConfirm).toBeUndefined();
   });
 
+  it('walks its two words with every direction, and still needs a press to commit', () => {
+    // One row of two, so up and down walk it as left and right do. Arriving on
+    // EXIT commits nothing; only start or fire does, and neither opens the card.
+    for (const [forward, backward] of [
+      [RIGHT, LEFT],
+      [DOWN, UP],
+    ] as const) {
+      const flow = testFlow();
+      press(flow, START);
+      press(flow, EXIT);
+      press(flow, forward);
+      expect(flow.exitConfirm?.choice).toBe('exit');
+      expect(flow.phase).toBe('exit-confirm');
+      press(flow, backward);
+      expect(flow.exitConfirm?.choice).toBe('resume');
+      press(flow, forward);
+      press(flow, START);
+      expect(flow.phase).toBe('attract');
+    }
+  });
+
+  it('cannot be committed by a double-tap of the key that opened it, even on EXIT', () => {
+    const flow = testFlow();
+    press(flow, START);
+    press(flow, EXIT);
+    press(flow, DOWN);
+    expect(flow.exitConfirm?.choice).toBe('exit');
+    press(flow, EXIT);
+    expect(flow.phase).toBe('paused');
+    expect(flow.world.step).toBeGreaterThan(0);
+  });
+
   it('cancels on the service button too', () => {
     const flow = testFlow();
     press(flow, START);
@@ -1188,6 +1285,7 @@ describe('X pauses first, then asks', () => {
     // GAME row, exactly as it is between games.
     const flow = twoVariantFlow();
     expect(flow.phase).toBe('variant-select');
+    press(flow, START);
     press(flow, START);
     expect(flow.phase).toBe('playing');
 
@@ -1460,6 +1558,8 @@ describe('watching the cabinet play itself', () => {
     ['menu', MENU],
     ['pause', PAUSE],
     ['exit', EXIT],
+    ['up', UP],
+    ['down', DOWN],
   ])('does not treat %s as taking the controls', (_name, frame) => {
     // None of the three flies a fighter: they hold a run, leave one, or open the
     // screen a watcher changes persona on. Reading any of them as a takeover would
@@ -1495,9 +1595,9 @@ describe('watching the cabinet play itself', () => {
   });
 
   it('leaves the menus alone: their buttons are the menu’s', () => {
-    // On the settings screen `fire` moves the cursor and left and right change a
-    // row. Reading either as a takeover would disarm autoplay while somebody was
-    // choosing a persona with it — so the cursor is walked *past* the autoplay row
+    // On the settings screen up and down move the cursor and left and right change
+    // a row. Reading either as a takeover would disarm autoplay while somebody was
+    // choosing a persona with them — so the cursor is walked *past* the autoplay row
     // and a different row is changed, and autoplay has to survive both.
     const { flow, settings } = watchableFlow('watcher');
     press(flow, MENU);
@@ -1505,7 +1605,7 @@ describe('watching the cabinet play itself', () => {
 
     const menu = flow.settingsMenu;
     expect(menu).toBeDefined();
-    for (let i = 0; i < 12 && menu?.row.id !== 'volume'; i += 1) press(flow, FIRE);
+    for (let i = 0; i < 12 && menu?.row.id !== 'volume'; i += 1) press(flow, DOWN);
     expect(flow.settingsMenu?.row.id).toBe('volume');
 
     const before = settings.value.volume;
@@ -1524,7 +1624,7 @@ describe('watching the cabinet play itself', () => {
     const { flow, settings } = watchableFlow('watcher');
     press(flow, MENU);
     const menu = flow.settingsMenu;
-    for (let i = 0; i < 12 && menu?.row.id !== 'autoplay'; i += 1) press(flow, FIRE);
+    for (let i = 0; i < 12 && menu?.row.id !== 'autoplay'; i += 1) press(flow, DOWN);
     expect(flow.settingsMenu?.row.id).toBe('autoplay');
 
     press(flow, RIGHT);

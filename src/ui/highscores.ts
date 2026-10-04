@@ -12,12 +12,15 @@
  *   where the bytes go. It is therefore testable on the Node environment that
  *   `tests/unit/` runs, without a DOM.
  *
- * Entry uses the four actions the game already has (`src/engine/input.ts`):
- * left/right walk the alphabet, fire commits a letter. The original walks the
- * letters with the stick's vertical axis, which this cabinet does not have.
+ * Entry is worked like every other card (`./keys.ts`): it has one line of
+ * choices — the letter under the cursor — so every direction walks the alphabet,
+ * `ENTER` or fire takes a letter, and `ESC` steps back to the one before. The
+ * original walks the letters with the stick's vertical axis; up and down do the
+ * same here, alongside left and right.
  */
 
 import { drawText, measureText } from '../render/text.js';
+import { KEY, keyLine } from './keys.js';
 import { drawCentredPanel } from './panel.js';
 import { createMemoryStorage, type KeyedStorage } from './storage.js';
 
@@ -225,6 +228,8 @@ export interface InitialsEntry {
   next: () => void;
   /** Accept the letter under the cursor and move on. */
   commit: () => void;
+  /** Step back to the letter before, keeping what it reads. Nothing on the first. */
+  back: () => void;
 }
 
 export interface InitialsEntryOptions {
@@ -267,6 +272,9 @@ export function createInitialsEntry(options: InitialsEntryOptions = {}): Initial
     },
     commit: () => {
       if (index < length) index += 1;
+    },
+    back: () => {
+      if (index > 0 && index < length) index -= 1;
     },
   };
 }
@@ -348,7 +356,25 @@ export const CURSOR_BLINK_STEPS = 20;
 
 /** The plate the entry screen sits on, in logical pixels. */
 const ENTRY_CARD_WIDTH = 200;
-const ENTRY_CARD_HEIGHT = 80;
+
+/** Where the first line of help sits under the card's top, and the pitch after it. */
+const ENTRY_HELP_TOP = 60;
+const ENTRY_HELP_PITCH = 10;
+
+/**
+ * The lines of help under the letters, in the order they are drawn.
+ *
+ * {@link drawInitialsEntry} draws exactly this, so a test over the list is a test
+ * over the card, and the plate's height is counted from it.
+ */
+export function initialsEntryKeys(): readonly string[] {
+  return [keyLine([KEY.values, 'CHANGE'], [KEY.ok, 'NEXT']), keyLine([KEY.back, 'BACK'])];
+}
+
+/** The entry card's height: everything above the help, the help, and its air. */
+export function initialsEntryHeight(): number {
+  return ENTRY_HELP_TOP + initialsEntryKeys().length * ENTRY_HELP_PITCH + 10;
+}
 
 /** Draw the "enter your initials" screen. */
 export function drawInitialsEntry(
@@ -357,7 +383,7 @@ export function drawInitialsEntry(
 ): void {
   const { score, rank, entry, steps, x, y } = options;
 
-  drawCentredPanel(ctx, x, y - 6, ENTRY_CARD_WIDTH, ENTRY_CARD_HEIGHT);
+  drawCentredPanel(ctx, x, y - 6, ENTRY_CARD_WIDTH, initialsEntryHeight());
   drawText(ctx, 'ENTER YOUR INITIALS', x, y + 4, { colour: '#ff2b2b', align: 'center' });
   drawText(ctx, `RANK ${String(rank + 1)}   SCORE ${String(score)}`, x, y + 18, {
     colour: '#b9c9ff',
@@ -380,8 +406,10 @@ export function drawInitialsEntry(
     }
   });
 
-  drawText(ctx, 'L/R  PICK   FIRE  ENTER', x, y + 60, {
-    colour: '#7d8aa8',
-    align: 'center',
+  initialsEntryKeys().forEach((line, index) => {
+    drawText(ctx, line, x, y + ENTRY_HELP_TOP + index * ENTRY_HELP_PITCH, {
+      colour: '#7d8aa8',
+      align: 'center',
+    });
   });
 }

@@ -66,9 +66,20 @@ describe('action set', () => {
   it('covers the four cabinet actions, then the front end\u2019s own', () => {
     // The first four are the cabinet's and are the whole of what `src/sim/` reads.
     // The rest are the front end's and no simulation code looks at any of them:
-    // the service button that opens the settings screen, the pause, and the exit
-    // that asks before a run is thrown away.
-    expect([...ACTIONS]).toEqual(['left', 'right', 'fire', 'start', 'menu', 'pause', 'exit']);
+    // the service button that opens the settings screen, the pause, the exit
+    // that asks before a run is thrown away, and the two directions a card's rows
+    // are walked with.
+    expect([...ACTIONS]).toEqual([
+      'left',
+      'right',
+      'fire',
+      'start',
+      'menu',
+      'pause',
+      'exit',
+      'up',
+      'down',
+    ]);
   });
 
   it('assigns each action a distinct single bit', () => {
@@ -97,7 +108,18 @@ describe('action set', () => {
       menu: 16,
       pause: 32,
       exit: 64,
+      up: 128,
+      down: 256,
     });
+  });
+
+  it('reads a log written before up and down existed as holding neither', () => {
+    // The same promise one append later: every mask in `tests/sim/golden/` has
+    // bits 128 and 256 clear, so no recorded frame reads as a card's direction.
+    for (const recorded of [0, 1, 2, 4, 8, 16, 32, 64, 5, 127]) {
+      expect(isDown(recorded, 'up')).toBe(false);
+      expect(isDown(recorded, 'down')).toBe(false);
+    }
   });
 
   it('reads a log written before pause and exit existed as holding neither', () => {

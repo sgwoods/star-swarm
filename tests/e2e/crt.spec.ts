@@ -40,7 +40,7 @@ async function openCrtRow(page: Page): Promise<void> {
   await page.waitForFunction(() => window.starSwarm?.phase === 'settings');
   for (let i = 0; i < 12; i += 1) {
     if ((await page.evaluate(() => window.starSwarm?.settingsMenuRow)) === 'crt') return;
-    await tap(page, 'Space');
+    await tap(page, 'ArrowDown');
   }
   throw new Error('the settings cursor never reached the CRT row');
 }

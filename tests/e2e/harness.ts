@@ -21,8 +21,8 @@ export async function booted(page: Page): Promise<void> {
 /**
  * Leave the page in attract mode, whichever phase it booted into.
  *
- * Fire chooses the variant under the cursor and drops into attract, which is the
- * ordinary way a player gets there.
+ * Fire chooses the variant under the cursor and drops into attract, as Enter
+ * does, which is the ordinary way a player gets there.
  */
 export async function reachAttract(page: Page): Promise<void> {
   await booted(page);
@@ -33,14 +33,27 @@ export async function reachAttract(page: Page): Promise<void> {
 }
 
 /**
- * Put a game on the screen.
+ * Press start until a game is on the screen, from whichever phase the page is in.
  *
- * Start plays from either screen — from the selector it chooses the variant under
- * the cursor and plays it — so this is one press either way, exactly as a player
- * does it.
+ * From the selector that is two presses — the first takes the variant under the
+ * cursor and lands on its attract screen, the second plays it — exactly as a
+ * player does it. Between the two the page is allowed a couple of steps with the
+ * key up, because the front end reads edges and two presses inside one sampled
+ * frame read as one.
  */
-export async function startGame(page: Page): Promise<void> {
-  await booted(page);
+export async function pressStart(page: Page): Promise<void> {
+  if ((await page.evaluate(() => window.starSwarm?.phase)) === 'variant-select') {
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => window.starSwarm?.phase === 'attract');
+    const step = await page.evaluate(() => window.starSwarm?.step ?? 0);
+    await page.waitForFunction((was) => (window.starSwarm?.step ?? 0) > was + 1, step);
+  }
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => window.starSwarm?.phase === 'playing');
+}
+
+/** Put a game on the screen, from a fresh page. */
+export async function startGame(page: Page): Promise<void> {
+  await booted(page);
+  await pressStart(page);
 }

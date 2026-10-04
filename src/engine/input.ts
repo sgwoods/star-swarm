@@ -17,7 +17,9 @@
  * screen (`src/ui/menus.ts`); `pause` holds the game; `exit` asks whether to
  * abandon the run. A cabinet has neither of the last two — they are ours, and
  * they are front-end state rather than simulation state for exactly that reason
- * (`src/ui/flow.ts`).
+ * (`src/ui/flow.ts`). `up` and `down` move between the rows of a card
+ * (`src/ui/keys.ts`); the fighter only travels sideways, so in play they do
+ * nothing at all.
  *
  * **The list is append-only.** {@link ACTION_BIT} assigns `1 << index`, and a
  * recorded replay log on disk is a list of those masks, so appending leaves every
@@ -25,7 +27,17 @@
  * Inserting or reordering would silently reinterpret every log in
  * `tests/sim/golden/`.
  */
-export const ACTIONS = ['left', 'right', 'fire', 'start', 'menu', 'pause', 'exit'] as const;
+export const ACTIONS = [
+  'left',
+  'right',
+  'fire',
+  'start',
+  'menu',
+  'pause',
+  'exit',
+  'up',
+  'down',
+] as const;
 
 export type Action = (typeof ACTIONS)[number];
 
@@ -68,6 +80,10 @@ export const DEFAULT_BINDINGS: Readonly<Record<string, Action>> = Object.freeze(
   KeyM: 'menu',
   KeyP: 'pause',
   KeyX: 'exit',
+  ArrowUp: 'up',
+  KeyW: 'up',
+  ArrowDown: 'down',
+  KeyS: 'down',
 });
 
 /** Build a frame from action names. */
