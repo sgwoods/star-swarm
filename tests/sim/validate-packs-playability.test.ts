@@ -25,7 +25,11 @@ const REPO_ROOT = resolve(import.meta.dirname, '..', '..');
 const SCRIPT = join(REPO_ROOT, 'scripts', 'validate-packs.ts');
 const FIXTURE = join(REPO_ROOT, 'tests', 'fixtures', 'unplayable');
 
-/** Flying every shipped stage measured about 15 s; this leaves room for a slow CI box. */
+/**
+ * Flying every shipped stage measured about 15 s when the pass landed and about 36 s
+ * once all thirteen Classic scripts did (53 flights, on an Apple-silicon laptop);
+ * this leaves room for a CI box several times slower than that.
+ */
 const TIMEOUT = 180_000;
 
 interface RunResult {

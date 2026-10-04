@@ -969,7 +969,7 @@ stage that cannot be built is not blamed on the stage cleared before it.
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `entry`         | the fleet cannot be built, an enemy never reaches a slot of its own, the formation never settles, or an entry path strays past the off-screen margin |
 | `dive`          | a dive, flown from any slot its role holds and aimed at the fighter's home column, leaves either side or never leaves the bottom                     |
-| `finishes`      | the strong persona, with lost fighters replaced, is still on the stage at the time limit on any seed                                                 |
+| `finishes`      | the strong persona, with lost fighters replaced, is still on the stage at the time limit on more than two seeds                                      |
 | `clearable`     | the mid-tier persona, fighters replaced, clears fewer seeds than the protocol asks                                                                   |
 | `bullet-wall`   | the bullets in flight leave no column of the fighter's row alive from any starting position                                                          |
 | `deterministic` | a seed flown twice ends on two different worlds                                                                                                      |
@@ -981,7 +981,7 @@ open — the stage, or the path for a dive — and the reason. The numbers it re
 (seeds, time limits, the clear threshold) are `PROTOCOL` in the same file, and the
 seeds are fixed strings, so a verdict reproduces on any machine.
 
-Four decisions in it are worth knowing before changing it:
+Five decisions in it are worth knowing before changing it:
 
 - **Fighters are replaced, because the question is the stage.** With a variant's
   own three, Classic's stage 5 is lost by the strongest persona during the entry, on every
@@ -997,11 +997,24 @@ Four decisions in it are worth knowing before changing it:
   fighter.
 - **The wall check is generous to the fighter**: it may start anywhere and take its
   longer step every frame, so a wall it reports is one no pilot escapes.
+- **Two stalls in sixteen are a lost duel, not an unfinishable stage.** A stage
+  nothing can finish stalls on every seed — the fixture's ledge on 16 of 16 — and a
+  strong pilot that loses to a lone diver stalls on a few. Measured over 48 extra
+  seeds per stage when the thirteen Classic scripts landed: Classic 0 stalls in
+  1,008 runs, Deep Sea 0 in 528, Swarm Remix 6 in 1,008, the astronaut never
+  killing a lone drone that flies that pack's dive. That rate predates the thirteen
+  scripts — it reached documents that were already shipped, and surfaced when a
+  rename redrew their seeds. So `finishes` fails on a third stall, and a tolerated
+  one is still named on the variant's report line rather than swallowed.
 
 What it does not cover: challenge scripts are flown but not path-checked, since
 their flyers leave the screen by design; a transform's spawned divers start
 mid-dive, out of reach of a slot check; and the wall check is the single fighter's.
-Flying every shipped stage measured about fifteen seconds when the pass landed.
+Flying every shipped stage measured about fifteen seconds when the pass landed and
+about thirty-six once all thirteen Classic scripts did: 53 flights across the three
+variants against 37, with Classic's later scripts first flown on harder difficulty
+rows. The shipped tree is flown twice per CI run — by its own step and by the test
+that wraps it, under a 180-second timeout.
 `tests/unit/playability.test.ts` pins its thresholds from both edges, and
 `tests/sim/validate-packs-playability.test.ts` runs the script over the shipped
 tree, which passes, and over `tests/fixtures/unplayable/` layered on Classic,

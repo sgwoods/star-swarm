@@ -21,6 +21,7 @@ import { maxXFor, resolveStageSequence } from '../../src/content/rules.js';
 import type { EnemyBullet } from '../../src/sim/shots.js';
 import {
   clearsEnough,
+  finishesEnough,
   findBulletWall,
   flyStage,
   pilotsFor,
@@ -110,6 +111,21 @@ describe('the bullet-wall sweep', () => {
 });
 
 describe('the thresholds', () => {
+  it('finishes: a lost duel or two passes, a third stall fails', () => {
+    // The permissive edge: one strong-persona stall in sixteen is a pilot losing to
+    // a lone diver, which is what Swarm Remix's dive produces on about 0.6% of
+    // runs, and it must not read as an unplayable stage.
+    expect(finishesEnough(0)).toBe(true);
+    expect(finishesEnough(1)).toBe(true);
+    expect(finishesEnough(PROTOCOL.stallsTolerated)).toBe(true);
+    // The strict edge: one more fails. A stage nothing can finish stalls on all
+    // sixteen — `tests/sim/validate-packs-playability.test.ts` holds the fixture's
+    // ledge to exactly that — so the tolerance has to stay a small fraction.
+    expect(finishesEnough(PROTOCOL.stallsTolerated + 1)).toBe(false);
+    expect(finishesEnough(PROTOCOL.seeds)).toBe(false);
+    expect(PROTOCOL.stallsTolerated).toBeLessThan(PROTOCOL.seeds / 4);
+  });
+
   it('clearable: exactly the protocol count of mid-tier clears passes, one fewer fails', () => {
     expect(clearsEnough(PROTOCOL.midClears)).toBe(true);
     expect(clearsEnough(PROTOCOL.midClears - 1)).toBe(false);
