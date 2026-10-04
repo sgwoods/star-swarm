@@ -149,9 +149,6 @@ Seams left for the tasks that follow, so they attach without editing a screen:
 - **`Settings.packs`** is a per-variant pack-list override, keyed by variant id.
   The loader honours it and the settings menu shows the active list read-only;
   writing one is the pack manager's job.
-- **`Settings.crt`** is stored and reported, and the menu row says on screen that
-  no filter reads it. `src/render/crt.ts` will be what does.
-  <!-- check:absent src/render/crt.ts -->
 
 See `docs/DESIGN.md` sections 4, 6 and 9, `docs/ARCHITECTURE.md` §4.5 and §6 for
 what exists, and `docs/ROADMAP.md` for what is next.

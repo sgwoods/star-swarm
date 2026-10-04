@@ -28,6 +28,7 @@ import { createKeyboardInput, type InputFrame } from './engine/input.js';
 import { createLoop, STEP_HZ } from './engine/loop.js';
 import { createRng } from './engine/rng.js';
 import { createDisplay, LOGICAL_HEIGHT, LOGICAL_WIDTH } from './render/canvas.js';
+import { createCrtFilter } from './render/crt.js';
 import { createEffects, type Effects } from './render/effects.js';
 import { drawScene } from './render/scene.js';
 import { createSpriteSheet, type SpriteSheet } from './render/sprites.js';
@@ -67,6 +68,10 @@ if (app === null) throw new Error('Missing #app container');
 const container: HTMLElement = app;
 
 const display = createDisplay({ container });
+
+// Built once and handed to the display while the setting is on. Its overlay is
+// rasterised per layout, not per frame, so toggling it costs nothing.
+const crt = createCrtFilter();
 
 // The games this build offers come from `variants/`, and the content each one runs
 // on comes from the packs it names — both bundled rather than fetched, and both
@@ -213,7 +218,7 @@ function applyVariant(chosen: FlowVariant): void {
   });
 }
 
-/** Apply the settings that live outside the flow: audio, controls, the CRT flag. */
+/** Apply the settings that live outside the flow: audio, controls, the CRT filter. */
 function applySettings(value: Settings): void {
   synth.setVolume(value.volume);
   synth.setMuted(value.muted);
@@ -223,9 +228,9 @@ function applySettings(value: Settings): void {
     input = createKeyboardInput({ bindings: bindingsFor(controls) });
     detachInput = input.attach(window);
   }
-  // The option is stored and reported; `src/render/crt.ts` is not written yet, so
-  // this is where the filter will read it from and nothing reads it today.
-  container.dataset.crt = value.crt ? 'on' : 'off';
+  // Presentation only: the filter darkens the presented image after the blit and
+  // never reaches the backbuffer, the world or a replay (`src/render/crt.ts`).
+  display.setFilter(value.crt ? crt : undefined);
 }
 
 let controls = settings.value.controls;
@@ -498,6 +503,15 @@ declare global {
       readonly hits: number;
       readonly highScore: number;
       readonly layout: ReturnType<typeof createDisplay>['layout'];
+      /** Whether the CRT filter is drawn over the presented frame right now. */
+      readonly crt: boolean;
+      /**
+       * The 224x288 backbuffer the frame is drawn on, before it is presented.
+       *
+       * `tests/e2e/crt.spec.ts` compares the screen against it to prove the filter
+       * off is the bare integer blit, and on only darkens what was drawn.
+       */
+      readonly backbuffer: HTMLCanvasElement;
       /** What build this page is running, as `src/ui/build-info.ts` derived it. */
       readonly build: typeof BUILD;
       /** The update poller: its last verdict, and how many polls have settled. */
@@ -643,6 +657,10 @@ window.starSwarm = {
   get layout(): ReturnType<typeof createDisplay>['layout'] {
     return display.layout;
   },
+  get crt(): boolean {
+    return display.filter !== undefined;
+  },
+  backbuffer: display.backbuffer,
   build: BUILD,
   get buildComparison(): BuildComparison {
     return updates.comparison;

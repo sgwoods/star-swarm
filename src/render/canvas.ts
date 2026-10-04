@@ -84,6 +84,16 @@ export function computeLayout(
   };
 }
 
+/**
+ * Something drawn over the presented image, after the blit, in device pixels.
+ *
+ * After rather than on the backbuffer because a 224x288 surface has no room for a
+ * scanline inside a pixel; `src/render/crt.ts` is the one there is.
+ */
+export interface ScreenFilter {
+  draw: (ctx: CanvasRenderingContext2D, layout: Layout) => void;
+}
+
 export interface Display {
   /** The on-screen canvas, filling its container including the black bars. */
   readonly canvas: HTMLCanvasElement;
@@ -95,6 +105,13 @@ export interface Display {
   readonly layout: Layout;
   /** Blit the backbuffer to the screen. Call once per rendered frame. */
   present: () => void;
+  /** The filter drawn over every presented frame, or `undefined` for none. */
+  readonly filter: ScreenFilter | undefined;
+  /**
+   * Draw `filter` over every presented frame from now on; `undefined` removes it.
+   * With none, presenting is the bare integer blit and nothing else.
+   */
+  setFilter: (filter: ScreenFilter | undefined) => void;
   /** Re-measure the container and resize the display surface. */
   resize: () => void;
   /** Convert a client (CSS pixel) point to logical playfield coordinates. */
@@ -171,6 +188,7 @@ export function createDisplay(options: DisplayOptions = {}): Display {
   disableSmoothing(ctx);
 
   let layout = computeLayout(0, 0, layoutOptions);
+  let filter: ScreenFilter | undefined;
 
   function resize(): void {
     const dpr = window.devicePixelRatio || 1;
@@ -203,6 +221,9 @@ export function createDisplay(options: DisplayOptions = {}): Display {
       layout.width,
       layout.height,
     );
+    // Over the scaled image, never into the backbuffer: a filter works in device
+    // pixels, and with none this function is the blit and nothing else.
+    filter?.draw(screenCtx, layout);
   }
 
   const onWindowResize = (): void => {
@@ -230,6 +251,14 @@ export function createDisplay(options: DisplayOptions = {}): Display {
       return layout;
     },
     present,
+    get filter(): ScreenFilter | undefined {
+      return filter;
+    },
+    setFilter(next: ScreenFilter | undefined): void {
+      if (next === filter) return;
+      filter = next;
+      present();
+    },
     resize,
     toLogical(clientX: number, clientY: number): { x: number; y: number } {
       const rect = canvas.getBoundingClientRect();

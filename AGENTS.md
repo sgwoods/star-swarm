@@ -62,7 +62,7 @@ Markdown:
 ```
 <!-- doc:layer state -->                        the layer this document is
 <!-- check:count flow.phases 6 -->              a stated count; name/number pairs
-<!-- check:absent src/render/crt.ts -->         not written yet, and must stay so
+<!-- check:absent src/audio/music.ts -->        not written yet, and must stay so
 <!-- check:path packs/classic/rules.json -->    a path named outside backticks
 <!-- check:script sprite-sheet -->              a script in package.json
 <!-- check:foreign src/mame/namco/galaga.cpp --> a path in somebody else's repo

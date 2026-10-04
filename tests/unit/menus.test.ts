@@ -246,8 +246,8 @@ describe('the settings menu', () => {
     expect(menu.row.id).toBe('crt');
     menu.adjust(1);
     expect(settings().crt).toBe(true);
-    // Honest about the half that is not built.
-    expect(menu.row.note).toContain('NOT BUILT');
+    // The row says what the filter does, now that there is one.
+    expect(menu.row.note).toBe(MENU_TEXT.crtNote);
   });
 
   it('cycles the control scheme', () => {

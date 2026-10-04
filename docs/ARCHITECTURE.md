@@ -395,6 +395,27 @@ the flag and believing it.
 
 ![The scroll rate before and after: half the reference's, then the reference's](media/starfield-rate.gif)
 
+### The CRT filter
+
+`CRT` in the settings menu, off by default, lays scanlines and the suggestion of a
+curved tube over the picture. It is drawn **after** the backbuffer is scaled, in
+device pixels, because the 224×288 backbuffer has no room inside a pixel for a
+scanline and a real barrel warp would resample the art the whole-number scale
+keeps sharp. `src/render/canvas.ts` takes it as a `ScreenFilter` that `present()`
+draws over the scaled image; `src/main.ts` sets or clears it from the setting, and
+nothing upstream of the display ever sees it — not the backbuffer, not the world,
+not a replay.
+
+It only removes light: one dark band at the bottom of every logical row (none at
+1x, where there is no room), a vignette that is zero over the middle of the screen
+and takes at most 30% at a corner, and corners rounded three logical pixels in.
+`tests/e2e/crt.spec.ts` checks it on the real canvas at 2x and 4x: off, every
+device pixel is exactly its logical pixel; on, nothing is brighter than the blit,
+every lit pixel keeps most of its light, and the top row of every lit pixel in the
+middle of the screen is still exact.
+
+![The same frame at 4x with the filter off, then on](media/crt-off-on.png)
+
 ### The two mechanics that are easiest to read about and hardest to picture
 
 **Capture.** A captor loops out of the formation, slides down and opens its
@@ -537,7 +558,7 @@ golden recorded on either architecture replays byte for byte on the other.
 | `src/engine/`  | The fixed-step loop, the seeded RNG, the trigonometry tables, abstract input, and input recording/replay. Knows nothing about this game or any game.                                        |
 | `src/sim/`     | The world and one step of it: player, shots, collisions, lives, enemies, formation, the path interpreter, dives, enemy fire, challenge stages, and the ability registry with capture in it. |
 | `src/content/` | The content platform: the Zod schemas, the loader, the registry, the module that interprets a rules document, and stage resolution.                                                         |
-| `src/render/`  | The 224×288 backbuffer presented at a whole-number scale, sprite rasterisation, the pixel font, the starfield, one-shot effect animations, and scene composition.                           |
+| `src/render/`  | The 224×288 backbuffer presented at a whole-number scale, sprite rasterisation, the pixel font, the starfield, one-shot effect animations, scene composition, and the optional CRT filter.  |
 | `src/audio/`   | A parametric synth over Web Audio, and the mapping from simulation events to sounds.                                                                                                        |
 | `src/ui/`      | The game-flow state machine, attract mode, the HUD, the results card, the high-score table — and the dev-only `/lab`.                                                                       |
 
@@ -1013,10 +1034,8 @@ describing as deliberately absent something that shipped two merges ago.
   `shield-hit`, `shield-restored`, `enemy-split`, `enemy-teleported` and
   `minions-spawned` — are ones a pack may bind a sound or an effect to, and none
   does, so a shield hit is not yet visible on screen.
-- **The optional CRT filter and music** are named in the design plan and are not
-  written yet. The CRT **option** is in: the
-  settings menu shows it, it persists, and the menu row says on screen that no
-  filter reads it. <!-- check:absent src/render/crt.ts src/audio/music.ts -->
+- **Music** is named in the design plan and is not written yet.
+  <!-- check:absent src/audio/music.ts -->
 - **No stage is a boss stage.** `boss` is one of the three stage kinds the schema
   admits, and no pack document uses it — what a boss stage would be has never
   been specified ([`docs/IDEAS.md`](IDEAS.md)).
@@ -1125,7 +1144,7 @@ override. Where each one arrives:
 | `volume`     | `Synth.setVolume`                                                           |
 | `muted`      | `Synth.setMuted`                                                            |
 | `controls`   | the keyboard map handed to `createKeyboardInput`, one of three schemes      |
-| `crt`        | stored and reported; no filter reads it yet                                 |
+| `crt`        | `Display.setFilter` with the scanline filter from `src/render/crt.ts`       |
 | `packs`      | an override of a variant's pack list, honoured on load, written by nothing  |
 
 <!-- check:count ui.controlSchemes 3 -->
