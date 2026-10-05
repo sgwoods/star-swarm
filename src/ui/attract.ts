@@ -35,9 +35,11 @@
  * **The cycle turns on a finished run.** Each persona plays one game from the
  * start, and the next takes over on the step after its game over, so a persona
  * holds the screen for as long as it stays alive — measured on the Classic demo
- * seed, between half a minute and a minute each. {@link DEMO_TURN_STEPS} is a
- * ceiling rather than a budget, and no shipped persona reaches it: it is there so
- * a persona that never dies cannot keep the others off the screen.
+ * seed, from about half a minute for the beginner to two and a half for the
+ * astronaut. {@link DEMO_TURN_STEPS} is a ceiling rather than a budget: it is
+ * there so a persona that never dies cannot keep the others off the screen, and
+ * the one shipped leg that reaches it is Deep Sea's astronaut, still flying on
+ * stage 7.
  *
  * **Still reproducible.** Every leg starts the same world from the same seed —
  * the same fleet, flown by somebody else — and each pilot draws from a seed of its
@@ -74,9 +76,10 @@ export const DEMO_SEED = 'star-swarm-attract';
 /**
  * The longest one persona may hold the screen, in simulation steps.
  *
- * Three minutes, which is three times the longest leg measured on the shipped
- * content: a ceiling for a persona that does not die, never the ordinary way a
- * turn ends.
+ * Three minutes, which was three times the longest leg measured on the shipped
+ * content when it was set: a ceiling for a persona that does not die rather than
+ * the ordinary way a turn ends. Deep Sea's astronaut has reached it since the
+ * pilot stopped walking through sweepers.
  */
 export const DEMO_TURN_STEPS = 3 * 60 * STEP_HZ;
 

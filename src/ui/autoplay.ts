@@ -255,7 +255,10 @@ interface Threat {
   readonly id: number;
   /** Where it is now, in fighter-anchor coordinates. */
   readonly x: number;
-  /** Pixels of altitude between it and the fighter's row, never below zero. */
+  /**
+   * Pixels of altitude between it and the fighter's row: negative for a body that
+   * has gone below it, which is what lets one falling away stop being a threat.
+   */
   readonly above: number;
   /** Sideways pixels per step, as measured over two views. */
   readonly drift: number;
@@ -430,6 +433,14 @@ export function createAutopilot(options: PilotOptions): Pilot {
    * something a threat, and the sideways room it wants outside whatever that thing
    * sweeps. The band itself is {@link PilotView.strikeDepth} and belongs to the
    * game — see the note there for why the two must not be the same number.
+   *
+   * `above` is signed, and that is not a detail either. Clamped at zero, a diver
+   * that had already gone **under** the fighter's row read as level with it on
+   * every frame until it left the screen — a sweeper that never finished passing.
+   * The pilot walked through that phantom harmlessly until it learned to walk
+   * round things ({@link reachOf}); then it treated it as a wall, and on one Deep
+   * Sea seed stood beside one in a corner for two and a half minutes without
+   * firing a shot.
    */
   const threatOf = (
     seen: PilotView,
@@ -441,11 +452,11 @@ export function createAutopilot(options: PilotOptions): Pilot {
     shootable: boolean,
     aim?: { readonly column: number },
   ): Threat => {
-    const strike = windowOfApproach(Math.max(0, above), -dy, 0, band(seen, persona.dodgeMargin));
+    const strike = windowOfApproach(above, -dy, 0, band(seen, persona.dodgeMargin));
     return {
       id,
       x,
-      above: Math.max(0, above),
+      above,
       drift: dx,
       descent: dy,
       from: strike?.from ?? Number.POSITIVE_INFINITY,
@@ -488,7 +499,9 @@ export function createAutopilot(options: PilotOptions): Pilot {
     if (!persona.rescue && beam !== undefined) {
       const above = fighter.y - beam.y;
       if (above <= persona.threatHorizon) {
-        out.push(threatOf(seen, BEAM_THREAT_ID, above, beam.x, 0, 0, false));
+        // Clamped, unlike a body: `beam.y` is the tip of a column that reaches all
+        // the way up to the captor, so a fighter anywhere above the tip is in it.
+        out.push(threatOf(seen, BEAM_THREAT_ID, Math.max(0, above), beam.x, 0, 0, false));
       }
     }
 
@@ -541,27 +554,98 @@ export function createAutopilot(options: PilotOptions): Pilot {
   };
 
   /**
-   * When `threat` would first be a danger to a fighter standing in `column`, or
-   * `undefined` if it never is inside the warning window.
+   * The steps during which `threat` is a danger to a fighter in `column`, or
+   * `undefined` if there are none — however far off they are.
    *
    * The intersection of two intervals: the steps it is at striking altitude, and
    * the steps it is over this column. That intersection is what makes a sweeping
    * body dodgeable at all — the answer is *later* for a column the sweeper reaches
    * last, which is exactly where the pilot should be standing.
    */
-  const strikesAt = (
+  const strikeWindow = (
     seen: PilotView,
     threat: Threat,
     column: number,
     margin: number,
-  ): number | undefined => {
+  ): { readonly from: number; readonly until: number } | undefined => {
     const altitude = windowOfApproach(threat.above, -threat.descent, 0, band(seen, margin));
     if (altitude === undefined) return undefined;
     const over = windowOfApproach(threat.x, threat.drift, column, seen.strikeWidth + margin);
     if (over === undefined) return undefined;
     const from = Math.max(altitude.from, over.from);
-    if (from > Math.min(altitude.until, over.until) || from > warning) return undefined;
-    return from;
+    const until = Math.min(altitude.until, over.until);
+    if (from > until || from > warning) return undefined;
+    return { from, until };
+  };
+
+  /**
+   * When `threat` would first be a danger to a fighter standing in `column`, or
+   * `undefined` if it never is inside the warning window.
+   */
+  const strikesAt = (
+    seen: PilotView,
+    threat: Threat,
+    column: number,
+    margin: number,
+  ): number | undefined => strikeWindow(seen, threat, column, margin)?.from;
+
+  /**
+   * The span of columns the fighter can walk to without passing through anything
+   * on the way, as the outermost reachable column on each side.
+   *
+   * Asking whether a column is safe to *stand* in is not asking whether it is safe
+   * to *get* to, and the difference is a body sweeping along the fighter's row:
+   * every column it has already passed is clear, and every one of them is on the
+   * far side of it. A pilot that asked only the first question chose the clear
+   * column behind the sweeper and walked through the sweeper to stand there.
+   * Swarm Remix's drone dive ends exactly that way — a weave aimed at the fighter
+   * that flattens into a pass along its row — so the astronaut, the pilot that
+   * leaves itself the most room and so finds the clear column soonest, did it on
+   * every pass. With one drone left nothing else changed between passes, the
+   * fighter died on the same frame of every cycle, and one run in a few hundred
+   * stalled to the time limit with the drone alive and the fighter rammed every
+   * four seconds.
+   *
+   * So the walk is checked column by column outwards from where the fighter is,
+   * and stops at the first column it would be struck in on the way. The fighter's
+   * cadence alternates one and two pixels a step (`src/sim/player.ts`), so it
+   * passes a column `d` pixels away somewhere between `d / 2` and `d` steps from
+   * now, and a threat over that column at any time in that interval blocks it. The
+   * clearance is none at all: what may not be walked through is what would kill,
+   * and the persona's own room is for the column it stops in.
+   */
+  const reachOf = (
+    seen: PilotView,
+    threats: readonly Threat[],
+    fighter: FighterSighting,
+  ): { readonly low: number; readonly high: number } => {
+    const passable = (column: number): boolean => {
+      const distance = Math.abs(column - fighter.x);
+      for (const threat of threats) {
+        const strike = strikeWindow(seen, threat, column, 0);
+        if (strike !== undefined && strike.from <= distance && strike.until >= distance / 2) {
+          return false;
+        }
+      }
+      return true;
+    };
+
+    // The candidate columns are the grid `bestColumn` walks, and the fighter is
+    // rarely on it, so each side starts at the first grid column on that side.
+    const first = seen.minX + Math.ceil((fighter.x - seen.minX) / COLUMN_STEP) * COLUMN_STEP;
+    let high = fighter.x;
+    for (let column = first; column <= seen.maxX && passable(column); column += COLUMN_STEP) {
+      high = column;
+    }
+    let low = fighter.x;
+    for (
+      let column = first - COLUMN_STEP;
+      column >= seen.minX && passable(column);
+      column -= COLUMN_STEP
+    ) {
+      low = column;
+    }
+    return { low, high };
   };
 
   /**
@@ -594,12 +678,13 @@ export function createAutopilot(options: PilotOptions): Pilot {
    * is a tuned constant and this is the decision the whole pilot turns on:
    *
    * 1. Is there a column nothing reaches inside the warning window, at the
-   *    clearance this persona wants? Then stand in the most *appealing* one. This is
+   *    clearance this persona wants, that it can walk to without passing through
+   *    anything ({@link reachOf})? Then stand in the most *appealing* one. This is
    *    the ordinary case, and it is why one pilot both hunts and dodges rather than
    *    having two modes that fight: while it is safe it walks towards something to
    *    shoot, and the moment that place stops being safe it walks away instead.
    * 2. Failing that, the same question at no clearance at all — a column that is
-   *    merely not lethal.
+   *    merely not lethal, and still one it can get to.
    * 3. Failing even that, the column that stays safe longest, and among equals the
    *    nearest: walking across a full screen to a marginally better place is how a
    *    pilot dies on the way.
@@ -625,10 +710,12 @@ export function createAutopilot(options: PilotOptions): Pilot {
     // astronaut with 28 px scored *below* the expert with 22. A real player who
     // wants twenty pixels and cannot get them takes eight, so the pilot does too —
     // and a large clearance now costs nothing when the screen will not allow it.
+    const reach = reachOf(seen, threats, fighter);
     for (const margin of [persona.dodgeMargin, 0]) {
       let clear: number | undefined;
       let clearCost = Number.POSITIVE_INFINITY;
       for (let column = seen.minX; column <= seen.maxX; column += COLUMN_STEP) {
+        if (column < reach.low || column > reach.high) continue;
         if (dangerAt(seen, column, threats, margin) > 0) continue;
         const cost = appeal(column);
         if (cost < clearCost) {
@@ -649,8 +736,9 @@ export function createAutopilot(options: PilotOptions): Pilot {
       // Nothing is clear, so the tie-break is distance from **here**, not from
       // whatever it wanted to shoot: the thing it wants to shoot is very often the
       // thing bearing down on it, and a pilot that broke the tie towards its target
-      // walked into the sweeper it was running from. That was the last defect this
-      // function had, and it read on screen as the astronaut turning into a diver.
+      // walked into the sweeper it was running from. It read on screen as the
+      // astronaut turning into a diver — and the first two questions had the same
+      // fault until they asked whether the column could be reached ({@link reachOf}).
       const walk = Math.abs(column - fighter.x);
       if (danger < safestDanger || (danger === safestDanger && walk < safestWalk)) {
         safestDanger = danger;

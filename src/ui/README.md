@@ -41,8 +41,8 @@ The front-end shell around it landed with Milestone 2:
   which ends it.
 - **The variant's personas fly it, in turn.** The `defaultPersona` first, then on
   through the list in menu order, each playing one whole game; the next takes over
-  on the step after a game over, with a three-minute ceiling that no shipped
-  persona reaches. Every leg starts the same world from the same seed and each
+  on the step after a game over, with a three-minute ceiling that only Deep Sea's
+  astronaut reaches. Every leg starts the same world from the same seed and each
   pilot has a seed the cycle never advances, so the cycle repeats exactly. The
   header of `attract.ts` is the argument for flying it this way rather than with
   the input log.

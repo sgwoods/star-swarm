@@ -28,7 +28,7 @@
  * here that every pack had to meet would belong in the gate's protocol instead.
  */
 
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 import type { Persona } from '../../src/content/personas.js';
 import { formationAxes, type Formation, type Rules } from '../../src/content/schema.js';
@@ -350,15 +350,26 @@ describe('every forged dive is flyable from every slot its alien can occupy', ()
 /* -------------------------------------------------------------------------- */
 
 /**
- * How long a run is given and how many seeds each persona plays.
+ * How long a stage is given, how long a whole run may go on, and how many seeds
+ * each persona plays.
  *
- * Three minutes is well past the longest run either persona has recorded here, so
- * a run that reaches the limit is a **stall** — a stage that cannot be finished —
- * rather than a long game cut short, which is what makes the stall count worth
- * asserting on. Sixteen seeds is where the clear rates below were measured and
- * costs about three seconds for the pair.
+ * A run is played to its game over, and the limit is **per stage**: a stage still
+ * on the field three minutes after it began is a **stall** — a stage that cannot
+ * be finished — rather than a long game, which is what makes the stall count worth
+ * asserting on. Three minutes is the gate's own stage limit (`PROTOCOL.stageSteps`
+ * in `scripts/playability.ts`) and over three times the slowest clear either
+ * persona has recorded here, 2,899 steps.
+ *
+ * It was a limit per *run* while three minutes was also well past the longest
+ * game either persona had recorded here. That stopped being true when the pilot
+ * stopped walking through sweepers: the astronaut is on stage 7 or 8 at three
+ * minutes on most seeds, and a limit per run counted those live games as stalls.
+ * {@link RUN_STEPS} is a guard so a pilot that never dies cannot hang the suite,
+ * not a measurement — the longest game measured here is 22,999 steps. Sixteen
+ * seeds is where the clear rates below were measured.
  */
-const STEPS = 3 * 60 * 60;
+const STAGE_STEPS = 3 * 60 * 60;
+const RUN_STEPS = 10 * STAGE_STEPS;
 const SEEDS = 16;
 
 type Outcome = 'cleared-and-then-lost' | 'lost-on-the-first-stage' | 'stalled';
@@ -375,7 +386,19 @@ function play(persona: Persona, seed: string): Run {
   const world = createWorld({ seed, rules: rules(), stages });
   const pilot = autopilotSource(world, { persona, seed: `pilot:${seed}` });
   let steps = 0;
-  for (; steps < STEPS && world.status === 'playing'; steps += 1) stepWorld(world, pilot.sample());
+  let stage = world.stage;
+  let stageBegan = 0;
+  for (
+    ;
+    steps < RUN_STEPS && steps - stageBegan < STAGE_STEPS && world.status === 'playing';
+    steps += 1
+  ) {
+    stepWorld(world, pilot.sample());
+    if (world.stage !== stage) {
+      stage = world.stage;
+      stageBegan = steps + 1;
+    }
+  }
   const outcome: Outcome =
     world.status === 'playing'
       ? 'stalled'
@@ -385,10 +408,25 @@ function play(persona: Persona, seed: string): Run {
   return { outcome, score: world.score, stage: world.stage, steps };
 }
 
-function runsOf(id: string): readonly Run[] {
+function playAll(id: string): readonly Run[] {
   const persona = variant().personas.find((candidate) => candidate.id === id);
   if (persona === undefined) throw new Error(`variants/${PACK_ID}.json declares no "${id}"`);
   return Array.from({ length: SEEDS }, (_unused, index) => play(persona, `forge-${index}`));
+}
+
+/**
+ * Each persona's runs, played once in `beforeAll` and read by every assertion,
+ * which are several readings of one experiment rather than several experiments.
+ *
+ * Played inside the first assertion that asked, whole games blew that assertion's
+ * five-second budget as soon as the rest of the suite was running beside it — the
+ * reason `./autoplay-personas.test.ts` measures in `beforeAll` too.
+ */
+const measured = new Map<string, readonly Run[]>();
+function runsOf(id: string): readonly Run[] {
+  const runs = measured.get(id);
+  if (runs === undefined) throw new Error(`the "${id}" persona was not measured`);
+  return runs;
 }
 
 function meanScore(runs: readonly Run[]): number {
@@ -396,6 +434,10 @@ function meanScore(runs: readonly Run[]): number {
 }
 
 describe('an autoplay persona plays the forged pack', () => {
+  beforeAll(() => {
+    for (const id of ['normal', 'astronaut']) measured.set(id, playAll(id));
+  }, 60_000);
+
   it('declares the personas it is measured with, so the measurement is reproducible', () => {
     // A variant with no `autoplay` block cannot be watched and cannot be measured,
     // which for a forged pack means the honest substitute for the playability
@@ -407,8 +449,9 @@ describe('an autoplay persona plays the forged pack', () => {
   it('is clearable: the strong persona gets past the first stage on almost every seed', () => {
     // This is the whole substitute for "the stage is clearable". A stage nothing can
     // clear passes `npm run validate-packs` without a murmur. Measured at 14 of 16
-    // and asserted at three quarters, which leaves room for a bad dive without
-    // leaving room for a stage that has stopped being finishable.
+    // when this was written and 16 of 16 since the pilot stopped walking through
+    // sweepers, and asserted at three quarters, which leaves room for a bad dive
+    // without leaving room for a stage that has stopped being finishable.
     const runs = runsOf('astronaut');
     const cleared = runs.filter((run) => run.stage > 1).length;
     expect(cleared).toBeGreaterThanOrEqual(Math.ceil(SEEDS * 0.75));
@@ -419,14 +462,15 @@ describe('an autoplay persona plays the forged pack', () => {
 
   it('is clearable by a mid-tier persona too, on a real fraction of seeds', () => {
     // The other half of clearable: a stage only a perfect pilot can finish is a
-    // stage that is not calibrated. Measured at 3 of 16; asserted at 1, which is
+    // stage that is not calibrated. Measured at 3 of 16, and 5 of 16 since the pilot
+    // stopped walking through sweepers; asserted at 1, which is
     // well inside the noise and still fails a stage that has become unclearable
     // for anyone but the ceiling.
     const cleared = runsOf('normal').filter((run) => run.stage > 1).length;
     expect(cleared).toBeGreaterThanOrEqual(1);
   });
 
-  it('always ends: no run of either persona reaches the step limit still playing', () => {
+  it('always ends: no stage of either persona’s runs outlasts the stage limit', () => {
     // A stage that cannot finish — an enemy nothing can reach, a wave that never
     // launches — shows up here and nowhere else in the suite.
     for (const id of ['normal', 'astronaut']) {

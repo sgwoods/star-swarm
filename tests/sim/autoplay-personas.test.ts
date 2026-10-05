@@ -27,17 +27,20 @@ import { shippedVariants } from '../helpers/variants.js';
  * How long a run is given, in simulation steps, and how many seeds each persona
  * plays.
  *
- * Three minutes is long enough for every persona to lose its three fighters —
- * measured, the longest average is under a minute — so a run almost always ends by
- * game over rather than by the clock, and the score is the whole run's rather than
- * a slice of one.
+ * Three minutes is long enough for the beginner, the normal and the expert to lose
+ * their three fighters — measured, the expert's average is a minute and a half — so
+ * their runs end by game over rather than by the clock, and their scores are whole
+ * runs'. The astronaut's are not always: it averages about two and a half minutes
+ * and is still flying at the limit on about a third of seeds, so there its score is
+ * a three-minute slice. A slice only understates it, which leaves every assertion
+ * below on the safe side.
  *
  * Thirty-two seeds because **sixteen is not enough**: at sixteen, on this seed
  * family, the expert's median run came out forty points under the normal's and this
  * file failed — correctly, because at that sample size the ordering genuinely is not
  * there to be seen. The whole suite of four orderings holds from twenty-four seeds
  * up and was checked at forty-eight; thirty-two is the middle of that with room
- * either side, and the four personas together cost about two seconds.
+ * either side, and the four personas together cost about five seconds.
  */
 const STEPS = 3 * 60 * 60;
 const SEEDS = 32;
