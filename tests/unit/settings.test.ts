@@ -54,6 +54,7 @@ describe('the settings shape', () => {
       'difficulty',
       'muted',
       'packs',
+      'stages',
       'variant',
       'volume',
     ]);

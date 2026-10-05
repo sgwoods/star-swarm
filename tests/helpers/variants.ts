@@ -16,7 +16,7 @@ import type { LoadedPack } from '../../src/content/loader.js';
 import { loadPackOrThrow } from '../../src/content/loader.js';
 import type { Rules } from '../../src/content/schema.js';
 import type { ResolvedVariant } from '../../src/content/variants.js';
-import { loadVariantsOrThrow } from '../../src/content/variants.js';
+import { loadVariantsOrThrow, type VariantSource } from '../../src/content/variants.js';
 
 const REPO_ROOT = resolve(import.meta.dirname, '..', '..');
 
@@ -39,12 +39,17 @@ export function installedPacks(): ReadonlyMap<string, LoadedPack> {
   return packs;
 }
 
+/** Every document under `variants/`, unparsed, as `src/main.ts` hands them to the loader. */
+export function shippedVariantSources(): readonly VariantSource[] {
+  const { sources, errors } = readVariantSources(resolve(REPO_ROOT, 'variants'));
+  if (errors.length > 0) throw new Error(`variants/ is unreadable: ${JSON.stringify(errors)}`);
+  return sources;
+}
+
 /** Every variant under `variants/`, resolved, in selector order. */
 export function shippedVariants(): readonly ResolvedVariant[] {
   if (cachedVariants !== undefined) return cachedVariants;
-  const { sources, errors } = readVariantSources(resolve(REPO_ROOT, 'variants'));
-  if (errors.length > 0) throw new Error(`variants/ is unreadable: ${JSON.stringify(errors)}`);
-  cachedVariants = loadVariantsOrThrow(sources, installedPacks());
+  cachedVariants = loadVariantsOrThrow(shippedVariantSources(), installedPacks());
   return cachedVariants;
 }
 

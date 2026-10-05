@@ -248,16 +248,16 @@ exactly centred, the breathe taking over — and then the fighter opening up on 
 
 ![The game: entry waves, formation and the fighter shooting](media/arch-gameplay.gif)
 
-The front end around that is one state machine with ten phases — the start-up
-variant selector, attract, the settings menu, playing, paused, the exit
-confirmation, the between-stage challenge card, game over, results and high-score
-entry. The cabinet boots into the selector when there is more than one game to
+The front end around that is one state machine with twelve phases — the start-up
+variant selector, attract, the settings menu, the pack manager and the
+stage-sequence editor it opens, playing, paused, the exit confirmation, the
+between-stage challenge card, game over, results and high-score entry. The cabinet boots into the selector when there is more than one game to
 choose and into attract when there is not; behind the cards the demo is the _real_
 simulation, flown in turn by the game's own autoplay personas (§7) — or, for a game
 that declares none, replaying a hand-written input log; start begins a game; three fighters
 lost ends it into the game-over banner, the hit-ratio results card, and then
 either the high-score table or straight back to attract.
-<!-- check:count flow.phases 10 -->
+<!-- check:count flow.phases 12 -->
 
 ![The front end: attract mode, a game, and out to the results card](media/arch-front-end.gif)
 
@@ -570,10 +570,10 @@ golden recorded on either architecture replays byte for byte on the other.
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/engine/`  | The fixed-step loop, the seeded RNG, the trigonometry tables, abstract input, and input recording/replay. Knows nothing about this game or any game.                                        |
 | `src/sim/`     | The world and one step of it: player, shots, collisions, lives, enemies, formation, the path interpreter, dives, enemy fire, challenge stages, and the ability registry with capture in it. |
-| `src/content/` | The content platform: the Zod schemas, the loader, the registry, the module that interprets a rules document, and stage resolution.                                                         |
+| `src/content/` | The content platform: the Zod schemas, the loader, the registry, the module that interprets a rules document, stage resolution, and what a pack mix is coupled to.                          |
 | `src/render/`  | The 224×288 backbuffer presented at a whole-number scale, sprite rasterisation, the pixel font, the starfield, one-shot effect animations, scene composition, and the optional CRT filter.  |
 | `src/audio/`   | A parametric synth over Web Audio, and the mapping from simulation events to sounds.                                                                                                        |
-| `src/ui/`      | The game-flow state machine, attract mode, the HUD, the results card, the high-score table — and the dev-only `/lab`.                                                                       |
+| `src/ui/`      | The game-flow state machine, attract mode, the HUD, the menus and the pack manager, the results card, the high-score table — and the dev-only `/lab`.                                       |
 
 Four properties worth knowing, because each one is load-bearing:
 
@@ -867,7 +867,10 @@ since that rank override is a statement about the same half and the later one
 wins. Without it the Deep Sea game would play its own stages at its default rank
 and Classic's combat scripts at the other three, because Classic's ranks B, C and
 D each name their own; the rest of the document is still Classic's object, shared
-rather than copied. A single-pack registry gets its own manifest back unchanged, so this is a
+rather than copied. A player's order from the stage-sequence editor is the same
+statement one layer further on — stated after every pack, so it supersedes the
+packs' combat half and every rank's override of it
+([§6](#the-pack-manager-and-the-stage-sequence-editor)). A single-pack registry gets its own manifest back unchanged, so this is a
 generalisation of the rule the registry always documented rather than a second
 rule beside it — and it is what lets `packs/swarm-remix/`'s `pack.json` be four
 lines.
@@ -985,7 +988,10 @@ stage that cannot be built is not blamed on the stage cleared before it.
 | `personas`      | a variant has stages to fly and no persona to fly them                                                                                               |
 
 Each failure names the variant, the stage number, the document an author would
-open — the stage, or the path for a dive — and the reason. The numbers it rests on
+open — the stage, or the path for a dive — and the reason. The two checks that
+need no pilot, `entry` and `dive`, are one function, `checkStructure`, and the pack
+manager runs that same function on every list a player composes
+([§6](#the-pack-manager-and-the-stage-sequence-editor)). The numbers it rests on
 (seeds, time limits, the clear threshold) are `PROTOCOL` in the same file, and the
 seeds are fixed strings, so a verdict reproduces on any machine.
 
@@ -1075,10 +1081,11 @@ describing as deliberately absent something that shipped two merges ago.
   formation tune on that same frame, and `packs/classic/pack.json` binds no sound
   to the event. The second half of acceptance test **M2** is therefore about
   something the pack does not ship yet.
-- **The pack manager and the stage-sequence editor.** The settings menu shows the
-  active variant's pack list as a read-only row, and the settings document already
-  carries a per-variant override the loader honours — nothing writes one yet, which
-  is the whole of what is missing.
+- **The pack manager does not fly a persona.** Its verdict on a list is the
+  loader and the structural half of the playability pass, run live; the flown half
+  — whether a persona can finish what loads and builds — is left to the gate,
+  because it costs seconds per list where the card needs milliseconds
+  ([§6](#the-pack-manager-and-the-stage-sequence-editor)).
 - **An overlay pack cannot reference the base pack's documents**
   ([§4.5](#45-variants-the-games-this-build-offers)). It can replace a
   self-contained document and nothing more, because the loader's reference pass
@@ -1149,10 +1156,10 @@ configuration layers: engine rules, content packs, and the player's settings. Th
 third is in, as `src/ui/settings.ts` and the menu in `src/ui/menus.ts`, and the
 whole of what is interesting about it is the boundary with the first.
 
-**Nothing in the settings is a number the simulation steps.** The eight values are
+**Nothing in the settings is a number the simulation steps.** The nine values are
 the chosen variant, the difficulty **preset id**, the autoplay **persona id**,
-volume, mute, the CRT option, the control scheme, and a per-variant pack-list
-override. Where each one arrives:
+volume, mute, the CRT option, the control scheme, and per variant a pack list and
+an order for its combat stages, both as ids. Where each one arrives:
 
 | Setting      | Applied by                                                                  |
 | ------------ | --------------------------------------------------------------------------- |
@@ -1163,14 +1170,16 @@ override. Where each one arrives:
 | `muted`      | `Synth.setMuted`                                                            |
 | `controls`   | the keyboard map handed to `createKeyboardInput`, one of three schemes      |
 | `crt`        | `Display.setFilter` with the scanline filter from `src/render/crt.ts`       |
-| `packs`      | an override of a variant's pack list, honoured on load, written by nothing  |
+| `packs`      | a variant's pack list, composed by the flow, written by the pack manager    |
+| `stages`     | a variant's combat-stage order, the same way, by the stage-sequence editor  |
 
 <!-- check:count ui.controlSchemes 3 -->
 
-The menu shows at most one row per setting, and two of them are shown only when
-there is something to choose: `GAME` needs more than one variant, and `AUTOPLAY`
-needs a variant that declares personas.
-<!-- check:count ui.settingsRows 8 -->
+The menu shows at most one row per setting, and three of them are shown only when
+there is something to choose: `GAME` needs more than one variant, `AUTOPLAY`
+needs a variant that declares personas, and `STAGES` needs something to compose
+with — which the browser always has, and a flow built in a test may not.
+<!-- check:count ui.settingsRows 9 -->
 
 **The difficulty preset does exactly one thing: it chooses the rank.** It is not a
 multiplier and there is nowhere in the shape to make it one. A preset is an id, a
@@ -1229,10 +1238,104 @@ meaning anything.
 
 ![The start-up selector, then the settings menu changing the difficulty preset](media/m3-variants.gif)
 
+### The pack manager and the stage-sequence editor
+
+The settings card's last two rows each open a card of their own: `PACKS` the pack
+manager and `STAGES` the stage-sequence editor, both in `src/ui/packs.ts`. Left or
+right on the row opens it — those are the keys that change a row, and a list is
+changed on its own card — and on both cards up and down move, left and right change
+the row under the cursor, **Enter** keeps and **Esc** cancels, in the voice every
+card speaks ([below](#working-a-card)). Each is a phase of `src/ui/flow.ts`, for
+the reason every card is.
+
+![The pack manager and the stage-sequence editor: Deep Sea mixed in, a list refused, a Classic script ordered first and played](media/m3-pack-manager.gif)
+
+**The pack manager lists every installed pack, and the value is the layer.** The
+rows stay in a fixed order; a pack that is on reads its place in the layering — `1`
+is the base, the highest number wins, which the card says under the list — and one
+that is off reads `OFF`. Switching a pack on puts it **on top**, so order is chosen
+by switching a pack off and on again. Each row's note says what the pack brings:
+whether it ships rules, and how many stages.
+
+**The stage-sequence editor orders the combat stages.** Its first row, `ORDER`,
+reads `OWN` — the packs' own order at the rank in force, drawn dim — or `MINE`. Each
+row below cycles through every combat stage the composed packs hold, then empty;
+an emptied row stays on screen until the order is kept, and the `+` row appends.
+Each row's note says which stage number it plays as, because the challenge stages
+take their own numbers and the third row is not stage 3
+([`docs/content-guide.md`](content-guide.md) section 7.5). A kept order is stated
+after every pack, so it is the combat half at **every** rank and cycles whole once
+past its end. The challenge half and the rules' challenge cadence are not the
+player's to reorder: a challenge script's flyers leave the screen by design, so in
+a combat slot it would be a stage that ends itself, and the loader refuses one.
+
+**Both are kept in the settings document, per variant** — `packs` and `stages`,
+ids keyed by variant id, through the one `KeyedStorage` — and keeping a variant's
+own list stores no override at all. The flow composes the chosen variant from them
+through its `composer` (`src/ui/compose.ts`), and the variant in force is what every
+world, the attract demo and the sprite sheet in `src/main.ts` are built from: a
+mix of Classic and Deep Sea draws the reef stages in Deep Sea's art, which
+`tests/e2e/packs.spec.ts` reads off the canvas.
+
+**A card refuses at the point of choosing.** Every change is judged at once and the
+verdict is on the card under the list: a green `LOADS AND BUILDS`, or a red
+`WILL NOT LOAD` or `UNPLAYABLE` with the reason on the two lines under it. **Enter**
+on a refused draft keeps nothing, and the headline gains `NOT KEPT` so the press is
+seen. The draft itself may pass through a refused list — switching the base pack
+off on the way to another is one — so only keeping is refused, never a press.
+
+**The verdict is two of the gate's checks, run live, and not the third:**
+
+| Question               | Whose check                                                                  | On failure     |
+| ---------------------- | ---------------------------------------------------------------------------- | -------------- |
+| Will it load?          | `resolveVariant` in `src/content/variants.ts` — the two passes of the loader | refused        |
+| Will its stages build? | `checkStructure` in `scripts/playability.ts` — `entry` and `dive`            | refused        |
+| What is it coupled to? | `findCouplings` in `src/content/couplings.ts`                                | said, not kept |
+
+`resolveVariant` is the variant document with its `packs` replaced, so a list is
+refused for exactly the reasons a document naming it would be. What the card does
+not run is the flown half of the pass — `finishes`, `clearable`, `bullet-wall`,
+`deterministic` and `ordered`. Measured over the shipped packs under the Classic
+game when the editor landed, the whole pass took 7.6 seconds for Classic with Deep
+Sea and 24 to 27 for the mixes that keep Classic's twenty-one stages; the
+structural half took 11 to 128 milliseconds, which is a verdict on every keypress.
+So the accepted word is `LOADS AND BUILDS` rather than "playable", and the cost is
+real: a list whose stages build and settle but that no persona could finish is
+accepted. `tests/sim/pack-manager-cost.test.ts` holds that in place with the
+fixture's `ledge` — accepted by the card, refused by the gate — so the day the card
+starts flying personas that test says so.
+
+**The couplings are said, not refused.** `src/content/couplings.ts` finds the four
+of [`docs/content-guide.md`](content-guide.md) section 7 that the documents alone
+show: a role no difficulty row names never attacks, a formation whose axes do not
+match the breathe table breathes unevenly, a fleet smaller than the rules' own
+pack's turns bombing continuous sooner, and a formation with captors and no captive
+slot never captures. Each loads, passes the gate and plays, so each is a line under
+an accepted verdict rather than a refusal. With the shipped packs one of them
+appears: the reef stages launch twenty-six enemies under thresholds written for
+Classic's forty — `BOMBS GO NONSTOP AT 6-14`, `LEFT OF 26, NOT OF 40` — on every
+list that plays them, the Deep Sea game's own included.
+<!-- check:count content.couplingKinds 4 -->
+
+**A stored choice that no longer composes is set aside, not repaired.** A settings
+document outlives the packs it named, so a stored list naming a pack this build
+does not install — or an order naming a stage the list no longer holds — plays the
+chosen variant as shipped, whole: the `PACKS` and `STAGES` rows read
+`YOURS WILL NOT LOAD`, the pack card shows the missing pack as a row reading
+`MISSING` with the reason under it, and the document keeps the list for the day it
+loads again. Switching a pack off can strand a stored order; that list may still be
+kept, and its verdict says `CLEARS YOUR STAGE ORDER` before **Enter** does it.
+
+`tests/unit/packs.test.ts` holds the two cards' shapes, `tests/unit/compose.test.ts`
+the judge against the shipped packs and `tests/fixtures/unplayable/`,
+`tests/unit/couplings.test.ts` each coupling against a pack built to have it, and
+`tests/unit/pack-manager-flow.test.ts` the whole story through the state machine.
+
 ### Working a card
 
-Five cards wait on an answer — the selector, the settings, the pause card, the
-exit card and initials entry — and they are worked with one scheme, held in
+Seven cards wait on an answer — the selector, the settings, the pack manager and
+the stage-sequence editor, the pause card, the exit card and initials entry — and
+they are worked with one scheme, held in
 `src/ui/keys.ts`:
 
 | Key     | On every card                                                |

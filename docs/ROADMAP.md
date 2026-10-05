@@ -34,10 +34,6 @@ was never a deployment question:
 
 ## Next: Milestone 3 — configurable
 
-- **Ship: pack manager + stage-sequence editor.** The game menu will list
-  installed packs and let a sequence be edited or played directly. The settings
-  document already carries a per-variant pack-list override and the menu already
-  shows the active list; what is left is writing to it.
 - **Ship: the two reserved abilities, and a game that uses the new four.** The
   ability registry and its first four new abilities have landed, and so have the
   playability checks in the validator; both moved to
@@ -57,10 +53,16 @@ Also in this milestone, because they are the same kind of work:
   another `rules.json` and a variant document naming them, and the question it will
   answer is whether that is really all it takes.
 
+The pack manager and the stage-sequence editor have landed, and moved to
+[`docs/ARCHITECTURE.md`](ARCHITECTURE.md#the-pack-manager-and-the-stage-sequence-editor)
+with what they check and what they cost.
+
 _Exit check:_ a player can change the rules from inside the game, a forged pack
 fails validation for being unplayable rather than merely malformed, and a pack
-with a new ability plays without an engine change — the second met by the
-validator's playability pass, and the third by `tests/sim/ability-pack.test.ts`.
+with a new ability plays without an engine change — the first met by the pack
+manager and the stage-sequence editor, the second by the validator's playability
+pass, and the third by `tests/sim/ability-pack.test.ts`. What the milestone still
+owes is the second game and the two reserved abilities above.
 
 ## Now: Milestone 4 — prompt forge
 
@@ -75,13 +77,14 @@ thing that exists is described. What the milestone still owes:
 - **Ship: `audio/music.ts`** — the jingles the plan's section 5 asks for, as pack
   data like every other sound. <!-- check:absent src/audio/music.ts -->
 
-One thing the forge **found** rather than built, which belongs to Milestone 3 and is
-written down for whoever takes it:
-
-- The rules layer couples a pack to numbers it cannot change: which roles may
-  attack at all, how wide a formation has to be for the breathe table it will run
-  under, and the absolute enemy count at which bombing turns continuous. A pack
-  manager that let a player mix packs freely would meet all three.
+One thing the forge **found** rather than built: the rules layer couples a pack to
+numbers it cannot change — which roles may attack at all, how wide a formation has
+to be for the breathe table it will run under, and the absolute enemy count at
+which bombing turns continuous. The pack manager says so on its card when a mix
+meets one ([`docs/ARCHITECTURE.md`](ARCHITECTURE.md#the-pack-manager-and-the-stage-sequence-editor));
+nothing in this roadmap will let a pack change them, because rules stay a whole
+document, and whether one ever should is a question for the captain rather than a
+task.
 
 _Exit check:_ one sentence becomes a validated, playable pack with a preview clip
 attached to its own pull request — met for `packs/deep-sea/`, and the remaining

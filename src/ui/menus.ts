@@ -51,8 +51,10 @@ export interface MenuVariant {
   readonly name: string;
   readonly description?: string | undefined;
   readonly demonstration: boolean;
-  /** The pack ids it layers, in order. */
+  /** The pack ids it layers, in order: the player's list when one is in force. */
   readonly packs: readonly string[];
+  /** The combat stages' order when a player stated one, else `undefined`. */
+  readonly stages?: readonly string[] | undefined;
   readonly presets: readonly DifficultyPreset[];
   readonly defaultPreset: DifficultyPreset;
   /**
@@ -141,6 +143,7 @@ export const SETTINGS_ROW_IDS = [
   'controls',
   'crt',
   'packs',
+  'stages',
 ] as const;
 
 export type SettingsRowId = (typeof SETTINGS_ROW_IDS)[number];
@@ -179,7 +182,25 @@ export interface SettingsMenuOptions {
   readonly variants: readonly MenuVariant[];
   /** The variant in force, read each time: changing the `GAME` row changes it. */
   readonly active: () => MenuVariant;
+  /**
+   * Open the pack manager or the stage-sequence editor (`./packs.ts`).
+   *
+   * Left and right on the `PACKS` row call it, because those are the keys that
+   * change a row and a pack list is changed on its own card. Omitted means there
+   * is nothing to compose with: the `PACKS` row reads as it always did, not
+   * editable, and the `STAGES` row is not shown.
+   */
+  readonly open?: (card: EditorCard) => void;
+  /**
+   * Why the stored pack list or stage order is not the one in force, when it is
+   * not — a settings document outlives the packs it named. `undefined` when what
+   * is stored is what plays.
+   */
+  readonly setAside?: () => string | undefined;
 }
+
+/** The two cards a settings row opens. */
+export type EditorCard = 'packs' | 'stages';
 
 /** Human labels for the control schemes. */
 const CONTROL_LABELS: Readonly<Record<ControlScheme, string>> = Object.freeze({
@@ -211,13 +232,13 @@ export function volumeBar(volume: number): string {
 }
 
 /** Step `index` by `delta` through `length` places, wrapping. */
-function cycle(index: number, delta: number, length: number): number {
+export function cycle(index: number, delta: number, length: number): number {
   if (length === 0) return 0;
   return (index + delta + length * Math.max(1, Math.abs(delta))) % length;
 }
 
 export function createSettingsMenu(options: SettingsMenuOptions): SettingsMenu {
-  const { read, write, variants, active } = options;
+  const { read, write, variants, active, open } = options;
   let index = 0;
 
   const rowsOf = (): SettingsRow[] => {
@@ -288,15 +309,38 @@ export function createSettingsMenu(options: SettingsMenuOptions): SettingsMenu {
       note: MENU_TEXT.crtNote,
     });
     // The value is a count and the note is the list, because a pack list is a
-    // sentence's worth of text and the value column is a word's worth.
-    const packs = settings.packs[variant.id] ?? variant.packs;
+    // sentence's worth of text and the value column is a word's worth. Both are
+    // the list **in force**: a stored list that will not load is not what plays,
+    // and the note says so rather than showing it as if it did.
+    const setAside = options.setAside?.();
     rows.push({
       id: 'packs',
       label: 'PACKS',
-      value: String(packs.length),
-      editable: false,
-      note: packs.join(' + '),
+      value: String(variant.packs.length),
+      editable: open !== undefined,
+      note: setAside === undefined ? variant.packs.join(' + ') : MENU_TEXT.setAside,
     });
+
+    // Only with something to compose with: without it the order is the packs'
+    // and nothing here could change it.
+    if (open !== undefined) {
+      const stages = variant.stages;
+      rows.push({
+        id: 'stages',
+        label: 'STAGES',
+        value:
+          stages === undefined
+            ? MENU_TEXT.stagesOwn
+            : `${MENU_TEXT.stagesMine}: ${String(stages.length)}`,
+        editable: true,
+        note:
+          setAside !== undefined
+            ? MENU_TEXT.setAside
+            : stages === undefined
+              ? MENU_TEXT.stagesOwnNote
+              : stages.join(' '),
+      });
+    }
 
     return rows;
   };
@@ -353,7 +397,10 @@ export function createSettingsMenu(options: SettingsMenuOptions): SettingsMenu {
         write({ crt: !settings.crt });
         break;
       }
-      case 'packs': {
+      case 'packs':
+      case 'stages': {
+        // Either direction opens the card: a list is not a value that steps.
+        open?.(row.id);
         break;
       }
     }
@@ -418,6 +465,12 @@ export const MENU_TEXT = Object.freeze({
   sessionOnly: 'THIS SESSION ONLY',
   /** The line under the `CRT` row. */
   crtNote: 'SCANLINES, CURVED GLASS',
+  /** What the `STAGES` row reads: the packs' own order, or the player's and its length. */
+  stagesOwn: 'OWN',
+  stagesMine: 'MINE',
+  stagesOwnNote: 'AS THE PACKS ORDER THEM',
+  /** Under `PACKS` and `STAGES` when what is stored will not load and is not what plays. */
+  setAside: 'YOURS WILL NOT LOAD',
 });
 
 const HEADING_COLOUR = '#ff2b2b';
@@ -425,6 +478,7 @@ const VALUE_COLOUR = '#ffffff';
 const CURSOR_COLOUR = '#ffd400';
 const DIM_COLOUR = '#7d8aa8';
 const NOTE_COLOUR = '#b9c9ff';
+const ACCEPT_COLOUR = '#5cff8a';
 
 /**
  * Row pitch, in logical pixels: one 8-px cell plus two of air.
@@ -513,7 +567,7 @@ export function variantSelectLines(demonstrations: boolean): number {
  * How a line under the settings list is inked. See `./pause.ts` for why the
  * lines are a tone rather than a colour.
  */
-export type MenuLineTone = 'note' | 'legend' | 'help';
+export type MenuLineTone = 'note' | 'legend' | 'help' | 'accept' | 'refuse';
 
 /** One line under the settings list. */
 export interface MenuLine {
@@ -549,6 +603,9 @@ const MENU_INK: Record<MenuLineTone, string> = {
   note: NOTE_COLOUR,
   legend: DIM_COLOUR,
   help: DIM_COLOUR,
+  // The pack manager's verdict: what may be kept, and what is refused.
+  accept: ACCEPT_COLOUR,
+  refuse: HEADING_COLOUR,
 };
 
 export interface VariantSelectOptions {
@@ -608,45 +665,103 @@ export interface SettingsScreenOptions {
 
 const SETTINGS_CARD_WIDTH = 216;
 
+/** What a row card draws for one row. {@link SettingsRow} is one. */
+export interface CardRow {
+  readonly label: string;
+  readonly value: string;
+  /** False draws the value dim: left and right do not reach it. */
+  readonly editable: boolean;
+}
+
+export interface RowCardOptions {
+  readonly heading: string;
+  /** The rows on screen — a window of a longer list, when the caller scrolls one. */
+  readonly rows: readonly CardRow[];
+  /** The row under the cursor, as an index into `rows`. */
+  readonly index: number;
+  /**
+   * How many rows tall the plate is. At least `rows.length`; more keeps a plate
+   * the same height while a list grows into it, so the card does not jump.
+   */
+  readonly height?: number;
+  /** Everything under the list, in order, already fitted to the card or not. */
+  readonly lines: readonly MenuLine[];
+  /** Whether rows are hidden above or below the window, which draws a mark. */
+  readonly more?: { readonly above: boolean; readonly below: boolean };
+  readonly steps: number;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+}
+
+/** The marks for rows scrolled out of a window. Both are in the pixel font. */
+const MORE_ABOVE = '^';
+const MORE_BELOW = 'V';
+
 /**
- * Draw the settings screen.
+ * Draw a card of labelled rows: the settings screen, and the two cards it opens
+ * (`./packs.ts`).
  *
  * Laid out from a measured label column so that a longer label moves every value
  * with it, the same way `drawHighScoreTable` measures its rows. The note belongs
  * to the row under the cursor and is drawn once, under the list, with the card's
- * whole width to itself: a note is a sentence and a value is a word.
+ * whole width to itself: a note is a sentence and a value is a word. One function
+ * for all three cards, so they cannot drift apart in how a row looks.
  */
-export function drawSettings(ctx: CanvasRenderingContext2D, options: SettingsScreenOptions): void {
-  const { menu, steps, x, y, persistent = true } = options;
-  const rows = menu.rows;
-  // The live row's note, the line that says these settings are going nowhere if
-  // they are, and then the two control lines.
-  const lines = settingsLines(persistent);
+export function drawRowCard(ctx: CanvasRenderingContext2D, options: RowCardOptions): void {
+  const { heading, rows, index, lines, steps, x, y, width, more } = options;
+  const height = Math.max(rows.length, options.height ?? 0);
 
-  drawCentredPanel(ctx, x, y - 6, SETTINGS_CARD_WIDTH, cardHeight(rows.length, lines));
-  drawText(ctx, MENU_TEXT.settingsHeading, x, y + 4, { colour: HEADING_COLOUR, align: 'center' });
+  drawCentredPanel(ctx, x, y - 6, width, cardHeight(height, lines.length));
+  drawText(ctx, heading, x, y + 4, { colour: HEADING_COLOUR, align: 'center' });
 
-  const labelWidth = Math.max(...rows.map((row) => measureText(row.label)));
-  const left = Math.round(x - SETTINGS_CARD_WIDTH / 2) + PADDING;
+  const labelWidth = Math.max(0, ...rows.map((row) => measureText(row.label)));
+  const left = Math.round(x - width / 2) + PADDING;
   const valueLeft = left + labelWidth + measureText(' ');
-  const right = Math.round(x + SETTINGS_CARD_WIDTH / 2) - PADDING;
+  const right = Math.round(x + width / 2) - PADDING;
   const valueCells = Math.max(0, Math.floor((right - valueLeft) / measureText(' ')));
-  const noteCells = cellsIn(SETTINGS_CARD_WIDTH);
+  const noteCells = cellsIn(width);
   const lit = Math.floor(steps / MENU_BLINK_STEPS) % 2 === 0;
 
-  rows.forEach((row, index) => {
-    const live = index === menu.index;
-    const top = y + HEADING_GAP + 4 + index * ROW_PITCH;
+  rows.forEach((row, at) => {
+    const live = at === index;
+    const top = y + HEADING_GAP + 4 + at * ROW_PITCH;
     const colour = live ? (lit ? CURSOR_COLOUR : VALUE_COLOUR) : DIM_COLOUR;
     drawText(ctx, row.label, left, top, { colour: live ? colour : DIM_COLOUR });
     drawText(ctx, fitText(row.value, valueCells), valueLeft, top, {
       colour: row.editable ? colour : DIM_COLOUR,
     });
   });
+  // In the padding at the plate's right edge, clear of every value.
+  const markX = right + 1;
+  if (more?.above === true) {
+    drawText(ctx, MORE_ABOVE, markX, y + HEADING_GAP + 4, { colour: DIM_COLOUR });
+  }
+  if (more?.below === true) {
+    const last = y + HEADING_GAP + 4 + (rows.length - 1) * ROW_PITCH;
+    drawText(ctx, MORE_BELOW, markX, last, { colour: DIM_COLOUR });
+  }
 
-  let line = y + HEADING_GAP + 8 + rows.length * ROW_PITCH;
-  for (const { text, tone } of settingsNotes(menu.row.note ?? '', persistent)) {
+  let line = y + HEADING_GAP + 8 + height * ROW_PITCH;
+  for (const { text, tone } of lines) {
     drawText(ctx, fitText(text, noteCells), x, line, { colour: MENU_INK[tone], align: 'center' });
     line += ROW_PITCH;
   }
+}
+
+/** Draw the settings screen: {@link drawRowCard} over the menu's rows. */
+export function drawSettings(ctx: CanvasRenderingContext2D, options: SettingsScreenOptions): void {
+  const { menu, steps, x, y, persistent = true } = options;
+  // The live row's note, the line that says these settings are going nowhere if
+  // they are, and then the two control lines.
+  drawRowCard(ctx, {
+    heading: MENU_TEXT.settingsHeading,
+    rows: menu.rows,
+    index: menu.index,
+    lines: settingsNotes(menu.row.note ?? '', persistent),
+    steps,
+    x,
+    y,
+    width: SETTINGS_CARD_WIDTH,
+  });
 }

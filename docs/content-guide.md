@@ -288,7 +288,10 @@ play at every difficulty preset, not only the default one.
 The schema validates a pack on its own. The rules layer it will run under is a
 different document, and these are the places the two meet. Every one of them was
 found by playing a pack — the first five a forged one — rather than by reading the
-code.
+code. The first four can be found in the documents alone, and the in-game pack
+manager does: `src/content/couplings.ts` finds them in a player's mix and the card
+says them under its verdict, so a player meets them before the game does
+([`docs/ARCHITECTURE.md`](ARCHITECTURE.md#the-pack-manager-and-the-stage-sequence-editor)).
 
 ### 7.1 Only roles the difficulty rows name can attack
 

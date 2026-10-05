@@ -9,6 +9,7 @@
  */
 
 export * from './schema.js';
+export * from './couplings.js';
 export * from './errors.js';
 export * from './loader.js';
 export * from './personas.js';

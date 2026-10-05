@@ -57,6 +57,23 @@ export function normalStageOrdinal(rules: Rules, stage: number): number {
   return stage - 1 - before;
 }
 
+/**
+ * The stage number the `position`th combat stage (zero-based) plays as — the
+ * inverse of {@link normalStageOrdinal}. With Classic's challenge stages on 3, 7,
+ * 11 …, combat stage 0 plays as 1 and combat stage 2 as 4: an order's third row is
+ * not stage 3, which is what `docs/content-guide.md` section 7.5 warns an author
+ * about and the stage-sequence editor says on screen.
+ */
+export function combatStageNumber(rules: Rules, position: number): number {
+  let stage = 0;
+  let seen = -1;
+  while (seen < position) {
+    stage += 1;
+    if (!isChallengeStage(rules, stage)) seen += 1;
+  }
+  return stage;
+}
+
 /** The rank's data set, or `undefined` if the rules do not declare that rank. */
 export function resolveRank(rules: Rules, rank?: string): DifficultyRank | undefined {
   return rules.difficulty.ranks[rank ?? rules.difficulty.defaultRank];
@@ -145,6 +162,47 @@ export function resolveLaunchCredit(
 export function isContinuousBombing(row: DifficultyRow | undefined, alive: number): boolean {
   if (row === undefined || row.continuousBombingAt <= 0) return false;
   return alive <= row.continuousBombingAt;
+}
+
+/**
+ * Every role some difficulty row, of some rank, names in its `launchRates`.
+ *
+ * The complement is the coupling `docs/content-guide.md` section 7.1 describes: a
+ * role no row names gets no launch credit from {@link resolveLaunchCredit} on any
+ * stage at any rank, so its enemies sit in formation for ever. Here so the pack
+ * manager can say so without reading a row itself.
+ */
+export function launchRoles(rules: Rules): ReadonlySet<string> {
+  const roles = new Set<string>();
+  for (const rank of Object.values(rules.difficulty.ranks)) {
+    for (const row of rank.stageTable.rows) {
+      for (const role of Object.keys(row.launchRates)) roles.add(role);
+    }
+  }
+  return roles;
+}
+
+/**
+ * The lowest and highest live-enemy counts, across every row of every rank, at
+ * which bombing turns continuous — `undefined` when no row turns it on.
+ *
+ * An absolute count rather than a fraction ({@link isContinuousBombing}), which is
+ * the coupling of `docs/content-guide.md` section 7.3: the same rows make a small
+ * fleet bomb continuously for a larger share of its stage.
+ */
+export function continuousBombingCounts(
+  rules: Rules,
+): { readonly min: number; readonly max: number } | undefined {
+  let min = Number.POSITIVE_INFINITY;
+  let max = 0;
+  for (const rank of Object.values(rules.difficulty.ranks)) {
+    for (const row of rank.stageTable.rows) {
+      if (row.continuousBombingAt <= 0) continue;
+      min = Math.min(min, row.continuousBombingAt);
+      max = Math.max(max, row.continuousBombingAt);
+    }
+  }
+  return max > 0 ? { min, max } : undefined;
 }
 
 /** The inter-shot delay in force for an alien whose own delay is `cooldownFrames`. */

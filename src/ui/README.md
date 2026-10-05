@@ -2,6 +2,9 @@
 
 `flow.ts` (the game-state machine), `attract.ts`, `hud.ts`, `results.ts`,
 `highscores.ts`, `menus.ts` (the start-up variant selector and the settings menu),
+`packs.ts` (the pack manager and the stage-sequence editor the settings menu opens),
+`compose.ts` (the judge behind them: what a player's list composes to, and whether
+it may be kept),
 `pause.ts` (the pause card and the one that asks before a run is thrown away),
 `keys.ts` (how every card is worked, and how it says so),
 `settings.ts` (what the player has chosen), `storage.ts` (where it is kept),
@@ -15,9 +18,10 @@ and events and draws; it never writes back, and `src/sim/` never imports it.
 `hud.ts` landed with Milestone 1: score, reserve fighters and the stage badges.
 The front-end shell around it landed with Milestone 2:
 
-- **`flow.ts` is the one state machine.** Ten phases — the start-up variant
-  selector, attract, the settings menu, playing, paused, the exit confirmation, the
-  between-stage challenge card, game over, results, high-score entry — and every
+- **`flow.ts` is the one state machine.** Twelve phases — the start-up variant
+  selector, attract, the settings menu and the pack and stage cards it opens,
+  playing, paused, the exit confirmation, the between-stage challenge card, game
+  over, results, high-score entry — and every
   transition is in that file. `challenge-results` is one of the two that go _back_
   to playing: the stage is over and the next is already on the field, so the world
   simply stops being stepped while the card is up. That is why it is a phase and
@@ -154,6 +158,28 @@ And the autoplay pilot, which is a subscriber like everything else here:
   frame — and `menu`, `pause` and `exit` deliberately do not, so a watched run can
   be paused and looked at without ending the demonstration.
 
+And the two cards that let a player change the game from inside it — the pack
+manager and the stage-sequence editor, Milestone 3's exit check:
+
+- **`packs.ts` holds two drafts with a cursor and applies nothing.** The pack card
+  lists every installed pack and reads each one's layer, `1` the base and the
+  highest winning; switching a pack on puts it on top. The stage card orders the
+  combat stages, `OWN` the packs' order and `MINE` the player's, each row saying
+  the stage number it plays as. `ENTER` keeps a draft only when its verdict
+  allows, `ESC` throws it away, and the flow is the one place a kept list has
+  consequences.
+- **`compose.ts` judges, and every judgement is somebody else's check.** Will it
+  load is `resolveVariant` in `src/content/variants.ts`; will its stages build is
+  `checkStructure` from `scripts/playability.ts`; what is it coupled to is
+  `findCouplings` in `src/content/couplings.ts`, said on the card rather than
+  refused. It does not fly a persona — seconds per list, where a card wants
+  milliseconds — and `tests/sim/pack-manager-cost.test.ts` holds that cost in
+  place.
+- **`Settings.packs` and `Settings.stages` are per-variant lists of ids**, and the
+  flow composes the chosen variant from them. One that no longer composes — a pack
+  this build does not install — is set aside whole, not repaired: the variant
+  plays as shipped, the rows say so, and the document keeps the list.
+
 And one scheme for working all of those cards:
 
 - **`keys.ts` is how every card is worked**: up and down move between rows, left
@@ -171,9 +197,6 @@ Seams left for the tasks that follow, so they attach without editing a screen:
   rows it is given.
 - **A pack-supplied default high-score table** — `DEFAULT_HIGH_SCORES` is ours
   and provisional; `createHighScoreBoard({ defaults })` already takes one.
-- **`Settings.packs`** is a per-variant pack-list override, keyed by variant id.
-  The loader honours it and the settings menu shows the active list read-only;
-  writing one is the pack manager's job.
 
 See `docs/DESIGN.md` sections 4, 6 and 9, `docs/ARCHITECTURE.md` §4.5 and §6 for
 what exists, and `docs/ROADMAP.md` for what is next.

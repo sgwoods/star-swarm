@@ -148,6 +148,19 @@ The clips are screen recordings of the dev build.
   simulation step and every alien is in the same place in both. That is the point
   of the pairing: the only difference on screen is the thing the change added. On
   the left the fighter is simply not there any more.
+- `m3-pack-manager.gif` — the pack manager and the stage-sequence editor, worked
+  with the keys every card uses and nothing else. From the selector to the
+  settings card, right on `PACKS`, and `DEEP SEA` switched on over Classic: the
+  verdict reads `LOADS AND BUILDS` with the bombing coupling under it. Then
+  `CLASSIC` switched off — `WILL NOT LOAD`, no pack with rules — and **Enter**
+  pressed on it anyway, which keeps nothing and says `NOT KEPT`. Classic back on
+  goes on top, Deep Sea off and on again puts it back above, and the list is kept.
+  Right on `STAGES` opens the order on the packs' own three reef stages; row 1
+  taken one step left to `SCRIPT-12`, kept, and a game started — which opens on
+  that Classic script, in Classic's art, inside the mixed game. Thirty-six
+  unedited seconds of the dev build, grabbed from the logical 224x288 backbuffer
+  every sixth simulation step, scaled 2x nearest-neighbour, at `fps=10` and
+  `max_colors=48`.
 - `m4-forge.gif` — the forged pack, played: one unedited take from live play, at
   the shipped dev build. The start-up selector with three games on it and the
   cursor moved onto `DEEP SEA`, the settings card opened with **Esc** and the

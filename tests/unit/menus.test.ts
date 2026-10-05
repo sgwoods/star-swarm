@@ -266,7 +266,7 @@ describe('the settings menu', () => {
     expect(settings().controls).toBe('both');
   });
 
-  it('shows the active pack list, read-only, as the seam for the pack manager', () => {
+  it('shows the active pack list, read-only, when there is nothing to compose with', () => {
     const { menu, settings } = menuOver([variantOf('classic', { packs: ['classic', 'extra'] })]);
     menu.previous();
     expect(menu.row.id).toBe('packs');
@@ -280,12 +280,15 @@ describe('the settings menu', () => {
     expect(settings()).toEqual(before);
   });
 
-  it('shows a stored per-variant pack override when there is one', () => {
+  it('shows the list in force, not one that is only stored', () => {
+    // With nothing to compose with, a stored list is not what plays, and the row
+    // must not show it as if it were: the flow hands the menu the variant in
+    // force, and that is the list on screen.
     const { menu } = menuOver([variantOf('classic', { packs: ['classic'] })], {
       packs: { classic: ['classic', 'chosen-by-the-player'] },
     });
     menu.previous();
-    expect(menu.row.note).toBe('classic + chosen-by-the-player');
+    expect(menu.row.note).toBe('classic');
   });
 
   it('derives its rows on every read, so nothing on screen goes stale', () => {
@@ -294,6 +297,76 @@ describe('the settings menu', () => {
     expect(settings().difficulty).toBe('expert');
     // Read again without touching the menu: the row reflects the write.
     expect(menu.rows[0]?.value).toBe('EXPERT');
+  });
+});
+
+describe('the PACKS and STAGES rows, with something to compose with', () => {
+  /** A menu whose `open` is recorded, standing in for the flow's. */
+  function composable(
+    variant: MenuVariant,
+    setAside?: string,
+  ): { menu: SettingsMenu; opened: string[]; settings: () => Settings } {
+    let settings: Settings = { ...DEFAULT_SETTINGS };
+    const opened: string[] = [];
+    const menu = createSettingsMenu({
+      read: () => settings,
+      write: (patch) => {
+        settings = { ...settings, ...patch };
+      },
+      variants: [variant],
+      active: () => variant,
+      open: (card) => {
+        opened.push(card);
+      },
+      setAside: () => setAside,
+    });
+    return { menu, opened, settings: () => settings };
+  }
+
+  /** Move the cursor to a row by id. */
+  function to(menu: SettingsMenu, id: string): void {
+    for (let step = 0; step < menu.rows.length && menu.row.id !== id; step += 1) menu.next();
+    expect(menu.row.id).toBe(id);
+  }
+
+  it('makes PACKS editable, and either direction opens its card without writing', () => {
+    const { menu, opened, settings } = composable(variantOf('classic'));
+    to(menu, 'packs');
+    expect(menu.row.editable).toBe(true);
+    const before = settings();
+    menu.adjust(1);
+    menu.adjust(-1);
+    expect(opened).toEqual(['packs', 'packs']);
+    // The menu applies nothing: the card is where a list is changed.
+    expect(settings()).toEqual(before);
+  });
+
+  it('adds a STAGES row last, reading the packs’ own order or the player’s', () => {
+    const own = composable(variantOf('classic'));
+    expect(own.menu.rows.at(-1)?.id).toBe('stages');
+    to(own.menu, 'stages');
+    expect(own.menu.row.value).toBe(MENU_TEXT.stagesOwn);
+    expect(own.menu.row.note).toBe(MENU_TEXT.stagesOwnNote);
+    own.menu.adjust(1);
+    expect(own.opened).toEqual(['stages']);
+
+    const mine = composable(variantOf('classic', { stages: ['reef-2', 'script-0'] }));
+    to(mine.menu, 'stages');
+    expect(mine.menu.row.value).toBe(`${MENU_TEXT.stagesMine}: 2`);
+    expect(mine.menu.row.note).toBe('reef-2 script-0');
+  });
+
+  it('says when what is stored is set aside, on both rows', () => {
+    const { menu } = composable(variantOf('classic'), 'WILL NOT LOAD');
+    to(menu, 'packs');
+    expect(menu.row.note).toBe(MENU_TEXT.setAside);
+    to(menu, 'stages');
+    expect(menu.row.note).toBe(MENU_TEXT.setAside);
+  });
+
+  it('keeps STAGES off the card when there is nothing to compose with', () => {
+    const { menu } = menuOver([variantOf('classic')]);
+    expect(menu.rows.map((row) => row.id)).not.toContain('stages');
   });
 });
 
