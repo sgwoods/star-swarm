@@ -1,7 +1,7 @@
 /**
  * The game-state machine (docs/DESIGN.md section 4, "Game flow").
  *
- * One explicit machine rather than flags spread through the loop. There are ten
+ * One explicit machine rather than flags spread through the loop. There are twelve
  * phases and every transition is named here:
  *
  * ```
@@ -13,6 +13,9 @@
  *                                    └── start/menu ──▶ attract ◀── no ◀── qualifies?
  *                                                          ▲                │ yes
  *                                                          └─ submitted ◀── high-score-entry
+ *
+ *   settings ──L/R on PACKS──▶ packs ──keep or cancel──▶ settings
+ *   settings ──L/R on STAGES─▶ stages ─keep or cancel──▶ settings
  *
  *   playing ──pause──▶ paused ──pause──▶ playing
  *      │                  │  ▲
@@ -38,6 +41,11 @@
  *   saying "attract, but not responding to start" is exactly the shape this file
  *   refuses, so it is a phase: it takes input exclusively and the world behind it
  *   is not stepped.
+ * - **`packs`** and **`stages`** are the two cards that settings screen opens —
+ *   the pack manager and the stage-sequence editor (`./packs.ts`) — and they are
+ *   phases for the same reason: "settings, but showing another card" is a flag.
+ *   Each edits a draft and returns to `settings` either way, keeping the draft or
+ *   throwing it away; the settings cursor is where it was.
  *
  * The two after them are the pause and the way out, and they are phases for the
  * third time for the same reason — a boolean `paused` beside `phase` is "playing,
@@ -73,13 +81,23 @@
  *   the audio can rebuild them. It does not touch either itself: this layer
  *   subscribes, and a flow that reached for a canvas would be the same mistake as
  *   a sim that did.
+ *
+ * And one that the pack manager added: **the variant in force is the chosen
+ * variant as the player composed it.** The selector and the `GAME` row choose a
+ * *base* — a variant as its document declares it — and the player's stored pack
+ * list and stage order for that base are composed over it
+ * ({@link FlowCommon.composer}). A stored choice that no longer composes — a pack
+ * this build does not install, a stage the list no longer holds — is set aside,
+ * not repaired: the base plays, the settings rows say so, and the stored choice
+ * stays in the document for the day it loads again.
  */
 
 import type { Persona } from '../content/personas.js';
 import { personaOf } from '../content/personas.js';
+import { combatStageNumber } from '../content/rules.js';
 import type { Rules } from '../content/schema.js';
 import type { StageSource } from '../content/stages.js';
-import type { DifficultyPreset } from '../content/variants.js';
+import type { DifficultyPreset, VariantChoice } from '../content/variants.js';
 import { rankFor } from '../content/variants.js';
 import {
   type Action,
@@ -103,10 +121,19 @@ import {
 import {
   createSettingsMenu,
   createVariantMenu,
+  type EditorCard,
   type SettingsMenu,
   type VariantMenu,
 } from './menus.js';
 import { cardPress } from './keys.js';
+import {
+  createPackEditor,
+  createStageEditor,
+  type PackComposer,
+  type PackEditor,
+  type StageEditor,
+  type Verdict,
+} from './packs.js';
 import { createExitConfirm, type ExitConfirm } from './pause.js';
 import { countEvents, EMPTY_STATS, type ResultRow, resultRows, type RunStats } from './results.js';
 import { DEFAULT_SETTINGS, type Settings, type SettingsStore } from './settings.js';
@@ -115,6 +142,8 @@ export type GamePhase =
   | 'variant-select'
   | 'attract'
   | 'settings'
+  | 'packs'
+  | 'stages'
   | 'playing'
   | 'paused'
   | 'exit-confirm'
@@ -135,8 +164,10 @@ export interface FlowVariant {
   readonly name: string;
   readonly description?: string | undefined;
   readonly demonstration: boolean;
-  /** The pack ids it layers, in order. Shown, read-only, in the settings menu. */
+  /** The pack ids it layers, in order: the player's list when one is in force. */
   readonly packs: readonly string[];
+  /** The combat stages' order when a player stated one, else `undefined`. */
+  readonly stages?: readonly string[] | undefined;
   readonly rules: Rules;
   readonly presets: readonly DifficultyPreset[];
   readonly defaultPreset: DifficultyPreset;
@@ -206,6 +237,16 @@ interface FlowCommon {
    * map — belongs to whoever owns those, and this is how they hear about it.
    */
   readonly onVariantChange?: (variant: FlowVariant) => void;
+  /**
+   * What composes a variant from the player's stored pack list and stage order,
+   * and judges a draft on the pack manager's cards — `src/ui/compose.ts` over the
+   * packs this build loaded.
+   *
+   * Omitted means there is nothing to compose with: every variant plays as its
+   * document declares it, the `PACKS` row reads as it always did and the `STAGES`
+   * row is not shown. That is what a test of the machine on its own wants.
+   */
+  readonly composer?: PackComposer<FlowVariant>;
 }
 
 /**
@@ -254,10 +295,20 @@ export interface GameFlow {
   /** Rank taken by the most recent submission, for highlighting a row. */
   readonly lastRank: number | undefined;
   readonly demo: AttractDemo;
-  /** Every game this build offers, in selector order. */
+  /** Every game this build offers, in selector order, each as its document declares it. */
   readonly variants: readonly FlowVariant[];
-  /** The game in force. Every world the flow creates comes from it. */
+  /**
+   * The game in force: the chosen variant, composed from the player's stored pack
+   * list and stage order when they compose. Every world the flow creates comes
+   * from it.
+   */
   readonly variant: FlowVariant;
+  /**
+   * Why the stored pack list or stage order for the chosen variant is not what is
+   * playing, or `undefined` when it is (or nothing is stored). The verdict the
+   * pack manager would give it.
+   */
+  readonly setAside: Verdict | undefined;
   /** The difficulty rank the next game will run at — the preset, resolved. */
   readonly rank: string;
   /**
@@ -279,6 +330,10 @@ export interface GameFlow {
   readonly variantMenu: VariantMenu<FlowVariant> | undefined;
   /** The settings rows, present only during `settings`. */
   readonly settingsMenu: SettingsMenu | undefined;
+  /** The pack manager's draft, present only during `packs`. */
+  readonly packEditor: PackEditor | undefined;
+  /** The stage-sequence editor's draft, present only during `stages`. */
+  readonly stageEditor: StageEditor | undefined;
   /** The exit confirmation's cursor, present only during `exit-confirm`. */
   readonly exitConfirm: ExitConfirm | undefined;
   /** Rows the results screen shows for the run just played. */
@@ -350,11 +405,46 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     else settingsStore.update(patch);
   };
 
+  const composer = options.composer;
+
+  /** The player's stored pack list and stage order for one variant, as ids. */
+  const choiceOf = (chosen: FlowVariant): VariantChoice => {
+    const settings = settingsValue();
+    return { packs: settings.packs[chosen.id], stages: settings.stages[chosen.id] };
+  };
+
+  /**
+   * A variant as the player composed it, and why the stored choice is set aside
+   * when it is. Nothing stored, or nothing to compose with, is the base itself.
+   *
+   * Strict on purpose, like `personaOf`: a stored list that will not compose
+   * plays the base whole, not some part of the list that happens to load —
+   * silently playing a mix nobody chose is worse than playing the game as shipped
+   * and saying so.
+   */
+  const composeFor = (
+    chosen: FlowVariant,
+  ): { readonly variant: FlowVariant; readonly setAside: Verdict | undefined } => {
+    const choice = choiceOf(chosen);
+    if (composer === undefined || (choice.packs === undefined && choice.stages === undefined)) {
+      return { variant: chosen, setAside: undefined };
+    }
+    const result = composer.compose(chosen.id, choice);
+    return result.variant === undefined
+      ? { variant: chosen, setAside: result.verdict }
+      : { variant: result.variant, setAside: undefined };
+  };
+
   // The remembered variant, if it is still installed. A settings document
   // outlives the build it was written against, so an id nobody offers any more
   // reads as "the first one" rather than as a failure.
   const remembered = variants.find((variant) => variant.id === settingsValue().variant);
-  let variant: FlowVariant = remembered ?? first;
+  /** The variant chosen, as its document declares it: what the selector lists. */
+  let base: FlowVariant = remembered ?? first;
+  const composed = composeFor(base);
+  /** The variant in force: {@link base} as the player composed it. */
+  let variant: FlowVariant = composed.variant;
+  let setAside: Verdict | undefined = composed.setAside;
 
   const rankOf = (): string => rankFor(variant, settingsValue().difficulty);
 
@@ -425,6 +515,8 @@ export function createGameFlow(options: FlowOptions): GameFlow {
   let variantMenu: VariantMenu<FlowVariant> | undefined;
   let settingsMenu: SettingsMenu | undefined;
   let confirm: ExitConfirm | undefined;
+  let packEditor: PackEditor | undefined;
+  let stageEditor: StageEditor | undefined;
   /** Where the settings screen returns to. */
   let settingsFrom: GamePhase = 'attract';
 
@@ -478,11 +570,74 @@ export function createGameFlow(options: FlowOptions): GameFlow {
    * settings menu's `GAME` row must not be two ways of doing this.
    */
   const selectVariant = (next: FlowVariant): void => {
-    if (next.id === variant.id) return;
-    variant = next;
+    if (next.id === base.id) return;
+    base = next;
     writeSettings({ variant: next.id });
+    const composition = composeFor(next);
+    variant = composition.variant;
+    setAside = composition.setAside;
     demo = buildDemo();
-    options.onVariantChange?.(next);
+    options.onVariantChange?.(variant);
+  };
+
+  /**
+   * Put the stored choice for the chosen variant back in force, after a card kept
+   * one. The same consequences as {@link selectVariant} — a fresh demo, and
+   * whoever owns the presentation told — because a pack list changes the sprites,
+   * the sounds and the palette exactly as a different game does.
+   */
+  const recompose = (): void => {
+    const composition = composeFor(base);
+    setAside = composition.setAside;
+    if (composition.variant === variant) return;
+    variant = composition.variant;
+    demo = buildDemo();
+    options.onVariantChange?.(variant);
+  };
+
+  /** A per-variant record from the settings with one variant's list replaced, or removed. */
+  const withList = (
+    record: Readonly<Record<string, readonly string[]>>,
+    list: readonly string[] | undefined,
+  ): Readonly<Record<string, readonly string[]>> => {
+    const next: Record<string, readonly string[]> = { ...record };
+    if (list === undefined) delete next[base.id];
+    else next[base.id] = list;
+    return next;
+  };
+
+  /**
+   * Open the pack manager or the stage-sequence editor over the chosen variant.
+   *
+   * Both start from what is **stored**, not from what is in force: when a stored
+   * choice is set aside, the card is where the player sees it and mends it — a
+   * missing pack is a row of its own on the pack card, and every verdict on the
+   * stage card names what the stored pack list lacks.
+   */
+  const openEditor = (card: EditorCard): void => {
+    if (composer === undefined) return;
+    const { packs, stages } = choiceOf(base);
+    const chosen = base;
+    if (card === 'packs') {
+      packEditor = createPackEditor({
+        installed: composer.installed,
+        start: packs ?? chosen.packs,
+        own: chosen.packs,
+        judge: (draft) => composer.judgePacks(chosen.id, draft, stages),
+      });
+      enter('packs');
+      return;
+    }
+    // The challenge cadence is the rules', so the rules in force number the rows.
+    const rules = variant.rules;
+    stageEditor = createStageEditor({
+      options: composer.stageOptions(chosen.id, packs),
+      own: composer.ownStages(chosen.id, packs, rankOf()),
+      stored: stages,
+      numberOf: (position) => combatStageNumber(rules, position),
+      judge: (draft) => composer.compose(chosen.id, { packs, stages: draft }).verdict,
+    });
+    enter('stages');
   };
 
   /** Start a game. Its opening events are this step's events. */
@@ -626,6 +781,12 @@ export function createGameFlow(options: FlowOptions): GameFlow {
       },
       variants,
       active: () => variant,
+      ...(composer === undefined
+        ? {}
+        : {
+            open: openEditor,
+            setAside: () => setAside?.headline,
+          }),
     });
     enter('settings');
   };
@@ -670,9 +831,13 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     enter('attract');
   };
 
-  /** Is the demo what is on screen? In attract, and on the two menus over it. */
+  /** Is the demo what is on screen? In attract, and on the menus and cards over it. */
   const onDemo = (): boolean =>
-    phase === 'attract' || phase === 'settings' || phase === 'variant-select';
+    phase === 'attract' ||
+    phase === 'settings' ||
+    phase === 'packs' ||
+    phase === 'stages' ||
+    phase === 'variant-select';
 
   if (phase === 'variant-select') openVariantSelect();
 
@@ -713,6 +878,9 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     get variant(): FlowVariant {
       return variant;
     },
+    get setAside(): Verdict | undefined {
+      return setAside;
+    },
     get rank(): string {
       return rankOf();
     },
@@ -730,6 +898,12 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     },
     get settingsMenu(): SettingsMenu | undefined {
       return phase === 'settings' ? settingsMenu : undefined;
+    },
+    get packEditor(): PackEditor | undefined {
+      return phase === 'packs' ? packEditor : undefined;
+    },
+    get stageEditor(): StageEditor | undefined {
+      return phase === 'stages' ? stageEditor : undefined;
     },
     get exitConfirm(): ExitConfirm | undefined {
       return phase === 'exit-confirm' ? confirm : undefined;
@@ -800,7 +974,12 @@ export function createGameFlow(options: FlowOptions): GameFlow {
           if (press.up) menu.previous();
           if (press.down) menu.next();
           if (press.left) menu.adjust(-1);
-          if (press.right) menu.adjust(1);
+          else if (press.right) menu.adjust(1);
+          // Left or right on `PACKS` or `STAGES` opened a card: it has the step.
+          if (phase !== 'settings') {
+            events = demo.advance();
+            break;
+          }
           // Every row applies as it changes, so done and back are the same exit.
           if (press.accept || press.back) {
             settingsMenu = undefined;
@@ -808,6 +987,71 @@ export function createGameFlow(options: FlowOptions): GameFlow {
             if (settingsFrom === 'variant-select') openVariantSelect();
             else enter('attract');
             break;
+          }
+          events = demo.advance();
+          break;
+        }
+
+        case 'packs': {
+          const editor = packEditor;
+          if (editor === undefined) {
+            enter('settings');
+            break;
+          }
+          const press = cardPress(previous, frame);
+          if (press.up) editor.previous();
+          if (press.down) editor.next();
+          if (press.left || press.right) editor.toggle();
+          if (press.back) {
+            // Cancelled: the draft goes, and nothing was written.
+            packEditor = undefined;
+            enter('settings');
+            break;
+          }
+          if (press.accept) {
+            const kept = editor.keep();
+            // Refused: the card stays up and its verdict says why.
+            if (kept.kept) {
+              const settings = settingsValue();
+              writeSettings({
+                packs: withList(settings.packs, kept.packs),
+                ...(kept.clearsStages ? { stages: withList(settings.stages, undefined) } : {}),
+              });
+              recompose();
+              packEditor = undefined;
+              enter('settings');
+              break;
+            }
+          }
+          events = demo.advance();
+          break;
+        }
+
+        case 'stages': {
+          const editor = stageEditor;
+          if (editor === undefined) {
+            enter('settings');
+            break;
+          }
+          const press = cardPress(previous, frame);
+          if (press.up) editor.previous();
+          if (press.down) editor.next();
+          if (press.left) editor.adjust(-1);
+          else if (press.right) editor.adjust(1);
+          if (press.back) {
+            stageEditor = undefined;
+            enter('settings');
+            break;
+          }
+          if (press.accept) {
+            const kept = editor.keep();
+            if (kept.kept) {
+              writeSettings({ stages: withList(settingsValue().stages, kept.stages) });
+              recompose();
+              stageEditor = undefined;
+              enter('settings');
+              break;
+            }
           }
           events = demo.advance();
           break;

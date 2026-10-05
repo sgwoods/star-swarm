@@ -26,6 +26,7 @@
  * | `controls`   | the keyboard map handed to `createKeyboardInput`              |
  * | `crt`        | the scanline filter `src/render/crt.ts` draws over the screen |
  * | `packs`      | an override of a variant's own pack list, per variant          |
+ * | `stages`     | an order for that variant's combat stages, per variant         |
  *
  * Persistence is {@link KeyedStorage} from `./storage.ts` — the same interface
  * the high-score table uses, for the same reason: blocked or unavailable browser
@@ -90,11 +91,22 @@ export interface Settings {
    * Per variant, an override of the pack list that variant declares.
    *
    * Keyed by variant id because a pack list is inherently a property of one
-   * game. Empty by default, which means "the variant's own list". This is the
-   * seam the pack manager attaches to: it is honoured on load today and nothing
-   * in the menu writes it yet.
+   * game. Empty by default, which means "the variant's own list". The pack
+   * manager (`./packs.ts`) writes it, and only with a list it has checked loads
+   * and builds; the flow composes the variant from it (`./flow.ts`).
+   *
+   * Ids rather than anything resolved, for the reason `variant` is one: a stored
+   * list naming a pack this build does not install is **kept**, not repaired —
+   * the game plays the variant's own list and the pack manager says why, so the
+   * list comes back the day the pack does.
    */
   readonly packs: Readonly<Record<string, readonly string[]>>;
+  /**
+   * Per variant, the order its combat stages play in, as stage ids: the
+   * stage-sequence editor's (`./packs.ts`). Absent means the packs' own sequence
+   * at the rank in force. Kept the way `packs` is when it stops resolving.
+   */
+  readonly stages: Readonly<Record<string, readonly string[]>>;
 }
 
 export const DEFAULT_SETTINGS: Settings = Object.freeze({
@@ -106,6 +118,7 @@ export const DEFAULT_SETTINGS: Settings = Object.freeze({
   crt: false,
   controls: 'both',
   packs: Object.freeze({}),
+  stages: Object.freeze({}),
 } satisfies Settings);
 
 /** Clamp a volume to 0…1 on the menu's own grid, so a stored float cannot drift. */
@@ -127,7 +140,8 @@ function stringOr(value: unknown, fallback: string | undefined): string | undefi
   return typeof value === 'string' && value.length > 0 ? value : fallback;
 }
 
-function packsOf(value: unknown): Record<string, readonly string[]> {
+/** A per-variant table of id lists — `packs` and `stages` both — coerced from storage. */
+function listsOf(value: unknown): Record<string, readonly string[]> {
   if (typeof value !== 'object' || value === null) return {};
   const out: Record<string, readonly string[]> = {};
   for (const [variant, list] of Object.entries(value as Record<string, unknown>)) {
@@ -172,7 +186,8 @@ export function parseSettings(text: string | undefined): Settings | undefined {
     controls: (CONTROL_SCHEMES as readonly string[]).includes(controls ?? '')
       ? (controls as ControlScheme)
       : DEFAULT_SETTINGS.controls,
-    packs: packsOf(stored.packs),
+    packs: listsOf(stored.packs),
+    stages: listsOf(stored.stages),
   };
 }
 

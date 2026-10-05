@@ -154,6 +154,13 @@ export interface ResolvedVariant {
   readonly file: string;
   /** The pack ids it layers, in order. What the settings menu shows. */
   readonly packs: readonly string[];
+  /**
+   * The combat stages' order, when one was stated after every pack — a player's,
+   * from {@link resolveVariant} — and `undefined` when the packs' own sequence
+   * plays. A variant document cannot state one: a variant selects packs, and this
+   * is the player-settings layer choosing an order among what they hold.
+   */
+  readonly stages: readonly string[] | undefined;
   /** Those packs, composed. */
   readonly registry: ContentRegistry;
   /** The rules in force. Present by construction: a variant without them fails to load. */
@@ -243,24 +250,41 @@ export type VariantLoadResult =
   | { readonly ok: false; readonly errors: readonly ContentError[] };
 
 /**
- * Validate and resolve every variant document, against the packs that loaded.
+ * A player's choice for one variant: a pack list in place of the document's own,
+ * and an order for the combat stages, stated after every pack.
  *
- * Two passes, as `loadPack` has: the schema, then the references. Nothing
- * partial escapes — the result is errors or variants, never both — and a
- * document that fails is reported alongside the others rather than hiding them.
- *
- * `packs` is keyed by pack id, which is also the directory name (`loadPack`
- * holds those two together), so a variant names a directory and this resolves it.
+ * Both are the player-settings layer of `docs/DESIGN.md` section 6 — "active
+ * packs" — and neither reaches the rules: the pack list chooses which documents
+ * are layered, exactly as the variant document's own list does, and the stage
+ * order chooses among stage documents those packs already hold. Rules still come
+ * whole from the last pack that ships them.
  */
-export function loadVariants(
-  sources: readonly VariantSource[],
-  packs: ReadonlyMap<string, LoadedPack>,
-): VariantLoadResult {
+export interface VariantChoice {
+  /** Pack ids to layer, in order, instead of the document's own `packs`. */
+  readonly packs?: readonly string[] | undefined;
+  /**
+   * Stage ids to play as the combat stages, in order, cycling once past the end.
+   * Challenge stages keep the packs' own sequence and the rules' own cadence.
+   */
+  readonly stages?: readonly string[] | undefined;
+}
+
+export type VariantResolveResult =
+  | { readonly ok: true; readonly variant: ResolvedVariant }
+  | { readonly ok: false; readonly errors: readonly ContentError[] };
+
+interface ParsedDocument {
+  readonly file: string;
+  readonly variant: Variant;
+}
+
+/** Pass 1: every document against the schema, its file name, and each other. */
+function parseDocuments(sources: readonly VariantSource[]): {
+  readonly errors: ContentError[];
+  readonly parsed: ParsedDocument[];
+} {
   const errors: ContentError[] = [];
-  const parsed: Array<{ readonly file: string; readonly variant: Variant }> = [];
-
-  /* -- pass 1: schemas ---------------------------------------------------- */
-
+  const parsed: ParsedDocument[] = [];
   const seen = new Map<string, string>();
   for (const source of [...sources].sort((a, b) => a.file.localeCompare(b.file))) {
     const result = variantSchema.safeParse(source.value);
@@ -292,139 +316,187 @@ export function loadVariants(
     seen.set(variant.id, source.file);
     parsed.push({ file: source.file, variant });
   }
+  return { errors, parsed };
+}
 
-  /* -- pass 2: references -------------------------------------------------- */
+/**
+ * Pass 2 for one document: its packs, its rules, its stage order if it has one,
+ * its presets and its personas. Errors or a variant, never both.
+ */
+function resolveDocument(
+  { file, variant }: ParsedDocument,
+  packs: ReadonlyMap<string, LoadedPack>,
+  stages: readonly string[] | undefined,
+): { readonly errors: readonly ContentError[]; readonly variant?: ResolvedVariant } {
+  const errors: ContentError[] = [];
+  const layered: LoadedPack[] = [];
+  let missing = false;
+  variant.packs.forEach((id, index) => {
+    const pack = packs.get(id);
+    if (pack === undefined) {
+      errors.push({
+        pack: VARIANTS_GROUP,
+        file,
+        field: `packs[${String(index)}]`,
+        message: `no pack with id "${id}" is installed`,
+      });
+      missing = true;
+      return;
+    }
+    if (layered.some((other) => other.id === id)) {
+      errors.push({
+        pack: VARIANTS_GROUP,
+        file,
+        field: `packs[${String(index)}]`,
+        message: `pack "${id}" is listed twice; a pack layers once`,
+      });
+      missing = true;
+      return;
+    }
+    layered.push(pack);
+  });
+  if (missing) return { errors };
 
-  const resolved: ResolvedVariant[] = [];
-  for (const { file, variant } of parsed) {
-    const layered: LoadedPack[] = [];
-    let missing = false;
-    variant.packs.forEach((id, index) => {
-      const pack = packs.get(id);
-      if (pack === undefined) {
-        errors.push({
-          pack: VARIANTS_GROUP,
-          file,
-          field: `packs[${String(index)}]`,
-          message: `no pack with id "${id}" is installed`,
-        });
-        missing = true;
-        return;
-      }
-      if (layered.some((other) => other.id === id)) {
-        errors.push({
-          pack: VARIANTS_GROUP,
-          file,
-          field: `packs[${String(index)}]`,
-          message: `pack "${id}" is listed twice; a pack layers once`,
-        });
-        missing = true;
-        return;
-      }
-      layered.push(pack);
+  // A stated order is the combat half, cycling whole: a player's list is a
+  // playlist, and "hold the last row for ever" would be a rule they never chose.
+  const registry = createRegistry(
+    layered,
+    stages === undefined ? {} : { normal: { rows: [...stages], repeatLast: stages.length } },
+  );
+  const rules = registry.rules;
+  if (rules === undefined) {
+    errors.push({
+      pack: VARIANTS_GROUP,
+      file,
+      field: 'packs',
+      message:
+        `no pack in "${variant.packs.join(', ')}" ships a rules.json, so this variant has ` +
+        'no rules for the simulation to run on',
     });
-    if (missing) continue;
+    return { errors };
+  }
 
-    const registry = createRegistry(layered);
-    const rules = registry.rules;
-    if (rules === undefined) {
+  if (stages !== undefined) {
+    if (stages.length === 0) {
       errors.push({
         pack: VARIANTS_GROUP,
         file,
-        field: 'packs',
-        message:
-          `no pack in "${variant.packs.join(', ')}" ships a rules.json, so this variant has ` +
-          'no rules for the simulation to run on',
+        field: 'stages',
+        message: 'an empty stage order plays nothing',
       });
-      continue;
     }
-
-    const declared = variant.difficulty.presets;
-    const presets = declared.length > 0 ? declared : presetsForRules(rules);
-    if (presets.length === 0) {
-      errors.push({
-        pack: VARIANTS_GROUP,
-        file,
-        field: 'difficulty.presets',
-        message: 'no presets are declared and the rules declare no ranks to derive them from',
-      });
-      continue;
-    }
-
-    let bad = false;
-    const presetIds = new Set<string>();
-    declared.forEach((preset, index) => {
-      const at = `difficulty.presets[${String(index)}]`;
-      if (presetIds.has(preset.id)) {
+    stages.forEach((id, index) => {
+      const stage = registry.stages.get(id);
+      const field = `stages[${String(index)}]`;
+      if (stage === undefined) {
         errors.push({
           pack: VARIANTS_GROUP,
           file,
-          field: `${at}.id`,
-          message: `duplicate preset id "${preset.id}"`,
+          field,
+          message: `no stage "${id}" is in ${variant.packs.join(' + ')}`,
         });
-        bad = true;
-      }
-      presetIds.add(preset.id);
-      if (!Object.prototype.hasOwnProperty.call(rules.difficulty.ranks, preset.rank)) {
+      } else if (stage.kind === 'challenge') {
         errors.push({
           pack: VARIANTS_GROUP,
           file,
-          field: `${at}.rank`,
+          field,
           message:
-            `rank "${preset.rank}" is not one of the ranks the rules declare ` +
-            `(${Object.keys(rules.difficulty.ranks).join(', ') || 'none'})`,
+            `"${id}" is a challenge stage; this is the order of the combat stages, and the ` +
+            "challenge stages keep the packs' own sequence and the rules' own cadence",
         });
-        bad = true;
       }
     });
+    if (errors.length > 0) return { errors };
+  }
 
-    const defaultPreset = defaultPresetOf(presets, rules, variant.difficulty.defaultPreset);
-    if (defaultPreset === undefined) {
+  const declared = variant.difficulty.presets;
+  const presets = declared.length > 0 ? declared : presetsForRules(rules);
+  if (presets.length === 0) {
+    errors.push({
+      pack: VARIANTS_GROUP,
+      file,
+      field: 'difficulty.presets',
+      message: 'no presets are declared and the rules declare no ranks to derive them from',
+    });
+    return { errors };
+  }
+
+  let bad = false;
+  const presetIds = new Set<string>();
+  declared.forEach((preset, index) => {
+    const at = `difficulty.presets[${String(index)}]`;
+    if (presetIds.has(preset.id)) {
       errors.push({
         pack: VARIANTS_GROUP,
         file,
-        field: 'difficulty.defaultPreset',
-        message: `"${variant.difficulty.defaultPreset ?? ''}" names no preset in this variant`,
+        field: `${at}.id`,
+        message: `duplicate preset id "${preset.id}"`,
       });
       bad = true;
     }
-
-    // Autoplay personas. Nothing outside the block is referenced — a persona
-    // describes a player, not the game — so the reference pass here is the ids
-    // holding together: one persona per id, and a `defaultPersona` that names one
-    // of them. Both are the failures an author actually makes.
-    const personas = variant.autoplay.personas;
-    const personaIds = new Set<string>();
-    personas.forEach((persona, index) => {
-      if (personaIds.has(persona.id)) {
-        errors.push({
-          pack: VARIANTS_GROUP,
-          file,
-          field: `autoplay.personas[${String(index)}].id`,
-          message: `duplicate persona id "${persona.id}"`,
-        });
-        bad = true;
-      }
-      personaIds.add(persona.id);
-    });
-
-    const declaredDefaultPersona = variant.autoplay.defaultPersona;
-    const defaultPersona = defaultPersonaOf(personas, declaredDefaultPersona);
-    if (declaredDefaultPersona !== undefined && defaultPersona === undefined) {
+    presetIds.add(preset.id);
+    if (!Object.prototype.hasOwnProperty.call(rules.difficulty.ranks, preset.rank)) {
       errors.push({
         pack: VARIANTS_GROUP,
         file,
-        field: 'autoplay.defaultPersona',
+        field: `${at}.rank`,
         message:
-          `"${declaredDefaultPersona}" names no persona in this variant ` +
-          `(${personas.map((persona) => persona.id).join(', ') || 'none are declared'})`,
+          `rank "${preset.rank}" is not one of the ranks the rules declare ` +
+          `(${Object.keys(rules.difficulty.ranks).join(', ') || 'none'})`,
       });
       bad = true;
     }
+  });
 
-    if (bad || defaultPreset === undefined) continue;
+  const defaultPreset = defaultPresetOf(presets, rules, variant.difficulty.defaultPreset);
+  if (defaultPreset === undefined) {
+    errors.push({
+      pack: VARIANTS_GROUP,
+      file,
+      field: 'difficulty.defaultPreset',
+      message: `"${variant.difficulty.defaultPreset ?? ''}" names no preset in this variant`,
+    });
+    bad = true;
+  }
 
-    resolved.push({
+  // Autoplay personas. Nothing outside the block is referenced — a persona
+  // describes a player, not the game — so the reference pass here is the ids
+  // holding together: one persona per id, and a `defaultPersona` that names one
+  // of them. Both are the failures an author actually makes.
+  const personas = variant.autoplay.personas;
+  const personaIds = new Set<string>();
+  personas.forEach((persona, index) => {
+    if (personaIds.has(persona.id)) {
+      errors.push({
+        pack: VARIANTS_GROUP,
+        file,
+        field: `autoplay.personas[${String(index)}].id`,
+        message: `duplicate persona id "${persona.id}"`,
+      });
+      bad = true;
+    }
+    personaIds.add(persona.id);
+  });
+
+  const declaredDefaultPersona = variant.autoplay.defaultPersona;
+  const defaultPersona = defaultPersonaOf(personas, declaredDefaultPersona);
+  if (declaredDefaultPersona !== undefined && defaultPersona === undefined) {
+    errors.push({
+      pack: VARIANTS_GROUP,
+      file,
+      field: 'autoplay.defaultPersona',
+      message:
+        `"${declaredDefaultPersona}" names no persona in this variant ` +
+        `(${personas.map((persona) => persona.id).join(', ') || 'none are declared'})`,
+    });
+    bad = true;
+  }
+
+  if (bad || defaultPreset === undefined) return { errors };
+
+  return {
+    errors,
+    variant: {
       id: variant.id,
       name: variant.name,
       description: variant.description,
@@ -432,6 +504,7 @@ export function loadVariants(
       demonstration: variant.demonstration,
       file,
       packs: variant.packs,
+      stages,
       registry,
       rules,
       presets,
@@ -439,11 +512,76 @@ export function loadVariants(
       personas,
       defaultPersona,
       stagesFor: (rank) => createStageSource(registry, rank === undefined ? {} : { rank }),
-    });
-  }
+    },
+  };
+}
 
+/**
+ * Validate and resolve every variant document, against the packs that loaded.
+ *
+ * Two passes, as `loadPack` has: the schema, then the references. Nothing
+ * partial escapes — the result is errors or variants, never both — and a
+ * document that fails is reported alongside the others rather than hiding them.
+ *
+ * `packs` is keyed by pack id, which is also the directory name (`loadPack`
+ * holds those two together), so a variant names a directory and this resolves it.
+ */
+export function loadVariants(
+  sources: readonly VariantSource[],
+  packs: ReadonlyMap<string, LoadedPack>,
+): VariantLoadResult {
+  const { errors, parsed } = parseDocuments(sources);
+  const resolved: ResolvedVariant[] = [];
+  for (const document of parsed) {
+    const result = resolveDocument(document, packs, undefined);
+    errors.push(...result.errors);
+    if (result.variant !== undefined) resolved.push(result.variant);
+  }
   if (errors.length > 0) return { ok: false, errors };
   return { ok: true, variants: sortVariants(resolved) };
+}
+
+/**
+ * Resolve one variant document **as a player chose it**: with a different pack
+ * list, an order for its combat stages, or both.
+ *
+ * The same two passes {@link loadVariants} runs, over the same document with its
+ * `packs` replaced — so a list a player composes is refused for exactly the
+ * reasons a variant document naming it would be, and the editor and the gate
+ * cannot disagree about what loads. The stage order is checked against the
+ * packs it will play over: every id a combat stage those packs hold.
+ *
+ * Nothing here decides what a refusal *does*; `src/ui/compose.ts` turns the
+ * errors into a reason a player can read.
+ */
+export function resolveVariant(
+  source: VariantSource,
+  packs: ReadonlyMap<string, LoadedPack>,
+  choice: VariantChoice = {},
+): VariantResolveResult {
+  const { errors, parsed } = parseDocuments([source]);
+  const document = parsed[0];
+  if (errors.length > 0 || document === undefined) return { ok: false, errors };
+  if (choice.packs !== undefined && choice.packs.length === 0) {
+    return {
+      ok: false,
+      errors: [
+        {
+          pack: VARIANTS_GROUP,
+          file: document.file,
+          field: 'packs',
+          message: 'an empty pack list layers nothing',
+        },
+      ],
+    };
+  }
+  const chosen: ParsedDocument =
+    choice.packs === undefined
+      ? document
+      : { file: document.file, variant: { ...document.variant, packs: [...choice.packs] } };
+  const result = resolveDocument(chosen, packs, choice.stages);
+  if (result.variant === undefined) return { ok: false, errors: result.errors };
+  return { ok: true, variant: result.variant };
 }
 
 /** Selector order: the declared `order`, then the id, so it is never arbitrary. */

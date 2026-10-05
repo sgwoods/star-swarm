@@ -286,3 +286,36 @@ describe('a registry over a base pack and an overlay', () => {
     expect(() => createRegistry([])).toThrow(/at least one/);
   });
 });
+
+describe('a stage sequence stated after every pack', () => {
+  /**
+   * The stage-sequence editor's order is "later wins" one layer further on: it
+   * replaces the half it states exactly as a later pack's would, and every rank's
+   * override of that half goes with it — otherwise EXPERT would play Classic's
+   * rank-D scripts over the player's order.
+   */
+  const classic = classicPack();
+
+  it('replaces the half it states, and only that half', () => {
+    const registry = createRegistry([classic], { normal: { rows: ['script-3'], repeatLast: 1 } });
+    expect(registry.manifest.stageSequence.normal.rows).toEqual(['script-3']);
+    expect(registry.manifest.stageSequence.challenge).toBe(
+      classic.manifest.stageSequence.challenge,
+    );
+  });
+
+  it('drops every rank’s override of that half, so it plays at every difficulty', () => {
+    const registry = createRegistry([classic], { normal: { rows: ['script-3'], repeatLast: 1 } });
+    const rules = registry.rules;
+    if (rules === undefined) throw new Error('Classic ships rules');
+    for (const rank of Object.keys(rules.difficulty.ranks)) {
+      expect(resolveStageId(registry.manifest, rules, 1, rank)).toBe('script-3');
+      expect(rules.difficulty.ranks[rank]?.stageSequence?.normal).toBeUndefined();
+    }
+  });
+
+  it('leaves the rules document itself alone when it states nothing', () => {
+    expect(createRegistry([classic], {}).rules).toBe(classic.rules);
+    expect(composeRules([classic], {})).toBe(classic.rules);
+  });
+});

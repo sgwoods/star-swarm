@@ -6,6 +6,14 @@ import { ATTRACT_PROMPT, attractKeys } from '../../src/ui/attract.js';
 import { createInitialsEntry, initialsEntryKeys } from '../../src/ui/highscores.js';
 import { cardPress, fireKeyFor, KEY, KEY_PAIR_GAP, keyLine } from '../../src/ui/keys.js';
 import { MENU_TEXT, settingsNotes, variantSelectNotes } from '../../src/ui/menus.js';
+import {
+  createPackEditor,
+  createStageEditor,
+  type PackEditor,
+  packEditorNotes,
+  type StageEditor,
+  stageEditorNotes,
+} from '../../src/ui/packs.js';
 import { exitConfirmUnderLines, PAUSE_TEXT } from '../../src/ui/pause.js';
 import { CONTROL_SCHEMES } from '../../src/ui/settings.js';
 
@@ -68,7 +76,29 @@ function everyHelpLine(): {
     { card: 'pause', text: PAUSE_TEXT.pausedKeys, cells: 24 },
     ...help(exitConfirmUnderLines(0, 1)).map((text) => ({ card: 'exit', text, cells: 24 })),
     ...initialsEntryKeys().map((text) => ({ card: 'entry', text, cells: 23 })),
+    ...help(packEditorNotes(packCard())).map((text) => ({ card: 'packs', text, cells: 25 })),
+    ...help(stageEditorNotes(stageCard())).map((text) => ({ card: 'stages', text, cells: 25 })),
   ];
+}
+
+/** The two cards the settings screen opens, over one pack and one stage, judged fine. */
+const fine = { ok: true, headline: 'FINE', details: [] };
+function packCard(): PackEditor {
+  return createPackEditor({
+    installed: [{ id: 'base', name: 'BASE', rules: true, stages: 1 }],
+    start: ['base'],
+    own: ['base'],
+    judge: () => fine,
+  });
+}
+function stageCard(): StageEditor {
+  return createStageEditor({
+    options: [{ id: 'one', pack: 'BASE' }],
+    own: ['one'],
+    stored: undefined,
+    numberOf: (position) => position + 1,
+    judge: () => fine,
+  });
 }
 
 describe('every card says how to work it in one voice', () => {
@@ -81,8 +111,8 @@ describe('every card says how to work it in one voice', () => {
 
   it('builds every line of help on every card from that vocabulary', () => {
     const lines = everyHelpLine();
-    // Five cards, two lines each but the pause card's one.
-    expect(new Set(lines.map((line) => line.card)).size).toBe(5);
+    // Seven cards, two lines each but the pause card's one.
+    expect(new Set(lines.map((line) => line.card)).size).toBe(7);
     for (const { card, text } of lines) {
       for (const pair of text.split(KEY_PAIR_GAP)) {
         const key = pair.slice(0, pair.indexOf(' '));

@@ -134,11 +134,22 @@ const EMPTY_TABLE: SequenceTable = { rows: [], repeatLast: 1 };
  *
  * Nothing here can *remove* a field: an overlay widens or replaces, never
  * empties. A game that wants no stage badges layers a base that has none.
+ *
+ * **`stated` is a stage sequence stated after every pack** — the player's own
+ * order, from the stage-sequence editor (`src/ui/packs.ts`). It is "later wins"
+ * one layer further on rather than a second rule: a half it states replaces the
+ * packs' half exactly as a later pack's would, and {@link composeRules} drops
+ * every rank's override of that half for the same reason it does for a pack.
  */
-export function composeManifest(packs: readonly LoadedPack[]): PackManifest {
+export function composeManifest(
+  packs: readonly LoadedPack[],
+  stated: StageSequenceOverride = {},
+): PackManifest {
   const active = packs[packs.length - 1];
   if (active === undefined) throw new Error('composing a manifest needs at least one loaded pack');
-  if (packs.length === 1) return active.manifest;
+  if (packs.length === 1 && stated.normal === undefined && stated.challenge === undefined) {
+    return active.manifest;
+  }
 
   const palette: string[] = [];
   for (const pack of packs) {
@@ -154,8 +165,8 @@ export function composeManifest(packs: readonly LoadedPack[]): PackManifest {
     );
 
   const stageSequence: StageSequence = {
-    normal: half((sequence) => sequence.normal),
-    challenge: half((sequence) => sequence.challenge),
+    normal: stated.normal ?? half((sequence) => sequence.normal),
+    challenge: stated.challenge ?? half((sequence) => sequence.challenge),
   };
 
   return {
@@ -195,20 +206,35 @@ export function composeManifest(packs: readonly LoadedPack[]): PackManifest {
  * and a registry where no later pack states a half gets the document back
  * unchanged and identical.
  */
-export function composeRules(packs: readonly LoadedPack[]): Rules | undefined {
+export function composeRules(
+  packs: readonly LoadedPack[],
+  stated: StageSequenceOverride = {},
+): Rules | undefined {
   for (let index = packs.length - 1; index >= 0; index -= 1) {
     const rules = packs[index]?.rules;
-    if (rules !== undefined) return withoutSupersededSequences(rules, packs.slice(index + 1));
+    if (rules !== undefined) {
+      return withoutSupersededSequences(rules, packs.slice(index + 1), stated);
+    }
   }
   return undefined;
 }
 
 const SEQUENCE_HALVES = ['normal', 'challenge'] as const;
 
-/** `rules` with every rank's override of a half that one of `later` states removed. */
-function withoutSupersededSequences(rules: Rules, later: readonly LoadedPack[]): Rules {
-  const superseded = SEQUENCE_HALVES.filter((half) =>
-    later.some((pack) => pack.manifest.stageSequence[half].rows.length > 0),
+/**
+ * `rules` with every rank's override of a half removed when one of `later` states
+ * that half, or `stated` does — a statement after every pack is later than all of
+ * them.
+ */
+function withoutSupersededSequences(
+  rules: Rules,
+  later: readonly LoadedPack[],
+  stated: StageSequenceOverride,
+): Rules {
+  const superseded = SEQUENCE_HALVES.filter(
+    (half) =>
+      stated[half] !== undefined ||
+      later.some((pack) => pack.manifest.stageSequence[half].rows.length > 0),
   );
   const overridden = (rank: DifficultyRank): boolean =>
     superseded.some((half) => rank.stageSequence?.[half] !== undefined);
@@ -229,13 +255,17 @@ function withoutSupersededSequences(rules: Rules, later: readonly LoadedPack[]):
 
 /**
  * Layer packs into one registry. Content, the manifest and the rules all follow
- * "later wins"; see {@link composeManifest} for what that means field by field.
+ * "later wins"; see {@link composeManifest} for what that means field by field,
+ * and for `stated`, a stage sequence stated after every pack.
  */
-export function createRegistry(packs: readonly LoadedPack[]): ContentRegistry {
+export function createRegistry(
+  packs: readonly LoadedPack[],
+  stated: StageSequenceOverride = {},
+): ContentRegistry {
   const active = packs[packs.length - 1];
   if (active === undefined) throw new Error('a registry needs at least one loaded pack');
 
-  const manifest = composeManifest(packs);
+  const manifest = composeManifest(packs, stated);
   const aliens = layer(packs, (pack) => pack.aliens);
   const paths = layer(packs, (pack) => pack.paths);
   const stages = layer(packs, (pack) => pack.stages);
@@ -254,7 +284,7 @@ export function createRegistry(packs: readonly LoadedPack[]): ContentRegistry {
     packs,
     active,
     manifest,
-    rules: composeRules(packs),
+    rules: composeRules(packs, stated),
     alien: (id) => aliens.get(id),
     path: (id) => paths.get(id),
     stage: (id) => stages.get(id),

@@ -31,6 +31,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
+import { COUPLING_KINDS } from '../../../src/content/couplings.js';
 import { personaSchema } from '../../../src/content/personas.js';
 import type { Formation, Sprite, StageSequence } from '../../../src/content/schema.js';
 import {
@@ -697,6 +698,8 @@ export function counters(root = REPO_ROOT): ReadonlyMap<string, () => number> {
     ],
     ['ui.controlSchemes', () => CONTROL_SCHEMES.length],
     ['ui.settingsRows', () => SETTINGS_ROW_IDS.length],
+    /** What the pack manager says about a mix: `src/content/couplings.ts`. */
+    ['content.couplingKinds', () => COUPLING_KINDS.length],
 
     /**
      * The dim lines a card draws to say which key does what.

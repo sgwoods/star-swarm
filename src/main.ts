@@ -10,9 +10,11 @@
  * file owns the display, the input device, the sprite sheet, the starfield and
  * the audio, and nothing else. Attract demo, play, the pause and its exit
  * confirmation, the between-stage challenge card, game over, results and
- * high-score entry all arrive through one `flow.step(frame)` call, which is why
- * there are no phase flags here — including no `paused` boolean, which is the
- * flag `src/ui/flow.ts` refuses on the same grounds as every other.
+ * high-score entry — and the settings screen with the pack manager and the
+ * stage-sequence editor it opens — all arrive through one `flow.step(frame)`
+ * call, which is why there are no phase flags here — including no `paused`
+ * boolean, which is the flag `src/ui/flow.ts` refuses on the same grounds as
+ * every other.
  */
 
 import { createSfx, createSynth, type Sfx } from './audio/index.js';
@@ -44,6 +46,7 @@ import {
   fetchServedIdentity,
 } from './ui/build-info.js';
 import { drawBuildLine, drawBuildStamp } from './ui/build-stamp.js';
+import { createComposer } from './ui/compose.js';
 import { createGameFlow, type FlowVariant, type GamePhase } from './ui/flow.js';
 import {
   createHighScoreBoard,
@@ -52,6 +55,7 @@ import {
 } from './ui/highscores.js';
 import { badgesForStage, drawHud, drawPersonaTag } from './ui/hud.js';
 import { drawSettings, drawVariantSelect, SELECT_CARD_TOP, SETTINGS_CARD_TOP } from './ui/menus.js';
+import { drawPackEditor, drawStageEditor } from './ui/packs.js';
 import { CARD_TOP } from './ui/panel.js';
 import { drawExitConfirm, drawPaused, EXIT_CARD_TOP, PAUSE_CARD_TOP } from './ui/pause.js';
 import { drawChallengeResults, drawGameOver, drawResults } from './ui/results.js';
@@ -92,14 +96,22 @@ for (const [name, source] of bundledPackSources()) {
 }
 if (packErrors.length > 0) throw new ContentValidationError(packErrors);
 
-const loaded = loadVariants(bundledVariantSources(), packs);
+const variantSources = bundledVariantSources();
+const loaded = loadVariants(variantSources, packs);
 if (!loaded.ok) throw new ContentValidationError(loaded.errors);
 const variants = loaded.variants;
 const firstVariant = variants[0];
 if (firstVariant === undefined) {
   throw new Error('no variants are bundled: variants/ holds no document, so there is no game');
 }
-const byId = new Map(variants.map((entry) => [entry.id, entry]));
+
+// What the pack manager composes a player's pack list and stage order with, and
+// judges a draft by: the same variant loader as above, over the same documents,
+// and the structural half of the validator's playability pass
+// (`src/ui/compose.ts`). It is also the one answer to "which resolved variant is
+// the flow running?" — by identity, so a variant nobody here loaded or composed
+// can never have a sprite sheet built for it.
+const composer = createComposer({ sources: variantSources, packs, variants });
 
 /**
  * The variant in force. Assigned only by {@link applyVariant}, which the flow
@@ -194,11 +206,13 @@ let effects: Effects;
  * boot with whatever the flow started on and again from `onVariantChange`.
  */
 function applyVariant(chosen: FlowVariant): void {
-  // `byId` is built from the very list the flow was handed, so this always
-  // lands. It is checked rather than defaulted because a silent fallback here is
-  // precisely the failure being fixed: carrying on with the wrong variant's
-  // presentation is how a fleet ends up drawn as squares.
-  const chosenVariant = byId.get(chosen.id);
+  // The flow only ever runs a variant the load produced or the composer composed,
+  // so this always lands — and it is the *composed* one, whose registry carries
+  // every pack the player switched on. It is checked rather than defaulted
+  // because a silent fallback here is precisely the failure being fixed: carrying
+  // on with the wrong variant's presentation is how a fleet ends up drawn as
+  // squares, and looking a composed variant up by id would hand back its base.
+  const chosenVariant = composer.resolvedOf(chosen);
   if (chosenVariant === undefined) {
     throw new Error(`the flow is running a variant this page did not load: ${chosen.id}`);
   }
@@ -244,6 +258,7 @@ const flow = createGameFlow({
   highScores,
   settings,
   onVariantChange: applyVariant,
+  composer,
 });
 
 // Ask, rather than assume the list starts where the flow does. The flow boots on
@@ -329,7 +344,12 @@ const loop = createLoop({
     // screens, where the `AUTOPLAY` row is about the *next* game and a tag naming
     // the demo's pilot under it would read as contradicting it.
     const persona = flow.flying;
-    if (persona !== undefined && flow.phase !== 'settings' && flow.phase !== 'variant-select') {
+    const onMenu =
+      flow.phase === 'settings' ||
+      flow.phase === 'packs' ||
+      flow.phase === 'stages' ||
+      flow.phase === 'variant-select';
+    if (persona !== undefined && !onMenu) {
       drawPersonaTag(ctx, persona.label, hud);
     }
 
@@ -395,6 +415,30 @@ const loop = createLoop({
             x: LOGICAL_WIDTH / 2,
             y: SETTINGS_CARD_TOP,
             persistent: settings.persistent,
+          });
+        }
+        break;
+      }
+      case 'packs': {
+        const editor = flow.packEditor;
+        if (editor !== undefined) {
+          drawPackEditor(ctx, {
+            editor,
+            steps: flow.phaseSteps,
+            x: LOGICAL_WIDTH / 2,
+            y: SETTINGS_CARD_TOP,
+          });
+        }
+        break;
+      }
+      case 'stages': {
+        const editor = flow.stageEditor;
+        if (editor !== undefined) {
+          drawStageEditor(ctx, {
+            editor,
+            steps: flow.phaseSteps,
+            x: LOGICAL_WIDTH / 2,
+            y: SETTINGS_CARD_TOP,
           });
         }
         break;
@@ -511,6 +555,25 @@ declare global {
       readonly settingsMenuNote: string;
       /** The variant under the selector's cursor. Empty off that phase. */
       readonly selecting: string;
+      /**
+       * The pack list and combat-stage order **in force** — what the next game
+       * plays — and the stage document the world on screen is playing.
+       * `tests/e2e/packs.spec.ts` holds a kept list to all three.
+       */
+      readonly packList: readonly string[];
+      readonly stageOrder: readonly string[];
+      readonly stageDocument: string;
+      /** Why the stored list is set aside, or `''` when what is stored plays. */
+      readonly setAside: string;
+      /**
+       * The open pack or stage card: its rows as `label=value`, the row under the
+       * cursor, the draft, and the verdict's lines. Empty off those phases.
+       */
+      readonly editorRows: readonly string[];
+      readonly editorRow: string;
+      readonly editorDraft: readonly string[];
+      readonly editorVerdict: readonly string[];
+      readonly editorOk: boolean;
       /** The exit confirmation's choice — `resume` or `exit`. Empty off that phase. */
       readonly exitChoice: string;
       /** Which motion the formation is running: sway, breathe or still. */
@@ -660,6 +723,41 @@ window.starSwarm = {
   },
   get selecting(): string {
     return flow.variantMenu?.chosen.id ?? '';
+  },
+  get packList(): readonly string[] {
+    return flow.variant.packs;
+  },
+  get stageOrder(): readonly string[] {
+    return flow.variant.stages ?? [];
+  },
+  get stageDocument(): string {
+    return flow.world.content?.stage.id ?? '';
+  },
+  get setAside(): string {
+    const verdict = flow.setAside;
+    return verdict === undefined ? '' : [verdict.headline, ...verdict.details].join(' / ');
+  },
+  get editorRows(): readonly string[] {
+    const rows = flow.packEditor?.rows ?? flow.stageEditor?.rows ?? [];
+    return rows.map((row) => `${row.label}=${row.value}`);
+  },
+  get editorRow(): string {
+    const pack = flow.packEditor;
+    if (pack !== undefined) return pack.row.id;
+    const stage = flow.stageEditor;
+    if (stage !== undefined) return `${stage.row.kind}:${stage.row.label}`;
+    return '';
+  },
+  get editorDraft(): readonly string[] {
+    return flow.packEditor?.draft ?? flow.stageEditor?.draft ?? [];
+  },
+  get editorVerdict(): readonly string[] {
+    const editor = flow.packEditor ?? flow.stageEditor;
+    if (editor === undefined) return [];
+    return [editor.verdict.headline, ...editor.verdict.details];
+  },
+  get editorOk(): boolean {
+    return (flow.packEditor ?? flow.stageEditor)?.verdict.ok ?? false;
   },
   get exitChoice(): string {
     return flow.exitConfirm?.choice ?? '';

@@ -14,6 +14,7 @@ import {
   presetOf,
   presetsForRules,
   rankFor,
+  resolveVariant,
   variantSchema,
 } from '../../src/content/variants.js';
 import { classicPack, minimalRules } from '../helpers/rules.js';
@@ -462,6 +463,81 @@ describe('autoplay personas', () => {
     // against, and watching the cabinet play itself as somebody else is worse than
     // not watching.
     expect(personaOf(variant, 'gone')).toBeUndefined();
+  });
+});
+
+describe('a variant resolved as a player chose it', () => {
+  /**
+   * `resolveVariant` is the pack manager's way in: the same document, its `packs`
+   * replaced by the player's list and, optionally, an order for its combat
+   * stages. It must refuse exactly what a document naming that list would.
+   */
+  const document = {
+    id: 'mix',
+    name: 'MIX',
+    packs: ['classic'],
+    difficulty: { presets: [{ id: 'arcade', label: 'ARCADE', rank: 'A' }] },
+  };
+  const source = sourceOf('mix.json', document);
+
+  function withTwoRanks(): Map<string, LoadedPack> {
+    const packs = installedPacks();
+    packs.set('two', twoRankPack());
+    return packs;
+  }
+
+  it('resolves the document unchanged when nothing is chosen', () => {
+    const result = resolveVariant(source, installedPacks());
+    expect(result.ok && result.variant.packs).toEqual(['classic']);
+    expect(result.ok && result.variant.stages).toBeUndefined();
+  });
+
+  it('refuses a list for the reason a document naming it would be refused', () => {
+    const packs = withTwoRanks();
+    const chosen = resolveVariant(source, packs, { packs: ['classic', 'two'] });
+    const named = loadVariants(
+      [sourceOf('mix.json', { ...document, packs: ['classic', 'two'] })],
+      packs,
+    );
+    // `two` ships rules with no rank A, so the document's ARCADE preset names nothing.
+    expect(chosen.ok).toBe(false);
+    expect(named.ok).toBe(false);
+    if (chosen.ok || named.ok) return;
+    expect(chosen.errors).toEqual(named.errors);
+    expect(chosen.errors[0]?.field).toBe('difficulty.presets[0].rank');
+  });
+
+  it('refuses an empty list, which a document cannot even state', () => {
+    const result = resolveVariant(source, installedPacks(), { packs: [] });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors[0]?.field).toBe('packs');
+  });
+
+  it('plays a stated order as the combat half at every rank, and cycles it whole', () => {
+    const result = resolveVariant(source, installedPacks(), {
+      stages: ['script-5', 'script-9', 'script-2'],
+    });
+    if (!result.ok) throw new Error(JSON.stringify(result.errors));
+    const { variant } = result;
+    expect(variant.stages).toEqual(['script-5', 'script-9', 'script-2']);
+    for (const rank of ['A', 'B', 'C', 'D']) {
+      const ids = [1, 2, 4, 5, 6, 8].map(
+        (stage) => variant.stagesFor(rank).stageFor(stage)?.stage.id,
+      );
+      expect(ids).toEqual(['script-5', 'script-9', 'script-2', 'script-5', 'script-9', 'script-2']);
+    }
+    // The challenge stages keep their own sequence and the rules' own cadence.
+    expect(variant.stagesFor('D').stageFor(3)?.stage.id).toBe('challenge-1');
+  });
+
+  it('refuses an order naming a stage the packs do not hold, or a challenge stage', () => {
+    const missing = resolveVariant(source, installedPacks(), { stages: ['script-0', 'nowhere'] });
+    expect(!missing.ok && missing.errors.map((error) => error.field)).toEqual(['stages[1]']);
+    const challenge = resolveVariant(source, installedPacks(), { stages: ['challenge-2'] });
+    expect(!challenge.ok && challenge.errors[0]?.message).toMatch(/challenge stage/);
+    const empty = resolveVariant(source, installedPacks(), { stages: [] });
+    expect(!empty.ok && empty.errors[0]?.field).toBe('stages');
   });
 });
 

@@ -739,6 +739,53 @@ function checkOrdered(variant: ResolvedVariant, pilots: Pilots): Finding[] {
   ];
 }
 
+/**
+ * The half of the pass that needs no pilot: checks 1 and 2, `entry` and `dive`,
+ * over every combat stage the variant plays.
+ *
+ * On its own because it is cheap — no persona flies, and the slowest shipped
+ * variant takes a few tens of milliseconds — so the pack manager in the browser
+ * runs it on every list a player composes (`src/ui/compose.ts`), where flying
+ * the personas would take seconds per list. One function for both, so the editor
+ * and the gate cannot disagree about a fleet that will not build or a dive that
+ * leaves the screen.
+ *
+ * One finding per faulty dive rather than one per stage that launches it: the
+ * path is what needs fixing, and the stages are where it was seen.
+ */
+export function checkStructure(
+  variant: ResolvedVariant,
+  flights: readonly StageFlight[] = stageFlights(variant),
+): Finding[] {
+  const findings: Finding[] = [];
+  const dives = new Map<string, { fault: DiveFault; stages: string[] }>();
+  for (const flight of flights) {
+    if (flight.stage.kind === 'challenge') continue;
+    const blame = blameOf(variant, 'stages', flight.stage.id);
+    for (const message of checkEntry(variant, flight)) {
+      findings.push({
+        check: 'entry',
+        ...blame,
+        message: `${where(variant, flight)}: ${message}`,
+      });
+    }
+    for (const fault of checkDives(variant, flight)) {
+      const key = `${fault.path}\u0000${fault.role}\u0000${fault.reasons}`;
+      const seen = dives.get(key);
+      if (seen === undefined) dives.set(key, { fault, stages: [flight.stage.id] });
+      else seen.stages.push(flight.stage.id);
+    }
+  }
+  for (const { fault, stages } of dives.values()) {
+    findings.push({
+      check: 'dive',
+      ...blameOf(variant, 'paths', fault.path),
+      message: `dive "${fault.path}" flown by the ${fault.role} role in ${variant.id} (${stages.join(', ')}), aimed at the fighter's home column: ${fault.reasons}`,
+    });
+  }
+  return findings;
+}
+
 /** The whole pass, over every variant that loaded. */
 export function checkPlayability(variants: readonly ResolvedVariant[]): PlayabilityReport {
   const findings: Finding[] = [];
@@ -763,26 +810,8 @@ export function checkPlayability(variants: readonly ResolvedVariant[]): Playabil
 
     const before = findings.length;
     const tolerated: string[] = [];
-    // One finding per faulty dive rather than one per stage that launches it: the
-    // path is what needs fixing, and the stages are where it was seen.
-    const dives = new Map<string, { fault: DiveFault; stages: string[] }>();
+    findings.push(...checkStructure(variant, flights));
     for (const flight of flights) {
-      const blame = blameOf(variant, 'stages', flight.stage.id);
-      if (flight.stage.kind !== 'challenge') {
-        for (const message of checkEntry(variant, flight)) {
-          findings.push({
-            check: 'entry',
-            ...blame,
-            message: `${where(variant, flight)}: ${message}`,
-          });
-        }
-        for (const fault of checkDives(variant, flight)) {
-          const key = `${fault.path}\u0000${fault.role}\u0000${fault.reasons}`;
-          const seen = dives.get(key);
-          if (seen === undefined) dives.set(key, { fault, stages: [flight.stage.id] });
-          else seen.stages.push(flight.stage.id);
-        }
-      }
       const flown = checkFlights(variant, flight, pilots);
       findings.push(...flown.findings);
       if (flown.tolerated > 0) {
@@ -790,13 +819,6 @@ export function checkPlayability(variants: readonly ResolvedVariant[]): Playabil
           `${flight.stage.id} on ${String(flown.tolerated)} of ${String(PROTOCOL.seeds)}`,
         );
       }
-    }
-    for (const { fault, stages } of dives.values()) {
-      findings.push({
-        check: 'dive',
-        ...blameOf(variant, 'paths', fault.path),
-        message: `dive "${fault.path}" flown by the ${fault.role} role in ${variant.id} (${stages.join(', ')}), aimed at the fighter's home column: ${fault.reasons}`,
-      });
     }
     findings.push(...checkOrdered(variant, pilots));
 
