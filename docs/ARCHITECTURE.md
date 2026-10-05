@@ -1019,7 +1019,11 @@ Five decisions in it are worth knowing before changing it:
   killing a lone drone that flies that pack's dive. That rate predates the thirteen
   scripts — it reached documents that were already shipped, and surfaced when a
   rename redrew their seeds. So `finishes` fails on a third stall, and a tolerated
-  one is still named on the variant's report line rather than swallowed.
+  one is still named on the variant's report line rather than swallowed. That duel
+  turned out to be the pilot walking through the drone's flattened pass to stand in
+  the clear column behind it; since it stopped, 480 extra seeds per stage stall
+  Swarm Remix 0 times in 10,080 runs, Classic 0 in 10,080 and Deep Sea 1 in 5,280,
+  and the threshold stays at two as the floor for a duel any pilot can lose.
 
 What it does not cover: challenge scripts are flown but not path-checked, since
 their flyers leave the screen by design; a transform's spawned divers start
@@ -1505,10 +1509,11 @@ fifth player with no name to show.
 
 **The cycle turns on a finished run.** Each persona plays one game from the start,
 and the next takes over on the step after its game over — so a persona holds the
-screen for as long as it stays alive, which on the Classic demo seed is between
-half a minute and a minute each. There is a ceiling of three minutes a turn, which
-no shipped persona reaches; it exists so a persona that never dies cannot keep the
-others off the screen.
+screen for as long as it stays alive, which on the Classic demo seed runs from
+about half a minute for the beginner to two and a half for the astronaut. There is
+a ceiling of three minutes a turn; it exists so a persona that never dies cannot
+keep the others off the screen, and Deep Sea's astronaut is the one shipped leg
+that reaches it.
 
 **It repeats exactly.** Every leg starts the same world from the same seed — the
 same fleet, flown by somebody else — at the rank in force, and each pilot draws

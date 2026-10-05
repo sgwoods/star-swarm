@@ -135,6 +135,13 @@ export const PROTOCOL = {
    * scripts: it reached the documents that were already shipped, and the gate saw
    * it only when a rename redrew their seeds. "Every seed" read that as a stage
    * that cannot be finished, which it is not.
+   *
+   * That duel was the pilot's to lose: it walked through the drone's flattened pass
+   * to stand in the clear column behind it (`reachOf` in `src/ui/autoplay.ts`).
+   * Since it stopped, 480 extra seeds per stage stall Classic 0 of 10,080 runs,
+   * Swarm Remix 0 of 10,080 (18 before) and Deep Sea 1 of 5,280 (1 before). Two is
+   * still the threshold: it is a floor for a duel any pilot can lose, not a
+   * measurement of this one.
    */
   stallsTolerated: 2,
   /**

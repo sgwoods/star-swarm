@@ -22,6 +22,7 @@ import {
   autopilotSource,
   createAutopilot,
   type PilotView,
+  type Sighting,
   viewOfWorld,
 } from '../../src/ui/autoplay.js';
 import { classicRules, classicStages } from '../helpers/rules.js';
@@ -291,4 +292,71 @@ describe('every shipped persona plays a stage', () => {
       expect(run.score).toBeGreaterThan(500);
     },
   );
+});
+
+/* -------------------------------------------------------------------------- */
+/* Getting out of the way                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A screen with the fighter on it and only what a test puts there, in the shipped
+ * fighter's own numbers — its row, its hit window, its rocket speed and its walls.
+ *
+ * Hand-built rather than reached in a run because what these pin is a few frames
+ * of one body's flight, and a whole run reaches them only by luck: the defect the
+ * first of them pins stalled the astronaut on one Swarm Remix run in a few hundred.
+ */
+function sceneOf(step: number, enemies: readonly Sighting[]): PilotView {
+  const shipped = viewOfWorld(newWorld());
+  const row = shipped.fighter?.y ?? 0;
+  return {
+    ...shipped,
+    step,
+    fighter: { x: 100, y: row, dual: false },
+    shotsFree: 2,
+    bombs: [],
+    enemies: enemies.map((enemy) => ({ ...enemy, y: row + enemy.y })),
+    beam: undefined,
+  };
+}
+
+/** What the astronaut does with each of `steps` consecutive scenes, one frame each. */
+function movesThrough(scene: (step: number) => PilotView, steps: number): string[] {
+  const pilot = createAutopilot({ persona: personaNamed('astronaut'), seed: 'scene' });
+  return Array.from({ length: steps }, (_unused, step) => {
+    const frame = pilot.sample(scene(step));
+    return isDown(frame, 'left') ? 'left' : isDown(frame, 'right') ? 'right' : 'still';
+  });
+}
+
+describe('a pilot gets out of the way', () => {
+  it('walks away from a body sweeping along its row, not through it to the clear side', () => {
+    // A diver level with the fighter, drifting towards it a pixel a step. Every
+    // column it has already passed is clear, and the clear column nearest anything
+    // worth shooting is the one just behind it — on the far side of it. A pilot that
+    // asked only whether a column was safe to stand in walked through the diver to
+    // get there; Swarm Remix's drone dive flattens into exactly this pass, and the
+    // astronaut lost a fighter to it on every pass until one run in a few hundred
+    // stalled with one drone left. The first frame has nothing to measure the drift
+    // from; from the second, it must never step towards the sweeper.
+    const sweeper = (step: number): PilotView =>
+      sceneOf(step, [{ id: 7, x: 120 - step, y: -4, flying: true, captured: false }]);
+    const moves = movesThrough(sweeper, 5);
+    expect(moves.slice(1)).not.toContain('right');
+    expect(moves).toContain('left');
+  });
+
+  it('walks past a diver that has gone under its row and is falling away', () => {
+    // Under the row and still descending, so it can never come back up to strike —
+    // and between the fighter and the one enemy left in the formation. Treated as
+    // level with the fighter on every frame, it read as a wall the fighter could not
+    // walk past, and one Deep Sea run stood beside one in a corner for two and a half
+    // minutes without a shot.
+    const below = (step: number): PilotView =>
+      sceneOf(step, [
+        { id: 7, x: 108, y: 8 + 2 * step, flying: true, captured: false },
+        { id: 8, x: 140, y: -188, flying: false, captured: false },
+      ]);
+    expect(movesThrough(below, 5).slice(1)).toEqual(['right', 'right', 'right', 'right']);
+  });
 });

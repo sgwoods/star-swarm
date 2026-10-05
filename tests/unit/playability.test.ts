@@ -113,8 +113,9 @@ describe('the bullet-wall sweep', () => {
 describe('the thresholds', () => {
   it('finishes: a lost duel or two passes, a third stall fails', () => {
     // The permissive edge: one strong-persona stall in sixteen is a pilot losing to
-    // a lone diver, which is what Swarm Remix's dive produces on about 0.6% of
-    // runs, and it must not read as an unplayable stage.
+    // a lone diver — what Swarm Remix's dive produced on about 0.6% of runs until
+    // the pilot stopped walking through its pass — and it must not read as an
+    // unplayable stage.
     expect(finishesEnough(0)).toBe(true);
     expect(finishesEnough(1)).toBe(true);
     expect(finishesEnough(PROTOCOL.stallsTolerated)).toBe(true);
