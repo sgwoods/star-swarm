@@ -1,14 +1,48 @@
 {
   "id": "rescue",
   "wave": "square",
-  "duty": 0.5,
-  "envelope": [0.006, 0.6, 0.394],
-  "volume": 0.4,
+  "duty": 0.25,
+  "envelope": [0.004, 0.62, 0.376],
+  "volume": 0.26,
   "sequence": [
-    { "freq": 523.25, "duration": 0.08 },
-    { "freq": 783.99, "duration": 0.08 },
-    { "freq": 1046.5, "duration": 0.08 },
-    { "freq": 1318.51, "duration": 0.08 },
-    { "freq": [1567.98, 1661.22], "duration": 0.3 }
+    { "freq": [440, 880], "duration": 0.2 },
+    { "freq": 587.33, "duration": 0.1 },
+    { "freq": 739.99, "duration": 0.1 },
+    { "freq": 880, "duration": 0.2 },
+    { "freq": 783.99, "duration": 0.1 },
+    { "freq": 739.99, "duration": 0.1 },
+    { "freq": 659.26, "duration": 0.1 },
+    { "freq": 739.99, "duration": 0.1 },
+    { "freq": 783.99, "duration": 0.1 },
+    { "freq": 1108.73, "duration": 0.1 },
+    { "freq": 1174.66, "duration": 0.4 }
+  ],
+  "parts": [
+    {
+      "wave": "square",
+      "duty": 0.125,
+      "envelope": [0.01, 0.7, 0.29],
+      "volume": 0.12,
+      "sequence": [
+        { "rest": true, "duration": 0.2 },
+        { "freq": 440, "duration": 0.2 },
+        { "freq": 587.33, "duration": 0.4 },
+        { "freq": 554.37, "duration": 0.4 },
+        { "freq": 739.99, "duration": 0.4 }
+      ]
+    },
+    {
+      "wave": "triangle",
+      "envelope": [0.004, 0.8, 0.196],
+      "volume": 0.36,
+      "sequence": [
+        { "freq": 146.83, "duration": 0.2 },
+        { "freq": 110, "duration": 0.2 },
+        { "freq": 146.83, "duration": 0.4 },
+        { "freq": 110, "duration": 0.2 },
+        { "freq": 164.81, "duration": 0.2 },
+        { "freq": 146.83, "duration": 0.4 }
+      ]
+    }
   ]
 }

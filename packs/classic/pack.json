@@ -278,23 +278,27 @@
     }
   },
   "sounds": {
-    "stage-started": "stage-start",
     "shot-fired": "fire",
     "enemy-fired": "enemy-fire",
     "target-destroyed": "enemy-hit",
     "player-hit": "player-death",
     "dual-half-lost": "player-death",
     "extra-life": "extra-life",
-    "game-over": "game-over",
     "enemy-dived": "dive",
     "enemy-transformed": "dive",
     "capture-started": "capture-beam",
-    "fighter-rescued": "rescue",
-    "challenge-group-cleared": "challenge-bonus",
-    "challenge-bonus": "challenge-bonus",
-    "challenge-perfect": "challenge-perfect",
     "target-hit": "enemy-hit"
   },
+  "music": [
+    { "event": "game-over", "sound": "game-over" },
+    { "event": "challenge-ended", "when": { "perfect": true }, "sound": "challenge-perfect" },
+    { "event": "challenge-ended", "sound": "challenge-results" },
+    { "event": "stage-started", "when": { "stage": 1 }, "sound": "game-start" },
+    { "event": "stage-started", "sound": "stage-start" },
+    { "event": "player-captured", "sound": "captured" },
+    { "event": "fighter-rescued", "sound": "rescue" },
+    { "event": "challenge-group-cleared", "sound": "challenge-bonus" }
+  ],
   "effects": {
     "player-hit": { "sprite": "explosion-player", "offsetX": -8, "offsetY": -8 },
     "dual-half-lost": { "sprite": "explosion-player", "offsetX": -8, "offsetY": -8 }

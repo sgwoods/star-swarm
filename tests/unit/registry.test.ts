@@ -44,6 +44,7 @@ const baseFiles = (rules: unknown = minimalRules('base-rules')): Record<string, 
       },
     },
     sounds: { 'shot-fired': 'pew' },
+    music: [{ event: 'stage-started', sound: 'pew' }],
     stageBadges: [{ value: 1, sprite: 'badge' }],
     stageSequence: { normal: { rows: ['one'], repeatLast: 1 } },
   },
@@ -111,6 +112,7 @@ describe('a registry over a base pack and an overlay', () => {
     expect(registry.manifest.stageSequence.normal.rows).toEqual(['one']);
     expect(registry.manifest.stageBadges).toHaveLength(1);
     expect(registry.manifest.sounds['shot-fired']).toBe('pew');
+    expect(registry.manifest.music).toEqual([{ event: 'stage-started', sound: 'pew' }]);
     // The formation map and the manifest are one source, not two merges of it.
     expect(registry.formations.get('grid')).toBe(registry.manifest.formations.grid);
   });
@@ -144,6 +146,28 @@ describe('a registry over a base pack and an overlay', () => {
       '#ffffff',
       '#ff2b2b',
       '#00e25a',
+    ]);
+  });
+
+  it('replaces the music cues whole, because their order is their priority', () => {
+    const scored = pack('scored', {
+      'pack.json': {
+        id: 'scored',
+        name: 'Scored',
+        music: [
+          { event: 'player-captured', sound: 'sting' },
+          { event: 'stage-started', when: { stage: 1 }, sound: 'sting' },
+        ],
+      },
+      'sounds/sting.json': {
+        id: 'sting',
+        wave: 'square',
+        sequence: [{ freq: 440, duration: 0.1 }],
+      },
+    });
+    expect(createRegistry([base(), scored]).manifest.music.map((cue) => cue.event)).toEqual([
+      'player-captured',
+      'stage-started',
     ]);
   });
 

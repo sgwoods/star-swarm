@@ -258,7 +258,7 @@ const pitchSchema = z.union([
 ]);
 
 /** One note or burst. A single-step sound states these at the top level instead. */
-const soundStepSchema = z.strictObject({
+const soundNoteSchema = z.strictObject({
   freq: pitchSchema,
   /** Seconds. The synth is not on the fixed step, so sounds are in wall time. */
   duration: z.number().positive(),
@@ -266,18 +266,64 @@ const soundStepSchema = z.strictObject({
   volume: z.number().min(0).max(1).optional(),
 });
 
+/**
+ * A silence of `duration` seconds. Music needs one: a phrase that breathes, an
+ * off-beat entry, a bass line that sits out a bar. A rest builds no voice.
+ */
+const soundRestSchema = z.strictObject({
+  rest: z.literal(true),
+  duration: z.number().positive(),
+});
+
+const soundStepSchema = z.union([soundNoteSchema, soundRestSchema]);
+
+export type SoundStep = z.infer<typeof soundStepSchema>;
+
+/** A sequence that is nothing but rests would build no voice at all. */
+const sequenceSchema = z
+  .array(soundStepSchema)
+  .min(1)
+  .refine((steps) => steps.some((step) => !('rest' in step)), {
+    message: 'a sequence needs at least one note, not only rests',
+  });
+
+const envelopeSchema = z.tuple([
+  z.number().nonnegative(),
+  z.number().nonnegative(),
+  z.number().nonnegative(),
+]);
+
+const vibratoSchema = z.strictObject({
+  rate: z.number().positive(),
+  depth: z.number().min(0).max(1),
+});
+
+/**
+ * One more line of a jingle, sounding at the same time as the sound's own: a
+ * bass under a melody, a harmony beside it. Every part starts at the sound's
+ * start and runs its own `sequence`. A `wave`, `envelope`, `volume` or `duty` it
+ * omits is the sound's; a `vibrato` it omits is none, because a wobble belongs
+ * to one line and there is no way to write "none" over an inherited one.
+ */
+const soundPartSchema = z.strictObject({
+  wave: waveformSchema.optional(),
+  envelope: envelopeSchema.optional(),
+  vibrato: vibratoSchema.optional(),
+  volume: z.number().min(0).max(1).optional(),
+  duty: z.number().min(0).max(1).optional(),
+  sequence: sequenceSchema,
+});
+
+export type SoundPart = z.infer<typeof soundPartSchema>;
+
 export const soundSchema = z
   .strictObject({
     id: idSchema,
     wave: waveformSchema,
     freq: pitchSchema.optional(),
     /** `[attack, hold, release]` in seconds. */
-    envelope: z
-      .tuple([z.number().nonnegative(), z.number().nonnegative(), z.number().nonnegative()])
-      .optional(),
-    vibrato: z
-      .strictObject({ rate: z.number().positive(), depth: z.number().min(0).max(1) })
-      .optional(),
+    envelope: envelopeSchema.optional(),
+    vibrato: vibratoSchema.optional(),
     volume: z.number().min(0).max(1).optional(),
     /** Square-wave duty cycle, 0…1. Ignored by the other waveforms. */
     duty: z.number().min(0).max(1).optional(),
@@ -286,7 +332,13 @@ export const soundSchema = z
      * short original tunes for start, capture, rescue and challenge results
      * (section 5) without a second content type for them.
      */
-    sequence: z.array(soundStepSchema).min(1).optional(),
+    sequence: sequenceSchema.optional(),
+    /**
+     * Further lines played at the same time as `sequence` — what turns a jingle
+     * into music without making music a second content type. A manifest's
+     * `music` cues play these on the music channel (`src/audio/music.ts`).
+     */
+    parts: z.array(soundPartSchema).min(1).optional(),
   })
   .refine((sound) => sound.freq !== undefined || sound.sequence !== undefined, {
     message: 'a sound needs either "freq" or a "sequence"',
@@ -294,6 +346,24 @@ export const soundSchema = z
   });
 
 export type Sound = z.infer<typeof soundSchema>;
+
+/**
+ * One line of a manifest's `music`: when a simulation event of type `event`
+ * arrives, start `sound` on the music channel.
+ *
+ * `when` narrows the cue to events whose fields equal the values it states —
+ * `{ "stage": 1 }` is the opening stage of a game rather than every stage. The
+ * cues are an **ordered** list because a step can match more than one, and the
+ * music channel plays one jingle: the earliest cue in the list that matches
+ * anything in the step wins (`src/audio/music.ts`).
+ */
+export const musicCueSchema = z.strictObject({
+  event: z.string().min(1),
+  when: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+  sound: refSchema,
+});
+
+export type MusicCue = z.infer<typeof musicCueSchema>;
 
 /* -------------------------------------------------------------------------- */
 /* 7.5 Abilities                                                                */
@@ -914,6 +984,17 @@ export const packManifestSchema = z.strictObject({
    * game, not to the platform.
    */
   sounds: z.record(z.string(), refSchema).default({}),
+  /**
+   * The jingles: which simulation events start which sound on the **music
+   * channel**, where one jingle plays at a time and a new one cuts the last.
+   *
+   * Separate from `sounds` rather than a flag on it because the channel is the
+   * difference — an effect stacks with every other effect, a jingle replaces the
+   * jingle before it — and an ordered list rather than a map because a cue may
+   * narrow on an event's fields (`musicCueSchema`), so one event can name more
+   * than one jingle and the order says which wins.
+   */
+  music: z.array(musicCueSchema).default([]),
   /**
    * Simulation event name → effect: what the game *looks* like at a moment, as
    * data, on exactly the terms `sounds` above already sets.

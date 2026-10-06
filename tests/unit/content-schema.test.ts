@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   alienSchema,
   formationSchema,
+  musicCueSchema,
   packManifestSchema,
   pathSchema,
   resolveRow,
@@ -333,12 +334,54 @@ describe('7.4 sound', () => {
     expect(sound.sequence).toHaveLength(2);
   });
 
+  it('accepts music: a melody with rests, and parts sounding beside it', () => {
+    const sound = soundSchema.parse({
+      id: 'tune',
+      wave: 'square',
+      sequence: [
+        { freq: 784, duration: 0.1 },
+        { rest: true, duration: 0.1 },
+      ],
+      parts: [{ wave: 'triangle', sequence: [{ freq: 98, duration: 0.2 }] }],
+    });
+    expect(sound.parts?.[0]?.sequence).toHaveLength(1);
+  });
+
+  it('rejects a part that states no sequence of its own', () => {
+    expect(
+      soundSchema.safeParse({
+        id: 's',
+        wave: 'square',
+        freq: 440,
+        parts: [{ wave: 'triangle', freq: 98 }],
+      }).success,
+    ).toBe(false);
+  });
+
   it('rejects a sound with neither a freq nor a sequence', () => {
     expect(soundSchema.safeParse({ id: 's', wave: 'square' }).success).toBe(false);
   });
 
   it('rejects an unknown waveform', () => {
     expect(soundSchema.safeParse({ id: 's', wave: 'pulse', freq: 440 }).success).toBe(false);
+  });
+});
+
+describe('music cue', () => {
+  it('accepts an event, a sound and scalar fields to narrow on', () => {
+    const cue = musicCueSchema.parse({
+      event: 'stage-started',
+      when: { stage: 1 },
+      sound: 'game-start',
+    });
+    expect(cue.when).toEqual({ stage: 1 });
+  });
+
+  it('rejects a misspelt field and a `when` value that is not a scalar', () => {
+    expect(musicCueSchema.safeParse({ event: 'e', sound: 's', wen: {} }).success).toBe(false);
+    expect(
+      musicCueSchema.safeParse({ event: 'e', sound: 's', when: { stage: [1, 2] } }).success,
+    ).toBe(false);
   });
 });
 

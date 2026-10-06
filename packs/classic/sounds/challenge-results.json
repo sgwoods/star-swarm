@@ -1,5 +1,5 @@
 {
-  "id": "challenge-perfect",
+  "id": "challenge-results",
   "wave": "square",
   "duty": 0.375,
   "envelope": [0.004, 0.62, 0.376],
@@ -23,10 +23,8 @@
     { "freq": 783.99, "duration": 0.1 },
     { "freq": 659.26, "duration": 0.1 },
     { "freq": 698.46, "duration": 0.1 },
-    { "freq": 880, "duration": 0.1 },
-    { "freq": 1046.5, "duration": 0.1 },
-    { "freq": 1318.51, "duration": 0.1 },
-    { "freq": 1396.91, "duration": 0.4 }
+    { "freq": 523.25, "duration": 0.1 },
+    { "freq": 698.46, "duration": 0.2 }
   ],
   "parts": [
     {
@@ -40,8 +38,7 @@
         { "freq": 698.46, "duration": 0.4 },
         { "freq": 440, "duration": 0.4 },
         { "freq": 392, "duration": 0.4 },
-        { "freq": 440, "duration": 0.4 },
-        { "freq": 880, "duration": 0.4 }
+        { "freq": 440, "duration": 0.4 }
       ]
     },
     {
@@ -59,8 +56,6 @@
         { "freq": 130.81, "duration": 0.2 },
         { "freq": 130.81, "duration": 0.2 },
         { "freq": 116.54, "duration": 0.2 },
-        { "freq": 174.61, "duration": 0.2 },
-        { "freq": 130.81, "duration": 0.2 },
         { "freq": 174.61, "duration": 0.4 }
       ]
     }
