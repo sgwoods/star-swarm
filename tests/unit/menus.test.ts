@@ -11,8 +11,11 @@ import {
   createVariantMenu,
   fitText,
   MENU_TEXT,
+  type MenuGame,
   type MenuVariant,
   SELECT_CARD_TOP,
+  SELECT_WINDOW,
+  selectRowText,
   SETTINGS_CARD_TOP,
   SETTINGS_ROW_IDS,
   settingsLines,
@@ -21,6 +24,7 @@ import {
   variantSelectLines,
   variantSelectNotes,
   volumeBar,
+  windowOf,
 } from '../../src/ui/menus.js';
 import { DEFAULT_SETTINGS, type Settings, VOLUME_STEPS } from '../../src/ui/settings.js';
 import { shippedVariants } from '../helpers/variants.js';
@@ -42,7 +46,9 @@ const preset = (id: string, rank: string): DifficultyPreset => ({
   rank,
 });
 
-function variantOf(id: string, overrides: Partial<MenuVariant> = {}): MenuVariant {
+type TestGame = MenuVariant & MenuGame;
+
+function variantOf(id: string, overrides: Partial<TestGame> = {}): TestGame {
   const presets = overrides.presets ?? [preset('arcade', 'A'), preset('expert', 'D')];
   const first = presets[0];
   if (first === undefined) throw new Error('a variant needs a preset');
@@ -50,6 +56,7 @@ function variantOf(id: string, overrides: Partial<MenuVariant> = {}): MenuVarian
     id,
     name: id.toUpperCase(),
     demonstration: false,
+    variation: false,
     packs: [id],
     presets,
     defaultPreset: first,
@@ -62,20 +69,22 @@ function variantOf(id: string, overrides: Partial<MenuVariant> = {}): MenuVarian
 
 /** A menu over a settings value this test holds, so writes are observable. */
 function menuOver(
-  variants: readonly MenuVariant[],
+  variants: readonly TestGame[],
   initial: Partial<Settings> = {},
 ): { menu: SettingsMenu; settings: () => Settings } {
   let settings: Settings = { ...DEFAULT_SETTINGS, ...initial };
   const first = variants[0];
   if (first === undefined) throw new Error('a menu needs a variant');
+  // The game chosen and the variant in force follow the settings, as the flow's do.
+  const chosen = (): TestGame => variants.find((entry) => entry.id === settings.variant) ?? first;
   const menu = createSettingsMenu({
     read: () => settings,
     write: (patch) => {
       settings = { ...settings, ...patch };
     },
-    variants,
-    // The variant in force follows the settings, as the flow's does.
-    active: () => variants.find((entry) => entry.id === settings.variant) ?? first,
+    games: () => variants,
+    chosen,
+    active: chosen,
   });
   return { menu, settings: () => settings };
 }
@@ -280,12 +289,18 @@ describe('the settings menu', () => {
     expect(settings()).toEqual(before);
   });
 
-  it('shows the list in force, not one that is only stored', () => {
-    // With nothing to compose with, a stored list is not what plays, and the row
-    // must not show it as if it were: the flow hands the menu the variant in
-    // force, and that is the list on screen.
-    const { menu } = menuOver([variantOf('classic', { packs: ['classic'] })], {
-      packs: { classic: ['classic', 'chosen-by-the-player'] },
+  it('shows the list in force, not the chosen game’s when it is not what plays', () => {
+    // A variation that will not load is not what plays, and the row must not show
+    // its list as if it were: the flow hands the menu the variant in force, and
+    // that is the list on screen.
+    const classic = variantOf('classic', { packs: ['classic'] });
+    const mine = variantOf('mine', { variation: true, packs: ['classic', 'not-here'] });
+    const menu = createSettingsMenu({
+      read: () => ({ ...DEFAULT_SETTINGS, variant: 'mine' }),
+      write: () => undefined,
+      games: () => [classic, mine],
+      chosen: () => mine,
+      active: () => classic,
     });
     menu.previous();
     expect(menu.row.note).toBe('classic');
@@ -303,7 +318,7 @@ describe('the settings menu', () => {
 describe('the PACKS and STAGES rows, with something to compose with', () => {
   /** A menu whose `open` is recorded, standing in for the flow's. */
   function composable(
-    variant: MenuVariant,
+    variant: TestGame,
     setAside?: string,
   ): { menu: SettingsMenu; opened: string[]; settings: () => Settings } {
     let settings: Settings = { ...DEFAULT_SETTINGS };
@@ -313,7 +328,8 @@ describe('the PACKS and STAGES rows, with something to compose with', () => {
       write: (patch) => {
         settings = { ...settings, ...patch };
       },
-      variants: [variant],
+      games: () => [variant],
+      chosen: () => variant,
       active: () => variant,
       open: (card) => {
         opened.push(card);
@@ -367,6 +383,87 @@ describe('the PACKS and STAGES rows, with something to compose with', () => {
   it('keeps STAGES off the card when there is nothing to compose with', () => {
     const { menu } = menuOver([variantOf('classic')]);
     expect(menu.rows.map((row) => row.id)).not.toContain('stages');
+  });
+});
+
+describe('the NAME and DELETE rows, which only a player’s variation has', () => {
+  const classic = variantOf('classic');
+  const mine = variantOf('classic-2', {
+    name: 'REEFS',
+    variation: true,
+    description: 'YOURS, FROM CLASSIC',
+  });
+
+  /** A menu over both games, with `chosen` and the opened cards recorded. */
+  function over(
+    chosen: TestGame,
+    setAside?: string,
+  ): { menu: SettingsMenu; opened: string[]; settings: () => Settings } {
+    let settings: Settings = { ...DEFAULT_SETTINGS, variant: chosen.id };
+    const opened: string[] = [];
+    const menu = createSettingsMenu({
+      read: () => settings,
+      write: (patch) => {
+        settings = { ...settings, ...patch };
+      },
+      games: () => [classic, mine],
+      chosen: () => (settings.variant === mine.id ? mine : classic),
+      active: () => classic,
+      open: (card) => {
+        opened.push(card);
+      },
+      setAside: () => setAside,
+    });
+    return { menu, opened, settings: () => settings };
+  }
+
+  it('are not on a shipped game’s card: a reference is neither renamed nor deleted', () => {
+    const ids = over(classic).menu.rows.map((row) => row.id);
+    expect(ids).not.toContain('name');
+    expect(ids).not.toContain('delete');
+  });
+
+  it('follow GAME on a variation, and each opens its own card without writing', () => {
+    const { menu, opened, settings } = over(mine);
+    expect(menu.rows.slice(0, 3).map((row) => [row.id, row.value])).toEqual([
+      ['game', 'REEFS'],
+      ['name', 'REEFS'],
+      ['delete', ''],
+    ]);
+    const before = settings();
+    menu.next();
+    menu.adjust(1);
+    menu.next();
+    menu.adjust(-1);
+    expect(opened).toEqual(['name', 'delete']);
+    expect(settings()).toEqual(before);
+  });
+
+  it('say on the GAME row whose game it is, or that it will not load', () => {
+    expect(over(mine).menu.rows[0]?.note).toBe('YOURS, FROM CLASSIC');
+    expect(over(mine, 'WILL NOT LOAD').menu.rows[0]?.note).toBe(MENU_TEXT.setAside);
+    expect(over(classic).menu.rows[0]?.note).toBeUndefined();
+  });
+
+  it('come and go as the GAME row steps on and off a variation', () => {
+    const { menu } = over(classic);
+    menu.adjust(1);
+    expect(menu.rows.map((row) => row.id)).toContain('delete');
+    menu.adjust(1);
+    expect(menu.rows.map((row) => row.id)).not.toContain('delete');
+  });
+
+  it('are absent with nothing to compose with, as STAGES is', () => {
+    const { menu } = menuOver([classic, mine], { variant: mine.id });
+    expect(menu.rows.map((row) => row.id)).not.toContain('name');
+  });
+
+  it('puts the cursor on a row by id, when the row is showing', () => {
+    const { menu } = over(mine);
+    menu.focus('delete');
+    expect(menu.row.id).toBe('delete');
+    menu.focus('stages');
+    expect(menu.row.id).toBe('stages');
   });
 });
 
@@ -527,11 +624,16 @@ describe('the cards fit the playfield', () => {
   const fits = (top: number, height: number): boolean =>
     top - 6 >= 0 && top - 6 + height <= LOGICAL_HEIGHT;
 
-  it('holds the selector, however many variants are on it', () => {
-    for (const count of [1, 2, 3, 5, 8]) {
+  it('holds the selector, however many games are on it', () => {
+    // The player's variations are on the list and nothing bounds how many there
+    // are, so the plate is a window that never grows past SELECT_WINDOW rows.
+    for (const count of [1, 2, 3, 5, 8, 9, 40]) {
       for (const demonstrations of [false, true]) {
-        const height = cardHeight(count, variantSelectLines(demonstrations));
-        expect(fits(SELECT_CARD_TOP, height)).toBe(true);
+        for (const variations of [false, true]) {
+          const rows = Math.min(count, SELECT_WINDOW);
+          const height = cardHeight(rows, variantSelectLines({ demonstrations, variations }));
+          expect(fits(SELECT_CARD_TOP, height)).toBe(true);
+        }
       }
     }
   });
@@ -634,39 +736,99 @@ describe('the settings card says how to work it, whatever the browser allows', (
 });
 
 describe('the selector says how to work it too', () => {
-  const help = (demonstrations: boolean): string[] =>
-    variantSelectNotes('A GAME', demonstrations)
+  const ALL_MARKS = [
+    { demonstrations: false, variations: false },
+    { demonstrations: true, variations: false },
+    { demonstrations: false, variations: true },
+    { demonstrations: true, variations: true },
+  ];
+  const help = (marks: (typeof ALL_MARKS)[number]): string[] =>
+    variantSelectNotes('A GAME', marks)
       .filter((line) => line.tone === 'help')
       .map((line) => line.text);
 
   it('names the keys that walk the list, take a game and open the settings', () => {
-    for (const demonstrations of [true, false]) {
-      expect(help(demonstrations)).toEqual([MENU_TEXT.selectKeys, MENU_TEXT.selectBack]);
+    for (const marks of ALL_MARKS) {
+      expect(help(marks)).toEqual([MENU_TEXT.selectKeys, MENU_TEXT.selectBack]);
     }
     expect(MENU_TEXT.selectKeys).toBe('U/D MOVE   ENTER CHOOSES');
     expect(MENU_TEXT.selectBack).toBe('ESC SETTINGS');
   });
 
-  it('leads with the chosen game’s description, then the legend, then the keys', () => {
-    expect(variantSelectNotes('A GAME', true).map((line) => line.tone)).toEqual([
-      'note',
-      'legend',
-      'help',
-      'help',
-    ]);
-    expect(variantSelectNotes('A GAME', false).map((line) => line.tone)).toEqual([
-      'note',
-      'help',
-      'help',
-    ]);
+  it('leads with the chosen game’s note, then the legend, then the keys', () => {
+    expect(
+      variantSelectNotes('A GAME', { demonstrations: true, variations: false }).map(
+        (line) => line.tone,
+      ),
+    ).toEqual(['note', 'legend', 'help', 'help']);
+    expect(
+      variantSelectNotes('A GAME', { demonstrations: false, variations: false }).map(
+        (line) => line.tone,
+      ),
+    ).toEqual(['note', 'help', 'help']);
+  });
+
+  it('explains whichever marks the list carries, in one legend line', () => {
+    const legend = (marks: (typeof ALL_MARKS)[number]): string | undefined =>
+      variantSelectNotes('', marks).find((line) => line.tone === 'legend')?.text;
+    expect(legend({ demonstrations: true, variations: false })).toBe(MENU_TEXT.selectLegend);
+    expect(legend({ demonstrations: false, variations: true })).toBe(MENU_TEXT.selectYours);
+    expect(legend({ demonstrations: true, variations: true })).toBe(MENU_TEXT.selectBoth);
   });
 
   it('counts the lines from the lines, so the plate cannot be too short', () => {
-    for (const demonstrations of [true, false]) {
-      expect(variantSelectLines(demonstrations)).toBe(
-        variantSelectNotes('', demonstrations).length,
-      );
+    for (const marks of ALL_MARKS) {
+      expect(variantSelectLines(marks)).toBe(variantSelectNotes('', marks).length);
     }
+  });
+});
+
+describe('the selector lists the player’s games beside the shipped ones', () => {
+  const games = [
+    variantOf('classic'),
+    variantOf('remix', { demonstration: true }),
+    variantOf('classic-2', { name: 'REEFS', variation: true }),
+  ];
+
+  it('marks a variation on its own row, as a demonstration is', () => {
+    expect(games.map(selectRowText)).toEqual(['CLASSIC', 'REMIX *', 'REEFS +']);
+  });
+
+  it('asks for a note only for the game under the cursor', () => {
+    const asked: string[] = [];
+    const menu = createVariantMenu({
+      variants: games,
+      noteOf: (game) => {
+        asked.push(game.id);
+        return `NOTE ${game.id}`;
+      },
+    });
+    expect(asked).toEqual([]);
+    menu.previous();
+    expect(menu.note).toBe('NOTE classic-2');
+    expect(asked).toEqual(['classic-2']);
+  });
+
+  it('defaults the note to the game’s description', () => {
+    expect(createVariantMenu({ variants: [variantOf('a', { description: 'HELLO' })] }).note).toBe(
+      'HELLO',
+    );
+  });
+
+  it('scrolls a long list, keeping the cursor in view and marking what is hidden', () => {
+    const rows = Array.from({ length: 12 }, (_unused, index) => index);
+    expect(windowOf(rows, 0, SELECT_WINDOW)).toMatchObject({
+      rows: rows.slice(0, SELECT_WINDOW),
+      index: 0,
+      above: false,
+      below: true,
+    });
+    expect(windowOf(rows, 11, SELECT_WINDOW)).toMatchObject({
+      rows: rows.slice(12 - SELECT_WINDOW),
+      index: SELECT_WINDOW - 1,
+      above: true,
+      below: false,
+    });
   });
 });
 

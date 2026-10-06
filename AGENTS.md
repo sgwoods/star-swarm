@@ -581,11 +581,12 @@ Three consequences when working here:
   byte-to-pixels conversion is in `src/render/starfield.ts` — so `provenance` cannot
   reach it and a `check:count` counter reading the module is what holds the state
   document to it instead.
-- The game boots into the **start-up selector** when more than one variant ships
-  and into **attract mode** otherwise, never into play: `src/ui/flow.ts` is the
-  one state machine — variant-select, attract, settings, the pack and stage cards
-  it opens, playing, paused, the exit confirmation, the between-stage challenge
-  card, game over, results and high-score entry <!-- check:count flow.phases 12 -->
+- The game boots into the **start-up selector** when more than one game is on
+  offer — the shipped variants and the player's variations — and into **attract
+  mode** otherwise, never into play: `src/ui/flow.ts` is the one state machine —
+  variant-select, attract, settings, the pack and stage cards and the naming and
+  delete cards it opens, playing, paused, the exit confirmation, the between-stage
+  challenge card, game over, results and high-score entry <!-- check:count flow.phases 14 -->
   — and `src/main.ts` only calls `flow.step(frame)` and draws the phase. Anything driving the browser has
   to get past the selector and push start — that is what `startGame()` in
   `tests/e2e/smoke.spec.ts` is for — and every phase timer counts **simulation

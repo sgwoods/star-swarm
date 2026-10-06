@@ -6,7 +6,9 @@ import { reachAttract } from './harness.js';
 /**
  * The pack manager and the stage-sequence editor, played in a real browser with
  * the real keyboard — `docs/ROADMAP.md`'s Milestone 3 exit check, that a player
- * can change the rules from inside the game.
+ * can change the rules from inside the game. Keeping an edit to a shipped game
+ * makes a named variation of it, so here the naming card is passed with `ENTER`
+ * on its default name; `tests/e2e/variations.spec.ts` is that card's own story.
  *
  * `tests/unit/pack-manager-flow.test.ts` tells the same story to the state
  * machine. What only a browser shows is that the composed game is what is
@@ -29,7 +31,7 @@ async function tap(page: Page, key: string): Promise<void> {
 /** From a fresh page to the settings screen over the Classic game. */
 async function openSettings(page: Page): Promise<void> {
   await reachAttract(page);
-  expect(await page.evaluate(() => window.starSwarm?.variant)).toBe('classic');
+  expect(await page.evaluate(() => window.starSwarm?.game)).toBe('classic');
   await tap(page, 'Escape');
   await page.waitForFunction(() => window.starSwarm?.phase === 'settings');
 }
@@ -58,6 +60,14 @@ async function toPack(page: Page, id: string): Promise<void> {
     await tap(page, 'ArrowDown');
   }
   expect(await page.evaluate(() => window.starSwarm?.editorRow)).toBe(id);
+}
+
+/** Keep the card's draft over a shipped game: the naming card, then its default name. */
+async function keepNamed(page: Page): Promise<void> {
+  await tap(page, 'Enter');
+  await page.waitForFunction(() => window.starSwarm?.phase === 'name');
+  await tap(page, 'Enter');
+  await page.waitForFunction(() => window.starSwarm?.phase === 'settings');
 }
 
 /** Close the settings and start a game on what is in force. */
@@ -108,9 +118,9 @@ test('a composed list is kept, played, drawn, and still there after a reload', a
   await tap(page, 'ArrowRight');
   expect(await page.evaluate(() => window.starSwarm?.editorDraft)).toEqual(['classic', 'deep-sea']);
   expect(await page.evaluate(() => window.starSwarm?.editorOk)).toBe(true);
-  await tap(page, 'Enter');
-  await page.waitForFunction(() => window.starSwarm?.phase === 'settings');
+  await keepNamed(page);
   expect(await page.evaluate(() => window.starSwarm?.packList)).toEqual(['classic', 'deep-sea']);
+  expect(await page.evaluate(() => window.starSwarm?.game)).toBe('classic-2');
 
   await play(page);
   expect(await page.evaluate(() => window.starSwarm?.stageDocument)).toBe('reef-1');
@@ -144,12 +154,12 @@ test('a list that cannot work is refused on the card, and nothing is written', a
   await tap(page, 'Enter');
   // Still on the card, refusing; nothing stored, nothing changed in the game.
   expect(await page.evaluate(() => window.starSwarm?.phase)).toBe('packs');
-  expect(await page.evaluate(() => window.starSwarm?.settings.packs)).toEqual({});
+  expect(await page.evaluate(() => window.starSwarm?.settings.variations)).toEqual([]);
   expect(await page.evaluate(() => window.starSwarm?.packList)).toEqual(['classic']);
 
   await tap(page, 'Escape');
   await page.waitForFunction(() => window.starSwarm?.phase === 'settings');
-  expect(await page.evaluate(() => window.starSwarm?.settings.packs)).toEqual({});
+  expect(await page.evaluate(() => window.starSwarm?.settings.variations)).toEqual([]);
 });
 
 test('a stage order mixes a Classic script into the Deep Sea stages, and plays it', async ({
@@ -159,9 +169,9 @@ test('a stage order mixes a Classic script into the Deep Sea stages, and plays i
   await openCard(page, 'packs', 'packs');
   await toPack(page, 'deep-sea');
   await tap(page, 'ArrowRight');
-  await tap(page, 'Enter');
-  await page.waitForFunction(() => window.starSwarm?.phase === 'settings');
+  await keepNamed(page);
 
+  // Over the variation now: its own, so the order is kept in it with no naming.
   await openCard(page, 'stages', 'stages');
   expect(await page.evaluate(() => window.starSwarm?.editorRows)).toEqual([
     'ORDER=OWN',
@@ -190,7 +200,7 @@ test('a stage order mixes a Classic script into the Deep Sea stages, and plays i
   expect(await page.evaluate(() => window.starSwarm?.stageDocument)).toBe('script-12');
 });
 
-test('a stored list naming a pack this build lacks is set aside, and readable', async ({
+test('an older build’s stored list naming a pack this build lacks is kept, set aside, readable', async ({
   page,
 }) => {
   await reachAttract(page);
@@ -205,11 +215,16 @@ test('a stored list naming a pack this build lacks is set aside, and readable', 
   });
   await page.reload();
   await page.waitForFunction(() => (window.starSwarm?.step ?? 0) > 0);
-  // The game as shipped plays, and says why.
+  // The override became a variation of Classic, chosen as it was playing; it will
+  // not load here, so the game it was made from plays, and says why.
+  expect(await page.evaluate(() => window.starSwarm?.game)).toBe('classic-2');
   expect(await page.evaluate(() => window.starSwarm?.packList)).toEqual(['classic']);
   expect(await page.evaluate(() => window.starSwarm?.setAside)).toBe(
     'WILL NOT LOAD / PACK moon-base / IS NOT INSTALLED HERE',
   );
+  // Written straight back in the new shape: the override tables are gone.
+  const stored = await page.evaluate(() => localStorage.getItem('star-swarm/settings/v1'));
+  expect(JSON.parse(stored ?? '{}')).toMatchObject({ version: 2 });
 
   await tap(page, 'Enter');
   await page.waitForFunction(() => window.starSwarm?.phase === 'attract');

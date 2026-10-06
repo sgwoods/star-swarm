@@ -1,16 +1,20 @@
 /**
- * The judge behind the pack manager: what a player-composed pack list or stage
- * order turns into, and what the card says about it.
+ * The judge behind the pack manager and the player's variations: what a
+ * variant document a player made — or is making — turns into, and what the card
+ * says about it.
  *
  * `./packs.ts` draws the cards and holds the drafts; this is the content side of
- * them, implementing `PackComposer` over the variants the build loaded. It holds
- * no rule of its own about what may be kept — every verdict is somebody else's
- * check, run over the draft:
+ * them, implementing `PackComposer` over the variants the build loaded. It is
+ * handed **documents**: a shipped game's own (`documentOf`), a variation as the
+ * settings store kept it, or a draft of either with its pack list or stage order
+ * replaced. It holds no rule of its own about what may be kept — every verdict is
+ * somebody else's check, run over the document:
  *
  * 1. **Will it load?** `resolveVariant` in `src/content/variants.ts` — the very
  *    two passes `loadVariants` runs at boot and `npm run validate-packs` runs in
- *    CI, over the variant document with its `packs` replaced. A list is refused
- *    for exactly the reasons a variant document naming it would be.
+ *    CI, over the one document, with the duplicate-id rule held against the
+ *    shipped games. A variation is refused for exactly the reasons a document in
+ *    `variants/` would be: there is no second, weaker path for player content.
  * 2. **Will it build?** `checkStructure` from `scripts/playability.ts` — the half
  *    of the gate's playability pass that needs no pilot: every combat stage the
  *    mix plays builds its fleet, fills its slots and settles, and every dive stays
@@ -32,8 +36,13 @@
  * with the fixture's unreachable stage, so the day the editor starts flying it is
  * the test that says so.
  *
- * Every verdict is memoised per variant and choice: a draft is judged once
- * however often the player passes back through it.
+ * **A shipped game's own document is never judged.** It is what the gate flew in
+ * CI, and handed back by identity it is the variant the build loaded, unchanged.
+ * That is the whole of how a reference game stays one: nothing stored is ever
+ * composed over it, so it can only ever play as it ships.
+ *
+ * Every verdict is memoised per document: a draft is judged once however often
+ * the player passes back through it.
  */
 
 import { checkStructure, type Finding } from '../../scripts/playability.js';
@@ -42,10 +51,14 @@ import type { ContentError } from '../content/errors.js';
 import type { LoadedPack } from '../content/loader.js';
 import { resolveStageSequence } from '../content/rules.js';
 import {
+  isVariantDocument,
+  listsOf,
   type ResolvedVariant,
   resolveVariant,
-  type VariantChoice,
+  type VariantDocument,
   type VariantSource,
+  withPacks,
+  withStages,
 } from '../content/variants.js';
 import type { InstalledPack, PackComposer, StageOption, Verdict } from './packs.js';
 
@@ -67,6 +80,8 @@ export const VERDICT_TEXT = Object.freeze({
   rankNeeded: 'A DIFFICULTY NEEDS IT',
   notInPacks: 'IS NOT IN THESE PACKS',
   isChallenge: 'IS A CHALLENGE STAGE',
+  shippedId: 'A SHIPPED GAME HAS ITS ID',
+  badDocument: 'IT IS NOT A GAME DOCUMENT',
   clearsStages: 'CLEARS YOUR STAGE ORDER',
   fleet: 'ITS FLEET WILL NOT BUILD',
   settles: 'IT NEVER SETTLES',
@@ -125,6 +140,8 @@ function refusalOf(errors: readonly ContentError[]): Verdict {
       `STAGE ${quoted(message)}`,
       /challenge/.test(message) ? VERDICT_TEXT.isChallenge : VERDICT_TEXT.notInPacks,
     ];
+  } else if (field === 'id' && /shipped/.test(message)) {
+    details = [`ID ${quoted(message)}`, VERDICT_TEXT.shippedId];
   } else {
     details = [field, message];
   }
@@ -221,6 +238,16 @@ export function createComposer(options: ComposerOptions): Composer {
   const { sources, packs, variants } = options;
   const made = new WeakSet<object>(variants);
   const bases = new Map(variants.map((variant) => [variant.id, variant]));
+  const reserved = variants.map((variant) => variant.id);
+  /** Each shipped game's own document, by id, and the variant it loaded as, by document. */
+  const documents = new Map<string, VariantDocument>();
+  const shipped = new Map<VariantDocument, ResolvedVariant>();
+  for (const variant of variants) {
+    const value = sources.find((source) => source.file === variant.file)?.value;
+    if (!isVariantDocument(value)) continue;
+    documents.set(variant.id, value);
+    shipped.set(value, variant);
+  }
   const memo = new Map<
     string,
     { readonly verdict: Verdict; readonly variant: ResolvedVariant | undefined }
@@ -233,29 +260,21 @@ export function createComposer(options: ComposerOptions): Composer {
     stages: pack.stages.size,
   }));
 
-  const sourceOf = (base: ResolvedVariant): VariantSource | undefined =>
-    sources.find((source) => source.file === base.file);
-
-  const isOwn = (base: ResolvedVariant, choice: VariantChoice): boolean =>
-    choice.stages === undefined &&
-    (choice.packs === undefined ||
-      (choice.packs.length === base.packs.length &&
-        choice.packs.every((id, index) => base.packs[index] === id)));
-
-  const compose = (
-    id: string,
-    choice: VariantChoice,
+  /**
+   * Judge one document. `reserve` holds its id to the duplicate rule against the
+   * shipped games, which is what every document a player keeps is held to; it is
+   * off only for a draft taken straight from a shipped game's own document, which
+   * carries that game's id because it is that game being edited, not a second one
+   * claiming the id.
+   */
+  const judge = (
+    document: VariantDocument,
+    reserve: boolean,
   ): { readonly verdict: Verdict; readonly variant: ResolvedVariant | undefined } => {
-    const base = bases.get(id);
-    if (base === undefined) {
-      return {
-        verdict: { ok: false, headline: VERDICT_TEXT.wontLoad, details: [`NO GAME ${id}`] },
-        variant: undefined,
-      };
-    }
-    // The variant's own list is what the gate flew in CI, so there is nothing to
-    // check: it is the base itself, and the base is what the build loaded.
-    if (isOwn(base, choice)) {
+    // A shipped game's own document is what the gate flew in CI, so there is
+    // nothing to check: it is the variant the build loaded.
+    const base = shipped.get(document);
+    if (base !== undefined) {
       const couplings = findCouplings(base.registry, base.rules);
       return {
         verdict: {
@@ -266,64 +285,88 @@ export function createComposer(options: ComposerOptions): Composer {
         variant: base,
       };
     }
-    const key = JSON.stringify([base.id, choice.packs ?? null, choice.stages ?? null]);
+    const key = `${reserve ? 'kept' : 'draft'}:${JSON.stringify(document)}`;
     const known = memo.get(key);
     if (known !== undefined) return known;
 
-    const source = sourceOf(base);
+    // The file a document in `variants/` would be, so a failure reads the way the
+    // gate's would. An id that is not a string fails the schema before this matters.
+    const id = typeof document.id === 'string' ? document.id : 'variation';
+    const source: VariantSource = { file: `${id}.json`, value: document };
     let result: { readonly verdict: Verdict; readonly variant: ResolvedVariant | undefined };
-    if (source === undefined) {
-      result = {
-        verdict: { ok: false, headline: VERDICT_TEXT.wontLoad, details: [base.file] },
-        variant: undefined,
-      };
+    const resolved = resolveVariant(source, packs, {}, reserve ? { reserved } : {});
+    if (!resolved.ok) {
+      result = { verdict: refusalOf(resolved.errors), variant: undefined };
     } else {
-      const resolved = resolveVariant(source, packs, choice);
-      if (!resolved.ok) {
-        result = { verdict: refusalOf(resolved.errors), variant: undefined };
+      const findings = checkStructure(resolved.variant);
+      if (findings.length > 0) {
+        result = { verdict: unplayableOf(findings), variant: undefined };
       } else {
-        const findings = checkStructure(resolved.variant);
-        if (findings.length > 0) {
-          result = { verdict: unplayableOf(findings), variant: undefined };
-        } else {
-          made.add(resolved.variant);
-          result = {
-            verdict: {
-              ok: true,
-              headline: VERDICT_TEXT.builds,
-              details: acceptedDetails(
-                findCouplings(resolved.variant.registry, resolved.variant.rules),
-              ),
-            },
-            variant: resolved.variant,
-          };
-        }
+        made.add(resolved.variant);
+        result = {
+          verdict: {
+            ok: true,
+            headline: VERDICT_TEXT.builds,
+            details: acceptedDetails(
+              findCouplings(resolved.variant.registry, resolved.variant.rules),
+            ),
+          },
+          variant: resolved.variant,
+        };
       }
     }
     memo.set(key, result);
     return result;
   };
 
+  const compose = (
+    document: VariantDocument,
+  ): { readonly verdict: Verdict; readonly variant: ResolvedVariant | undefined } =>
+    judge(document, true);
+
+  /** Judge a draft made from `document`: held to the duplicate rule unless `document` shipped. */
+  const draft = (
+    document: VariantDocument,
+    changed: VariantDocument,
+  ): { readonly verdict: Verdict; readonly variant: ResolvedVariant | undefined } =>
+    judge(changed, !shipped.has(document));
+
+  /** The shipped game a document came from — itself, or the one it names — if installed. */
+  const referenceOf = (document: VariantDocument): ResolvedVariant | undefined =>
+    shipped.get(document) ??
+    (typeof document.derivedFrom === 'string' ? bases.get(document.derivedFrom) : undefined) ??
+    (typeof document.id === 'string' ? bases.get(document.id) : undefined);
+
   /**
-   * The variant a pack list composes to without any stage order, else the base —
-   * so a card over a stored list that is set aside still lists what can be played.
+   * What a document composes to over a pack list with no stage order, else the
+   * game it came from — so a card over a document that will not load still lists
+   * what can be played.
    */
   const overPacks = (
-    id: string,
-    list: readonly string[] | undefined,
-  ): ResolvedVariant | undefined =>
-    (list === undefined ? undefined : compose(id, { packs: list }).variant) ?? bases.get(id);
+    document: VariantDocument,
+    list: readonly string[],
+  ): ResolvedVariant | undefined => {
+    const own = listsOf(document);
+    const over =
+      own.stages === undefined && sameIds(own.packs, list)
+        ? compose(document)
+        : draft(document, withStages(withPacks(document, list), undefined));
+    return over.variant ?? referenceOf(document);
+  };
 
   return {
     installed,
+    documentOf: (id) => documents.get(id),
     compose,
-    judgePacks: (id, list, stages) => {
-      const whole = compose(id, { packs: list, stages });
-      if (whole.verdict.ok || stages === undefined) return whole.verdict;
+    judgePacks: (document, list) => {
+      const own = listsOf(document);
+      if (sameIds(own.packs, list)) return compose(document).verdict;
+      const whole = draft(document, withPacks(document, list));
+      if (whole.verdict.ok || own.stages === undefined) return whole.verdict;
       // The stored order may be all that is wrong: a pack it named is the one
       // being switched off. The list can still be kept — and the card says, before
       // `ENTER`, that the order goes with it.
-      const alone = compose(id, { packs: list }).verdict;
+      const alone = draft(document, withStages(withPacks(document, list), undefined)).verdict;
       if (!alone.ok) return alone;
       return {
         ...alone,
@@ -331,8 +374,14 @@ export function createComposer(options: ComposerOptions): Composer {
         clearsStages: true,
       };
     },
-    stageOptions: (id, list): readonly StageOption[] => {
-      const variant = overPacks(id, list);
+    judgeStages: (document, stages) => {
+      const own = listsOf(document).stages;
+      const same =
+        own === undefined || stages === undefined ? own === stages : sameIds(own, stages);
+      return (same ? compose(document) : draft(document, withStages(document, stages))).verdict;
+    },
+    stageOptions: (document, list): readonly StageOption[] => {
+      const variant = overPacks(document, list);
       if (variant === undefined) return [];
       const layer = new Map(variant.registry.packs.map((pack, index) => [pack.id, index]));
       const options = [...variant.registry.stages.values()]
@@ -350,11 +399,16 @@ export function createComposer(options: ComposerOptions): Composer {
       );
       return options.map(({ id, pack }) => ({ id, pack }));
     },
-    ownStages: (id, list, rank) => {
-      const variant = overPacks(id, list);
+    ownStages: (document, list, rank) => {
+      const variant = overPacks(document, list);
       if (variant === undefined) return [];
       return resolveStageSequence(variant.registry.manifest, variant.rules, rank).normal.rows;
     },
     resolvedOf: (variant) => (made.has(variant) ? (variant as ResolvedVariant) : undefined),
   };
+}
+
+/** Whether two id lists are the same ids in the same order. */
+function sameIds(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((id, index) => b[index] === id);
 }

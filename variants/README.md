@@ -1,8 +1,13 @@
 # `variants/`
 
-One document per **game this build offers**. A variant is a display name, the
+One document per **game this build ships**. A variant is a display name, the
 packs it layers and the difficulty presets a player may pick from; the start-up
 selector in `src/ui/flow.ts` lists them and starts the chosen one.
+
+These are **references**: nothing a player does in the game writes to them, so
+each plays as it ships. A player's edit to one is a _variation_ — a document of
+exactly this shape, derived from it, named by the player and kept in their
+browser's settings rather than here ([below](#a-players-variation-is-one-of-these-documents)).
 
 `packs/` and `variants/` answer different questions. A pack is _content_; a
 variant is a _game_. The registry layers packs within one game, which is not the
@@ -43,6 +48,8 @@ interpreted. The file name is the id: `classic.json` must declare `"id":
 | `demonstration` | Marks a variant nobody has committed to. The selector says so                                 |
 | `difficulty`    | The presets on offer. Omitted means one per rank the rules declare                            |
 | `autoplay`      | The personas the cabinet may play itself as. Omitted means no autoplay                        |
+| `stages`        | An order for the combat stages, stated after every pack. Omitted means the packs' own         |
+| `derivedFrom`   | The game this one was made from. Provenance only: the loader never resolves it                |
 
 ## Difficulty presets choose a rank, and nothing else
 
@@ -145,6 +152,35 @@ whole document from a pack, because a variant that could nudge single numbers is
 difficulty multiplier with a different name. A variant that wants different numbers
 names a pack with a `rules.json` that has them — which is exactly what
 `docs/ARCHITECTURE.md` §4.4 says a sibling game does.
+
+## A player's variation is one of these documents
+
+Editing a shipped game in the pack manager or the stage-sequence editor and
+keeping the edit makes a new document: `deriveVariant` in
+`src/content/variants.ts` copies the shipped one — presets and personas included —
+under a fresh `id` (`classic-2`), the name the player spells, `derivedFrom` naming
+the shipped game, and the chosen `packs` and `stages`. It leaves out the shipped
+game's `description`, `order` and `demonstration`, which describe that game rather
+than the copy.
+
+```json
+{
+  "id": "classic-2",
+  "name": "REEFS",
+  "derivedFrom": "classic",
+  "packs": ["classic", "deep-sea"],
+  "stages": ["reef-2", "script-0"],
+  "difficulty": { "presets": ["…copied from classic.json…"], "defaultPreset": "arcade" },
+  "autoplay": { "personas": ["…copied…"], "defaultPersona": "normal" }
+}
+```
+
+It is validated as a document here is — the same schema and reference passes, with
+its `id` held to be no shipped game's — plus the structural half of the
+playability pass, and one that fails is refused with the reason on screen. It
+lives in the player's settings (`src/ui/settings.ts`), not in this directory, and
+nothing yet exports one to a file or imports one from text; the shape is what
+would let both happen. `docs/ARCHITECTURE.md` §6 has the whole account.
 
 ## Adding one
 

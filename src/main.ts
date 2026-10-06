@@ -10,8 +10,9 @@
  * file owns the display, the input device, the sprite sheet, the starfield and
  * the audio, and nothing else. Attract demo, play, the pause and its exit
  * confirmation, the between-stage challenge card, game over, results and
- * high-score entry — and the settings screen with the pack manager and the
- * stage-sequence editor it opens — all arrive through one `flow.step(frame)`
+ * high-score entry — and the settings screen with the pack manager, the
+ * stage-sequence editor and the naming and delete cards it opens — all arrive
+ * through one `flow.step(frame)`
  * call, which is why there are no phase flags here — including no `paused`
  * boolean, which is the flag `src/ui/flow.ts` refuses on the same grounds as
  * every other.
@@ -62,10 +63,12 @@ import { drawChallengeResults, drawGameOver, drawResults } from './ui/results.js
 import {
   bindingsFor,
   createSettingsStore,
+  type LegacyBase,
   SETTINGS_STORAGE_KEY,
   type Settings,
 } from './ui/settings.js';
 import { createWebStorage } from './ui/storage.js';
+import { drawDeleteConfirm, drawNameEntry } from './ui/variations.js';
 
 const app = document.getElementById('app');
 if (app === null) throw new Error('Missing #app container');
@@ -105,12 +108,12 @@ if (firstVariant === undefined) {
   throw new Error('no variants are bundled: variants/ holds no document, so there is no game');
 }
 
-// What the pack manager composes a player's pack list and stage order with, and
-// judges a draft by: the same variant loader as above, over the same documents,
-// and the structural half of the validator's playability pass
-// (`src/ui/compose.ts`). It is also the one answer to "which resolved variant is
-// the flow running?" — by identity, so a variant nobody here loaded or composed
-// can never have a sprite sheet built for it.
+// What resolves a player's variation, and judges a draft on the pack manager's
+// cards: the same variant loader as above, over one document at a time, and the
+// structural half of the validator's playability pass (`src/ui/compose.ts`). It
+// is also the one answer to "which resolved variant is the flow running?" — by
+// identity, so a variant nobody here loaded or composed can never have a sprite
+// sheet built for it.
 const composer = createComposer({ sources: variantSources, packs, variants });
 
 /**
@@ -137,8 +140,18 @@ const SEED = 'star-swarm-m2';
 const highScores = createHighScoreBoard({
   storage: createWebStorage({ key: HIGH_SCORE_STORAGE_KEY }),
 });
+// A settings document written before the player's variations existed kept an
+// override per shipped game; reading one turns each into a variation of that game,
+// copied from its document, and writes the new shape straight back
+// (`src/ui/settings.ts`).
+const upgrade: LegacyBase[] = [];
+for (const shipped of variants) {
+  const document = composer.documentOf(shipped.id);
+  if (document !== undefined) upgrade.push({ id: shipped.id, name: shipped.name, document });
+}
 const settings = createSettingsStore({
   storage: createWebStorage({ key: SETTINGS_STORAGE_KEY }),
+  upgrade,
 });
 
 /**
@@ -348,6 +361,8 @@ const loop = createLoop({
       flow.phase === 'settings' ||
       flow.phase === 'packs' ||
       flow.phase === 'stages' ||
+      flow.phase === 'name' ||
+      flow.phase === 'delete' ||
       flow.phase === 'variant-select';
     if (persona !== undefined && !onMenu) {
       drawPersonaTag(ctx, persona.label, hud);
@@ -443,6 +458,31 @@ const loop = createLoop({
         }
         break;
       }
+      case 'name': {
+        const naming = flow.naming;
+        if (naming !== undefined) {
+          drawNameEntry(ctx, {
+            ...naming,
+            steps: flow.phaseSteps,
+            x: LOGICAL_WIDTH / 2,
+            y: SETTINGS_CARD_TOP,
+          });
+        }
+        break;
+      }
+      case 'delete': {
+        const confirm = flow.deleteConfirm;
+        if (confirm !== undefined) {
+          drawDeleteConfirm(ctx, {
+            confirm,
+            name: flow.game.name,
+            steps: flow.phaseSteps,
+            x: LOGICAL_WIDTH / 2,
+            y: SETTINGS_CARD_TOP,
+          });
+        }
+        break;
+      }
       case 'paused':
         drawPaused(ctx, { steps: flow.phaseSteps, x: LOGICAL_WIDTH / 2, y: PAUSE_CARD_TOP });
         break;
@@ -520,10 +560,29 @@ declare global {
       readonly perfectStages: number;
       /** The badge denominations on screen, which come from the pack. */
       readonly badges: readonly number[];
-      /** The variant in force, the list on offer, and the rank the preset chose. */
+      /**
+       * The variant in force, the shipped list, and the rank the preset chose.
+       * `variant` is what plays: a variation's own id, or the game it was made
+       * from when it will not load.
+       */
       readonly variant: string;
       readonly variantName: string;
       readonly variants: readonly string[];
+      /**
+       * The game chosen and its name — a shipped id, or a variation's — and every
+       * game on the list as `id=name`, the player's variations last.
+       * `tests/e2e/variations.spec.ts` holds a made, renamed and deleted variation
+       * to these.
+       */
+      readonly game: string;
+      readonly gameName: string;
+      readonly games: readonly string[];
+      /** The naming card: the letters taken, and what the cursor is on. Empty off it. */
+      readonly nameTaken: string;
+      readonly nameUnder: string;
+      readonly nameRefusal: string;
+      /** The delete card's choice — `keep` or `delete`. Empty off that phase. */
+      readonly deleteChoice: string;
       readonly rank: string;
       readonly difficulty: string;
       /**
@@ -563,7 +622,7 @@ declare global {
       readonly packList: readonly string[];
       readonly stageOrder: readonly string[];
       readonly stageDocument: string;
-      /** Why the stored list is set aside, or `''` when what is stored plays. */
+      /** Why the chosen variation is set aside, or `''` when what is chosen plays. */
       readonly setAside: string;
       /**
        * The open pack or stage card: its rows as `label=value`, the row under the
@@ -687,6 +746,27 @@ window.starSwarm = {
   },
   get variants(): readonly string[] {
     return flow.variants.map((entry) => entry.id);
+  },
+  get game(): string {
+    return flow.game.id;
+  },
+  get gameName(): string {
+    return flow.game.name;
+  },
+  get games(): readonly string[] {
+    return flow.games.map((entry) => `${entry.id}=${entry.name}`);
+  },
+  get nameTaken(): string {
+    return flow.naming?.entry.taken ?? '';
+  },
+  get nameUnder(): string {
+    return flow.naming?.entry.under ?? '';
+  },
+  get nameRefusal(): string {
+    return flow.naming?.entry.refusal ?? '';
+  },
+  get deleteChoice(): string {
+    return flow.deleteConfirm?.choice ?? '';
   },
   get rank(): string {
     return flow.rank;

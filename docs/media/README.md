@@ -161,6 +161,16 @@ The clips are screen recordings of the dev build.
   unedited seconds of the dev build, grabbed from the logical 224x288 backbuffer
   every sixth simulation step, scaled 2x nearest-neighbour, at `fps=10` and
   `max_colors=48`.
+- `m3-variations.png` — the player's variations: six screenshots of the dev build
+  from one browser session driven only by the keyboard. The selector after a
+  version 1 settings document holding a Classic override was read — the override
+  is `STAR SWARM 2 +`, chosen, under the reference; the pack card over
+  `STAR SWARM` saying `KEEPING MAKES A NEW GAME` above its verdict; the naming
+  card on its default name with `END` under the cursor; the settings card over a
+  new variation, `NEW GUN`, with its `NAME` and `DELETE` rows; the delete card
+  with `DELETE` chosen; and a list with no rules refused on the card, `NOT KEPT`.
+  Laid out three by two at half size, and captured as one picture of a page
+  holding the six.
 - `m4-forge.gif` — the forged pack, played: one unedited take from live play, at
   the shipped dev build. The start-up selector with three games on it and the
   cursor moved onto `DEEP SEA`, the settings card opened with **Esc** and the

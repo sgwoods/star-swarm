@@ -164,10 +164,11 @@ describe('the pack card', () => {
     expect(editor.keep()).toMatchObject({ kept: true, clearsStages: true });
   });
 
-  it('draws the row’s note, the layering rule, the verdict, then the two key lines', () => {
+  it('draws the row’s note, the layering rule, what keeping does, the verdict, then the keys', () => {
     const { editor } = packCard();
     expect(packEditorNotes(editor).map((line) => line.tone)).toEqual([
       'note',
+      'legend',
       'legend',
       'accept',
       'note',
@@ -176,6 +177,18 @@ describe('the pack card', () => {
       'help',
     ]);
     expect(packEditorNotes(editor)[1]?.text).toBe(PACKS_TEXT.laterWins);
+    expect(packEditorNotes(editor)[2]?.text).toBe(PACKS_TEXT.keepsYours);
+  });
+
+  it('says over a shipped game that keeping makes a new one', () => {
+    const editor = createPackEditor({
+      installed: [{ id: 'base', name: 'BASE', rules: true, stages: 1 }],
+      start: ['base'],
+      own: ['base'],
+      judge: () => ({ ok: true, headline: 'FINE', details: [] }),
+      makesNew: true,
+    });
+    expect(packEditorNotes(editor)[2]?.text).toBe(PACKS_TEXT.keepsNew);
   });
 });
 
@@ -310,10 +323,11 @@ describe('the stage card', () => {
     expect(asked).toContain(undefined);
   });
 
-  it('draws the row’s note, the verdict, then the two key lines', () => {
+  it('draws the row’s note, what keeping does, the verdict, then the two key lines', () => {
     const { editor } = stageCard();
     expect(stageEditorNotes(editor).map((line) => line.tone)).toEqual([
       'note',
+      'legend',
       'accept',
       'note',
       'note',

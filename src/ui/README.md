@@ -3,8 +3,9 @@
 `flow.ts` (the game-state machine), `attract.ts`, `hud.ts`, `results.ts`,
 `highscores.ts`, `menus.ts` (the start-up variant selector and the settings menu),
 `packs.ts` (the pack manager and the stage-sequence editor the settings menu opens),
-`compose.ts` (the judge behind them: what a player's list composes to, and whether
-it may be kept),
+`variations.ts` (the naming and delete cards for the player's own games),
+`compose.ts` (the judge behind them: what a player's document composes to, and
+whether it may be kept),
 `pause.ts` (the pause card and the one that asks before a run is thrown away),
 `keys.ts` (how every card is worked, and how it says so),
 `settings.ts` (what the player has chosen), `storage.ts` (where it is kept),
@@ -18,10 +19,10 @@ and events and draws; it never writes back, and `src/sim/` never imports it.
 `hud.ts` landed with Milestone 1: score, reserve fighters and the stage badges.
 The front-end shell around it landed with Milestone 2:
 
-- **`flow.ts` is the one state machine.** Twelve phases — the start-up variant
-  selector, attract, the settings menu and the pack and stage cards it opens,
-  playing, paused, the exit confirmation, the between-stage challenge card, game
-  over, results, high-score entry — and every
+- **`flow.ts` is the one state machine.** Fourteen phases — the start-up variant
+  selector, attract, the settings menu and the pack, stage, naming and delete
+  cards it opens, playing, paused, the exit confirmation, the between-stage
+  challenge card, game over, results, high-score entry — and every
   transition is in that file. `challenge-results` is one of the two that go _back_
   to playing: the stage is over and the next is already on the field, so the world
   simply stops being stepped while the card is up. That is why it is a phase and
@@ -175,10 +176,21 @@ manager and the stage-sequence editor, Milestone 3's exit check:
   refused. It does not fly a persona — seconds per list, where a card wants
   milliseconds — and `tests/sim/pack-manager-cost.test.ts` holds that cost in
   place.
-- **`Settings.packs` and `Settings.stages` are per-variant lists of ids**, and the
-  flow composes the chosen variant from them. One that no longer composes — a pack
-  this build does not install — is set aside whole, not repaired: the variant
-  plays as shipped, the rows say so, and the document keeps the list.
+- **A shipped game is never edited; an edit is a new game.** Keeping a changed
+  draft over a shipped game opens the naming card, and the named result is a
+  variation — a whole variant document in `Settings.variations`, derived from the
+  shipped one — listed after the shipped games and chosen. Over a variation the
+  cards write into its document. One that no longer loads — a pack this build does
+  not install — is set aside whole, not repaired: the game it was made from plays,
+  the rows say so, and the document keeps what was written.
+- **`variations.ts` names and deletes them**, as two more values with a cursor.
+  Naming is initials entry at a different length — every direction spins the
+  letter, `ENTER` takes it or keeps the name on `END`, `ESC` steps back — and an
+  empty name, or another game's, is refused on the card. The delete card opens on
+  `KEEP`, as the exit card opens on `RESUME`.
+- **`settings.ts` reads the shape before this one, once.** A version 1 document's
+  per-game overrides become variations of those games on the first read, and
+  version 2 is written straight back; its own header documents the stored shape.
 
 And one scheme for working all of those cards:
 

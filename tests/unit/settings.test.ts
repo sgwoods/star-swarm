@@ -1,15 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
+import { isVariantDocument, resolveVariant } from '../../src/content/variants.js';
 import { ACTIONS } from '../../src/engine/input.js';
 import {
   bindingsFor,
   CONTROL_SCHEMES,
   createSettingsStore,
   DEFAULT_SETTINGS,
+  freshVariationId,
+  freshVariationName,
+  type LegacyBase,
   parseSettings,
   quantiseVolume,
+  readSettings,
   SETTINGS_STORAGE_KEY,
   type Settings,
+  VARIATION_NAME_LENGTH,
   VOLUME_STEPS,
 } from '../../src/ui/settings.js';
 import {
@@ -17,6 +23,7 @@ import {
   createWebStorage,
   type WebStorageLike,
 } from '../../src/ui/storage.js';
+import { installedPacks, shippedVariants, shippedVariantSources } from '../helpers/variants.js';
 
 /**
  * Player settings — `docs/DESIGN.md` section 6 layer 3.
@@ -53,9 +60,8 @@ describe('the settings shape', () => {
       'crt',
       'difficulty',
       'muted',
-      'packs',
-      'stages',
       'variant',
+      'variations',
       'volume',
     ]);
     expect(typeof DEFAULT_SETTINGS.difficulty).not.toBe('number');
@@ -70,7 +76,7 @@ describe('the settings shape', () => {
     // Autoplay is off out of the box: a cabinet nobody asked to watch itself
     // must boot into the hands of whoever is standing at it.
     expect(DEFAULT_SETTINGS.autoplay).toBeUndefined();
-    expect(DEFAULT_SETTINGS.packs).toEqual({});
+    expect(DEFAULT_SETTINGS.variations).toEqual([]);
   });
 
   it('quantises volume onto the menu’s own grid', () => {
@@ -107,6 +113,7 @@ describe('reading a stored settings document', () => {
     expect(parseSettings('[]')).toBeUndefined();
     expect(parseSettings('{"version":99,"settings":{}}')).toBeUndefined();
     expect(parseSettings('{"version":1}')).toBeUndefined();
+    expect(parseSettings('{"version":2}')).toBeUndefined();
   });
 
   it('honours a partial document field by field', () => {
@@ -122,24 +129,187 @@ describe('reading a stored settings document', () => {
 
   it('drops a field of the wrong type rather than trusting it', () => {
     const parsed = parseSettings(
-      '{"version":1,"settings":{"volume":"loud","muted":"yes","controls":"joystick","variant":7,"packs":"classic"}}',
+      '{"version":2,"settings":{"volume":"loud","muted":"yes","controls":"joystick","variant":7,"variations":"classic"}}',
     );
     expect(parsed?.volume).toBe(DEFAULT_SETTINGS.volume);
     expect(parsed?.muted).toBe(DEFAULT_SETTINGS.muted);
     expect(parsed?.controls).toBe(DEFAULT_SETTINGS.controls);
     expect(parsed?.variant).toBeUndefined();
-    expect(parsed?.packs).toEqual({});
-  });
-
-  it('keeps a per-variant pack override and drops a malformed one', () => {
-    const parsed = parseSettings(
-      '{"version":1,"settings":{"packs":{"x":["classic","extra"],"y":"nope","z":[1,2]}}}',
-    );
-    expect(parsed?.packs).toEqual({ x: ['classic', 'extra'] });
+    expect(parsed?.variations).toEqual([]);
   });
 
   it('clamps a stored volume that is out of range', () => {
     expect(parseSettings('{"version":1,"settings":{"volume":12}}')?.volume).toBe(1);
+  });
+});
+
+describe('the player’s variations, as stored', () => {
+  const stored = (variations: unknown): Settings | undefined =>
+    parseSettings(JSON.stringify({ version: 2, settings: { variations } }));
+
+  it('keeps each one as written — whether or not it would load', () => {
+    const mine = { id: 'classic-2', name: 'REEFS', packs: ['classic', 'moon-base'], extra: 1 };
+    // A pack this build lacks and a field no schema has: still the player's,
+    // still listed, and judged only when it is played.
+    expect(stored([mine])?.variations).toEqual([mine]);
+  });
+
+  it('drops only what cannot be addressed: no id, not an object, an id read twice', () => {
+    const first = { id: 'classic-2', name: 'ONE', packs: ['classic'] };
+    expect(
+      stored([first, { name: 'NO ID' }, { id: '' }, 'classic-3', [1], null, { id: 'classic-2' }])
+        ?.variations,
+    ).toEqual([first]);
+  });
+
+  it('reads a variation back through a store exactly as it was written', () => {
+    const storage = createMemoryStorage();
+    const mine = { id: 'classic-2', name: 'REEFS', derivedFrom: 'classic', packs: ['classic'] };
+    createSettingsStore({ storage }).update({ variations: [mine], variant: 'classic-2' });
+    expect(createSettingsStore({ storage }).value).toMatchObject({
+      variant: 'classic-2',
+      variations: [mine],
+    });
+    expect(JSON.parse(storage.load() ?? '{}')).toMatchObject({ version: 2 });
+  });
+});
+
+describe('a version 1 document, with an override per shipped game', () => {
+  /** The shipped games, as `src/main.ts` hands them to the store. */
+  const bases: readonly LegacyBase[] = shippedVariants().map((variant) => {
+    const document = shippedVariantSources().find((source) => source.file === variant.file)?.value;
+    if (!isVariantDocument(document)) throw new Error(`no document for ${variant.id}`);
+    return { id: variant.id, name: variant.name, document };
+  });
+
+  const v1 = (settings: Record<string, unknown>): string =>
+    JSON.stringify({ version: 1, settings });
+
+  it('becomes a variation of the game it was stored against, chosen as it was playing', () => {
+    const read = readSettings(
+      v1({ variant: 'classic', difficulty: 'hard', packs: { classic: ['classic', 'deep-sea'] } }),
+      bases,
+    );
+    expect(read?.upgraded).toBe(true);
+    const settings = read?.settings;
+    expect(settings?.difficulty).toBe('hard');
+    expect(settings?.variant).toBe('classic-2');
+    expect(settings?.variations).toHaveLength(1);
+    const made = settings?.variations[0];
+    expect(made).toMatchObject({
+      id: 'classic-2',
+      name: 'STAR SWARM 2',
+      derivedFrom: 'classic',
+      packs: ['classic', 'deep-sea'],
+    });
+    // A copy of the game's document, so the presets and personas come across…
+    expect(made?.difficulty).toEqual(bases[0]?.document.difficulty);
+    expect(made?.autoplay).toEqual(bases[0]?.document.autoplay);
+    // …and the claims about the shipped game do not.
+    expect(made).not.toHaveProperty('description');
+    expect(made).not.toHaveProperty('order');
+    expect(made).not.toHaveProperty('stages');
+  });
+
+  it('makes a variation that loads exactly as a variant document would', () => {
+    const made = parseSettings(
+      v1({ packs: { classic: ['classic', 'deep-sea'] }, stages: { classic: ['reef-2'] } }),
+      bases,
+    )?.variations[0];
+    expect(made).toBeDefined();
+    const result = resolveVariant(
+      { file: 'classic-2.json', value: made },
+      installedPacks(),
+      {},
+      {
+        reserved: bases.map((base) => base.id),
+      },
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.variant.packs).toEqual(['classic', 'deep-sea']);
+      expect(result.variant.stages).toEqual(['reef-2']);
+      expect(result.variant.derivedFrom).toBe('classic');
+    }
+  });
+
+  it('chooses the variation when nothing was remembered, because the first game was playing', () => {
+    const settings = parseSettings(v1({ stages: { classic: ['script-3'] } }), bases);
+    expect(settings?.variant).toBe('classic-2');
+    // Only an order was stored, so the game's own pack list comes with it.
+    expect(settings?.variations[0]).toMatchObject({ packs: ['classic'], stages: ['script-3'] });
+  });
+
+  it('makes one per game, and leaves the choice alone when another game was playing', () => {
+    const settings = parseSettings(
+      v1({
+        variant: 'swarm-remix',
+        packs: {
+          classic: ['classic', 'deep-sea'],
+          'deep-sea': ['classic', 'deep-sea', 'swarm-remix'],
+        },
+      }),
+      bases,
+    );
+    expect(settings?.variant).toBe('swarm-remix');
+    expect(settings?.variations.map((variation) => [variation.id, variation.name])).toEqual([
+      ['classic-2', 'STAR SWARM 2'],
+      ['deep-sea-2', 'DEEP SEA 2'],
+    ]);
+  });
+
+  it('keeps an override that will not load, rather than dropping what the player made', () => {
+    const settings = parseSettings(v1({ packs: { classic: ['classic', 'moon-base'] } }), bases);
+    expect(settings?.variations[0]?.packs).toEqual(['classic', 'moon-base']);
+  });
+
+  it('keeps an override for a game this build does not ship, as what it can state', () => {
+    const settings = parseSettings(v1({ packs: { 'old-game': ['classic'] } }), bases);
+    expect(settings?.variations[0]).toEqual({
+      id: 'old-game-2',
+      name: 'OLD-GAME 2',
+      derivedFrom: 'old-game',
+      packs: ['classic'],
+    });
+  });
+
+  it('is upgraded on the store’s first read and written straight back as version 2', () => {
+    const storage = createMemoryStorage(
+      v1({ volume: 0.3, packs: { classic: ['classic', 'deep-sea'] } }),
+    );
+    const store = createSettingsStore({ storage, upgrade: bases });
+    expect(store.value.variant).toBe('classic-2');
+    const written = JSON.parse(storage.load() ?? '{}') as {
+      version: number;
+      settings: Record<string, unknown>;
+    };
+    expect(written.version).toBe(2);
+    expect(written.settings).not.toHaveProperty('packs');
+    expect(written.settings).not.toHaveProperty('stages');
+    expect(written.settings.volume).toBe(0.3);
+    // One-way: a second read finds version 2 and makes nothing more.
+    expect(createSettingsStore({ storage, upgrade: bases }).value.variations).toHaveLength(1);
+  });
+
+  it('reads a version 1 document with no overrides as itself', () => {
+    const storage = createMemoryStorage(v1({ difficulty: 'expert' }));
+    const store = createSettingsStore({ storage, upgrade: bases });
+    expect(store.value).toEqual({ ...DEFAULT_SETTINGS, difficulty: 'expert' });
+  });
+});
+
+describe('a fresh variation’s id and name', () => {
+  it('numbers from 2, past whatever is taken', () => {
+    expect(freshVariationId('classic', ['classic'])).toBe('classic-2');
+    expect(freshVariationId('classic', ['classic', 'classic-2', 'classic-4'])).toBe('classic-3');
+    expect(freshVariationName('STAR SWARM', ['STAR SWARM'])).toBe('STAR SWARM 2');
+    expect(freshVariationName('STAR SWARM', ['star swarm 2', 'STAR SWARM'])).toBe('STAR SWARM 3');
+  });
+
+  it('cuts a long name so the number still fits the row', () => {
+    const name = freshVariationName('A VERY LONG GAME NAME', []);
+    expect(name).toBe('A VERY LONG 2');
+    expect(name.length).toBeLessThanOrEqual(VARIATION_NAME_LENGTH);
   });
 });
 

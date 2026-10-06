@@ -796,7 +796,7 @@ describe('the settings phase', () => {
     expect(flow.settingsMenu?.row.id).toBe('game');
     press(flow, RIGHT);
     expect(flow.variant.id).toBe('second');
-    // The same `selectVariant` the selector uses, so a subscriber hears about it.
+    // The same `selectGame` the selector uses, so a subscriber hears about it.
     expect(seen).toEqual(['second']);
   });
 });

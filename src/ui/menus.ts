@@ -67,29 +67,54 @@ export interface MenuVariant {
   readonly defaultPersona?: Persona | undefined;
 }
 
+/**
+ * One game on the list a player chooses from: a shipped variant, or one of the
+ * player's own variations (`./variations.ts`).
+ *
+ * Smaller than {@link MenuVariant} on purpose. A variation that will not load
+ * still has a row — it is how the player finds it to mend or delete it — and it
+ * has no presets or personas to offer, so the list cannot ask for them.
+ */
+export interface MenuGame {
+  readonly id: string;
+  readonly name: string;
+  readonly description?: string | undefined;
+  readonly demonstration: boolean;
+  /** True for a game the player made: editable, renamable, deletable. */
+  readonly variation: boolean;
+}
+
 /* -------------------------------------------------------------------------- */
 /* The variant selector                                                        */
 /* -------------------------------------------------------------------------- */
 
 /**
- * A cursor over the variants on offer.
+ * A cursor over the games on offer.
  *
  * Wrapping, because a list of two with a cursor that stops at the ends is a list
  * the player has to think about.
  */
-export interface VariantMenu<T extends MenuVariant = MenuVariant> {
+export interface VariantMenu<T extends MenuGame = MenuGame> {
   readonly variants: readonly T[];
   readonly index: number;
-  /** The variant under the cursor. */
+  /** The game under the cursor. */
   readonly chosen: T;
+  /** The line under the list, for the game under the cursor. */
+  readonly note: string;
   previous: () => void;
   next: () => void;
 }
 
-export interface VariantMenuOptions<T extends MenuVariant> {
+export interface VariantMenuOptions<T extends MenuGame> {
   readonly variants: readonly T[];
   /** Which to start on — the remembered choice. Unknown ids start at the first. */
   readonly selected?: string | undefined;
+  /**
+   * The line under the list for one game. Asked only for the game under the
+   * cursor, so a variation is judged when the player reaches it rather than every
+   * one of them when the list opens. Defaults to the game's description.
+   */
+  readonly noteOf?: (game: T) => string;
 }
 
 /**
@@ -98,10 +123,10 @@ export interface VariantMenuOptions<T extends MenuVariant> {
  * to start a game with; looking the choice up again by id would be a second
  * lookup that could disagree with the first.
  */
-export function createVariantMenu<T extends MenuVariant>(
+export function createVariantMenu<T extends MenuGame>(
   options: VariantMenuOptions<T>,
 ): VariantMenu<T> {
-  const { variants } = options;
+  const { variants, noteOf = (game: T) => game.description ?? '' } = options;
   const first = variants[0];
   if (first === undefined) throw new Error('a variant menu needs at least one variant');
 
@@ -120,6 +145,9 @@ export function createVariantMenu<T extends MenuVariant>(
     get chosen(): T {
       return variants[index] ?? first;
     },
+    get note(): string {
+      return noteOf(variants[index] ?? first);
+    },
     previous: () => {
       move(-1);
     },
@@ -136,6 +164,8 @@ export function createVariantMenu<T extends MenuVariant>(
 /** The rows the menu can show, in menu order. */
 export const SETTINGS_ROW_IDS = [
   'game',
+  'name',
+  'delete',
   'difficulty',
   'autoplay',
   'volume',
@@ -173,34 +203,47 @@ export interface SettingsMenu {
   previous: () => void;
   /** Change the row under the cursor by `delta` places, if it is editable. */
   adjust: (delta: number) => void;
+  /** Put the cursor on a row, if it is showing. */
+  focus: (id: SettingsRowId) => void;
 }
 
 export interface SettingsMenuOptions {
   readonly read: () => Settings;
   readonly write: (patch: Partial<Settings>) => void;
-  /** Every variant on offer. One means the `GAME` row is not shown. */
-  readonly variants: readonly MenuVariant[];
-  /** The variant in force, read each time: changing the `GAME` row changes it. */
+  /**
+   * Every game on offer — the shipped ones, then the player's variations — read
+   * each time, because naming or deleting a variation changes the list. One means
+   * the `GAME` row is not shown.
+   */
+  readonly games: () => readonly MenuGame[];
+  /** The game chosen, read each time: what the `GAME` row reads. */
+  readonly chosen: () => MenuGame;
+  /**
+   * The variant in force, read each time: changing the `GAME` row changes it.
+   * The chosen game's own, unless it is a variation that will not load, when it is
+   * the game that variation was made from ({@link setAside} says so).
+   */
   readonly active: () => MenuVariant;
   /**
-   * Open the pack manager or the stage-sequence editor (`./packs.ts`).
+   * Open a card: the pack manager or the stage-sequence editor (`./packs.ts`), or
+   * the naming or delete card for a variation (`./variations.ts`).
    *
-   * Left and right on the `PACKS` row call it, because those are the keys that
-   * change a row and a pack list is changed on its own card. Omitted means there
-   * is nothing to compose with: the `PACKS` row reads as it always did, not
-   * editable, and the `STAGES` row is not shown.
+   * Left and right on the row call it, because those are the keys that change a
+   * row and each of these is changed on its own card. Omitted means there is
+   * nothing to compose with: the `PACKS` row reads as it always did, not
+   * editable, and the `STAGES`, `NAME` and `DELETE` rows are not shown.
    */
   readonly open?: (card: EditorCard) => void;
   /**
-   * Why the stored pack list or stage order is not the one in force, when it is
-   * not — a settings document outlives the packs it named. `undefined` when what
-   * is stored is what plays.
+   * Why the chosen variation is not what is in force, when it will not load — a
+   * settings document outlives the packs it named. `undefined` when what is
+   * chosen is what plays.
    */
   readonly setAside?: () => string | undefined;
 }
 
-/** The two cards a settings row opens. */
-export type EditorCard = 'packs' | 'stages';
+/** The cards a settings row opens. */
+export type EditorCard = 'packs' | 'stages' | 'name' | 'delete';
 
 /** Human labels for the control schemes. */
 const CONTROL_LABELS: Readonly<Record<ControlScheme, string>> = Object.freeze({
@@ -238,24 +281,52 @@ export function cycle(index: number, delta: number, length: number): number {
 }
 
 export function createSettingsMenu(options: SettingsMenuOptions): SettingsMenu {
-  const { read, write, variants, active, open } = options;
+  const { read, write, games, chosen, active, open } = options;
   let index = 0;
 
   const rowsOf = (): SettingsRow[] => {
     const settings = read();
     const variant = active();
+    const game = chosen();
     const preset = presetOf(variant, settings.difficulty);
+    const setAside = options.setAside?.();
     const rows: SettingsRow[] = [];
 
     // Only when there is a choice: a one-variant cabinet must not grow a row
     // whose only value is the game the player is already looking at.
-    if (variants.length > 1) {
+    if (games().length > 1) {
+      const note = game.variation
+        ? setAside === undefined
+          ? game.description
+          : MENU_TEXT.setAside
+        : game.demonstration
+          ? 'DEMONSTRATION'
+          : undefined;
       rows.push({
         id: 'game',
         label: 'GAME',
-        value: variant.name,
+        value: game.name,
         editable: true,
-        ...(variant.demonstration ? { note: 'DEMONSTRATION' } : {}),
+        ...(note === undefined ? {} : { note }),
+      });
+    }
+
+    // A variation is the player's: named and deleted here. A shipped game is
+    // neither, which is the point — it is the reference the variation came from.
+    if (game.variation && open !== undefined) {
+      rows.push({
+        id: 'name',
+        label: 'NAME',
+        value: game.name,
+        editable: true,
+        note: MENU_TEXT.nameNote,
+      });
+      rows.push({
+        id: 'delete',
+        label: 'DELETE',
+        value: '',
+        editable: true,
+        note: MENU_TEXT.deleteNote,
       });
     }
 
@@ -310,9 +381,8 @@ export function createSettingsMenu(options: SettingsMenuOptions): SettingsMenu {
     });
     // The value is a count and the note is the list, because a pack list is a
     // sentence's worth of text and the value column is a word's worth. Both are
-    // the list **in force**: a stored list that will not load is not what plays,
+    // the list **in force**: a variation that will not load is not what plays,
     // and the note says so rather than showing it as if it did.
-    const setAside = options.setAside?.();
     rows.push({
       id: 'packs',
       label: 'PACKS',
@@ -354,8 +424,9 @@ export function createSettingsMenu(options: SettingsMenuOptions): SettingsMenu {
 
     switch (row.id) {
       case 'game': {
-        const at = variants.findIndex((candidate) => candidate.id === variant.id);
-        const next = variants[cycle(Math.max(0, at), delta, variants.length)];
+        const list = games();
+        const at = list.findIndex((candidate) => candidate.id === chosen().id);
+        const next = list[cycle(Math.max(0, at), delta, list.length)];
         if (next !== undefined) write({ variant: next.id });
         break;
       }
@@ -398,8 +469,10 @@ export function createSettingsMenu(options: SettingsMenuOptions): SettingsMenu {
         break;
       }
       case 'packs':
-      case 'stages': {
-        // Either direction opens the card: a list is not a value that steps.
+      case 'stages':
+      case 'name':
+      case 'delete': {
+        // Either direction opens the card: a list or a name is not a value that steps.
         open?.(row.id);
         break;
       }
@@ -432,6 +505,10 @@ export function createSettingsMenu(options: SettingsMenuOptions): SettingsMenu {
       move(-1);
     },
     adjust,
+    focus: (id) => {
+      const at = rowsOf().findIndex((row) => row.id === id);
+      if (at >= 0) index = at;
+    },
   };
 }
 
@@ -453,6 +530,9 @@ export const MENU_BLINK_STEPS = 20;
 export const MENU_TEXT = Object.freeze({
   selectHeading: 'SELECT GAME',
   selectLegend: '* DEMONSTRATION ONLY',
+  /** The legend when the list holds the player's own games, and when it holds both. */
+  selectYours: '+ YOURS',
+  selectBoth: '* DEMONSTRATION  + YOURS',
   /** The two lines of help on each card, in the one voice `./keys.ts` writes. */
   selectKeys: keyLine([KEY.rows, 'MOVE'], [KEY.ok, 'CHOOSES']),
   selectBack: keyLine([KEY.back, 'SETTINGS']),
@@ -469,8 +549,11 @@ export const MENU_TEXT = Object.freeze({
   stagesOwn: 'OWN',
   stagesMine: 'MINE',
   stagesOwnNote: 'AS THE PACKS ORDER THEM',
-  /** Under `PACKS` and `STAGES` when what is stored will not load and is not what plays. */
+  /** Under `GAME`, `PACKS` and `STAGES` when the chosen variation will not load and is not what plays. */
   setAside: 'YOURS WILL NOT LOAD',
+  /** Under the two rows a variation has and a shipped game does not. */
+  nameNote: 'WHAT THE GAME LIST SAYS',
+  deleteNote: 'ASKS FIRST',
 });
 
 const HEADING_COLOUR = '#ff2b2b';
@@ -541,26 +624,76 @@ export function cardHeight(rows: number, lines: number): number {
 export const SELECT_CARD_TOP = CARD_TOP;
 export const SETTINGS_CARD_TOP = CARD_TOP - 24;
 
+/** What the selector marks a row with, and explains in its legend. */
+export interface SelectMarks {
+  readonly demonstrations: boolean;
+  readonly variations: boolean;
+}
+
+/** The legend for whichever marks the list carries, or `undefined` for none. */
+function legendOf(marks: SelectMarks): string | undefined {
+  if (marks.demonstrations && marks.variations) return MENU_TEXT.selectBoth;
+  if (marks.demonstrations) return MENU_TEXT.selectLegend;
+  if (marks.variations) return MENU_TEXT.selectYours;
+  return undefined;
+}
+
 /**
  * Every line under the selector's list, in the order they are drawn: the chosen
- * game's description, the demonstration legend when there is a demonstration to
- * mark, and the two lines of help — which, as on the settings card, are never
- * conditional.
+ * game's note, the legend when there is a mark to explain, and the two lines of
+ * help — which, as on the settings card, are never conditional.
  */
-export function variantSelectNotes(
-  description: string,
-  demonstrations: boolean,
-): readonly MenuLine[] {
-  const lines: MenuLine[] = [{ text: description, tone: 'note' }];
-  if (demonstrations) lines.push({ text: MENU_TEXT.selectLegend, tone: 'legend' });
+export function variantSelectNotes(note: string, marks: SelectMarks): readonly MenuLine[] {
+  const lines: MenuLine[] = [{ text: note, tone: 'note' }];
+  const legend = legendOf(marks);
+  if (legend !== undefined) lines.push({ text: legend, tone: 'legend' });
   lines.push({ text: MENU_TEXT.selectKeys, tone: 'help' });
   lines.push({ text: MENU_TEXT.selectBack, tone: 'help' });
   return lines;
 }
 
 /** Lines under the list on each card, which the height depends on. Derived, not stated. */
-export function variantSelectLines(demonstrations: boolean): number {
-  return variantSelectNotes('', demonstrations).length;
+export function variantSelectLines(marks: SelectMarks): number {
+  return variantSelectNotes('', marks).length;
+}
+
+/**
+ * Rows of the selector on screen at once; a longer list scrolls past them.
+ *
+ * The player's variations are on the list, and nothing bounds how many they
+ * make — so the plate is at most this many rows tall wherever the list ends,
+ * which `tests/unit/menus.test.ts` holds to the playfield.
+ */
+export const SELECT_WINDOW = 8;
+
+/**
+ * The rows of a long list that are on screen: a window of `size` that keeps the
+ * cursor in view, and whether anything is hidden above or below it.
+ */
+export function windowOf<T>(
+  rows: readonly T[],
+  index: number,
+  size: number,
+): {
+  readonly rows: readonly T[];
+  readonly index: number;
+  readonly above: boolean;
+  readonly below: boolean;
+} {
+  if (rows.length <= size) return { rows, index, above: false, below: false };
+  const top = Math.min(Math.max(0, index - Math.floor(size / 2)), rows.length - size);
+  return {
+    rows: rows.slice(top, top + size),
+    index: index - top,
+    above: top > 0,
+    below: top + size < rows.length,
+  };
+}
+
+/** A selector row's text: the name, and the mark that says what kind of game it is. */
+export function selectRowText(game: MenuGame): string {
+  if (game.variation) return `${game.name} +`;
+  return game.demonstration ? `${game.name} *` : game.name;
 }
 
 /**
@@ -599,7 +732,7 @@ export function settingsLines(persistent: boolean): number {
 }
 
 /** The ink each tone is drawn in. Help is the dim one, as on the pause cards. */
-const MENU_INK: Record<MenuLineTone, string> = {
+export const MENU_INK: Readonly<Record<MenuLineTone, string>> = {
   note: NOTE_COLOUR,
   legend: DIM_COLOUR,
   help: DIM_COLOUR,
@@ -624,31 +757,45 @@ export function drawVariantSelect(
   options: VariantSelectOptions,
 ): void {
   const { menu, steps, x, y } = options;
-  const demonstrations = menu.variants.some((variant) => variant.demonstration);
-  // The chosen game's description, the demonstration legend if any, and the two
-  // control lines.
-  const lines = variantSelectLines(demonstrations);
+  const marks: SelectMarks = {
+    demonstrations: menu.variants.some((variant) => variant.demonstration),
+    variations: menu.variants.some((variant) => variant.variation),
+  };
+  // The chosen game's note, the legend if any, and the two control lines.
+  const lines = variantSelectLines(marks);
   const cells = cellsIn(SELECT_CARD_WIDTH);
+  const view = windowOf(menu.variants, menu.index, SELECT_WINDOW);
 
-  drawCentredPanel(ctx, x, y - 6, SELECT_CARD_WIDTH, cardHeight(menu.variants.length, lines));
+  drawCentredPanel(ctx, x, y - 6, SELECT_CARD_WIDTH, cardHeight(view.rows.length, lines));
   drawText(ctx, MENU_TEXT.selectHeading, x, y + 4, { colour: HEADING_COLOUR, align: 'center' });
 
   const lit = Math.floor(steps / MENU_BLINK_STEPS) % 2 === 0;
-  menu.variants.forEach((variant, index) => {
-    const live = index === menu.index;
-    // A demonstration is marked on its own row, not only in a legend: a variant
-    // nobody committed to must not read like part of the line-up.
-    const name = variant.demonstration ? `${variant.name} *` : variant.name;
-    drawText(ctx, fitText(name, cells), x, y + HEADING_GAP + 4 + index * ROW_PITCH, {
-      colour: live ? (lit ? CURSOR_COLOUR : VALUE_COLOUR) : DIM_COLOUR,
-      align: 'center',
-    });
+  view.rows.forEach((variant, index) => {
+    const live = index === view.index;
+    // A demonstration and a player's own game are each marked on their own row,
+    // not only in a legend: neither may read like part of the shipped line-up.
+    drawText(
+      ctx,
+      fitText(selectRowText(variant), cells),
+      x,
+      y + HEADING_GAP + 4 + index * ROW_PITCH,
+      {
+        colour: live ? (lit ? CURSOR_COLOUR : VALUE_COLOUR) : DIM_COLOUR,
+        align: 'center',
+      },
+    );
   });
+  const markX = Math.round(x + SELECT_CARD_WIDTH / 2) - PADDING + 1;
+  if (view.above) drawText(ctx, MORE_ABOVE, markX, y + HEADING_GAP + 4, { colour: DIM_COLOUR });
+  if (view.below) {
+    const last = y + HEADING_GAP + 4 + (view.rows.length - 1) * ROW_PITCH;
+    drawText(ctx, MORE_BELOW, markX, last, { colour: DIM_COLOUR });
+  }
 
-  // One description, for the game under the cursor. Every game's at once is a
-  // card taller than the playfield as soon as there are a few of them.
-  let line = y + HEADING_GAP + 8 + menu.variants.length * ROW_PITCH;
-  for (const { text, tone } of variantSelectNotes(menu.chosen.description ?? '', demonstrations)) {
+  // One note, for the game under the cursor. Every game's at once is a card
+  // taller than the playfield as soon as there are a few of them.
+  let line = y + HEADING_GAP + 8 + view.rows.length * ROW_PITCH;
+  for (const { text, tone } of variantSelectNotes(menu.note, marks)) {
     drawText(ctx, fitText(text, cells), x, line, { colour: MENU_INK[tone], align: 'center' });
     line += ROW_PITCH;
   }

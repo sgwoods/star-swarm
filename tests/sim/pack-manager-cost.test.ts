@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { checkPlayability } from '../../scripts/playability.js';
 import { readPackSource } from '../../src/content/fs.js';
 import { type LoadedPack, loadPackOrThrow } from '../../src/content/loader.js';
+import { deriveVariant } from '../../src/content/variants.js';
 import { createComposer } from '../../src/ui/compose.js';
 import { installedPacks, shippedVariants, shippedVariantSources } from '../helpers/variants.js';
 
@@ -40,10 +41,17 @@ describe('the pack manager does not fly a persona', () => {
       packs: withFixture(),
       variants: shippedVariants(),
     });
-    const { verdict, variant } = composer.compose('classic', {
-      packs: ['classic', 'unplayable'],
-      stages: ['ledge'],
-    });
+    const classic = composer.documentOf('classic');
+    if (classic === undefined) throw new Error('no Classic document');
+    const { verdict, variant } = composer.compose(
+      deriveVariant(classic, {
+        id: 'classic-2',
+        name: 'LEDGE',
+        from: 'classic',
+        packs: ['classic', 'unplayable'],
+        stages: ['ledge'],
+      }),
+    );
     expect(verdict.ok).toBe(true);
     expect(variant).toBeDefined();
     if (variant === undefined) return;
