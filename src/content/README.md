@@ -17,7 +17,7 @@ model and section 6 the rules layer.
 | `couplings.ts` | What a pack mix is coupled to under its rules, for the pack manager to say on its card                                         |
 | `errors.ts`    | `ContentError`, and the per-file report both the loader and the validator print                                                |
 
-Three things worth knowing before changing anything here.
+Five things worth knowing before changing anything here.
 
 **Nothing in this directory knows about Star Swarm.** The content model is a
 shared platform expected to host more than one game in this arcade lineage
@@ -54,6 +54,17 @@ multiplier section 6 rules out. `docs/ARCHITECTURE.md` §4.5 has the whole of it
 including the one limit on an overlay pack: `loadPack` resolves references within a
 pack, so an overlay may replace a self-contained document and may not add one that
 names the base pack's content.
+
+**An ability is validated here and acted on in `src/sim/abilities/`.** `schema.ts`
+lists every id in the engine's ability registry and gives each implemented one a
+strict parameter schema of its own, so a misspelt or missing parameter is a load
+error rather than a mechanic that quietly does nothing. An id with no module would
+sit in `RESERVED_ABILITY_TYPES`, accepted with anything and read by nothing; that
+list is empty, and the registry's mapped type refuses a module for any id still in
+it. `loader.ts` checks what an ability names and refuses one that could never act —
+a split chain that never ends, a timed ability with neither a timer nor a trigger
+on the alien's own dive paths, a `transform` into the alien that declares it.
+<!-- check:count schema.abilityIds 7 schema.reservedAbilityIds 0 -->
 
 `npm run validate-packs` runs the same passes the game does — it calls `loadPack`
 and `loadVariants` rather than reimplementing either — and then flies what they

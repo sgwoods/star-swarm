@@ -441,6 +441,7 @@ function abilityContext(world: World): AbilityContext | undefined {
     playerAt: playerTarget(world),
     attacks: world.dive.attacks,
     armed: world.dive.armed,
+    captorId: world.capture.captorId,
   };
 }
 
@@ -864,6 +865,16 @@ function resolveAbilities(world: World, triggered: readonly ScriptedTrigger[]): 
     world.events.push({
       type: 'shield-restored',
       targetId: enemy.id,
+      alienId: enemy.alienId,
+      x: enemy.x,
+      y: enemy.y,
+    });
+  }
+  for (const { enemy, from } of step.transformed) {
+    world.events.push({
+      type: 'enemy-morphed',
+      targetId: enemy.id,
+      fromAlienId: from,
       alienId: enemy.alienId,
       x: enemy.x,
       y: enemy.y,

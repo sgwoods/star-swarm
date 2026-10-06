@@ -401,18 +401,25 @@ describe('exitBottom', () => {
 });
 
 describe('fire and trigger', () => {
-  // A reserved id, because only a reserved one may carry `params` (`src/content/schema.ts`):
-  // the interpreter's job is to carry them to the timeline untouched either way.
-  const path = makePath({
+  // The schema lets only a reserved id carry `params` (`src/content/schema.ts`), and
+  // none is reserved today, so they are put on the parsed document directly: the
+  // interpreter's job is to carry them to the timeline untouched either way.
+  const parsed = makePath({
     start: [100, 10],
     segments: [
       { type: 'line', to: [100, 30], speed: 1 },
       { type: 'fire', count: 2 },
       { type: 'line', to: [100, 50], speed: 1 },
-      { type: 'trigger', ability: 'transform', params: { width: 24 } },
+      { type: 'trigger', ability: 'transform' },
       { type: 'exitBottom' },
     ],
   });
+  const path: MovementPath = {
+    ...parsed,
+    segments: parsed.segments.map((segment) =>
+      segment.type === 'trigger' ? { ...segment, params: { width: 24 } } : segment,
+    ),
+  };
 
   it('takes no time and leaves the pose alone', () => {
     const compiled = compilePath(path);

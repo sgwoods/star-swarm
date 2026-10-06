@@ -81,11 +81,29 @@ describe('7.1 alien', () => {
     expect(parse({ type: 'teleport', everyFrames: 0 }).success).toBe(false);
   });
 
-  it('keeps the reserved ids loose, because nothing reads them', () => {
+  it('holds transform and mirrorPlayer to their own parameters, now that both are implemented', () => {
+    // Both were reserved, and loose: anything validated because nothing read it.
+    const parse = (ability: Record<string, unknown>) =>
+      alienSchema.safeParse({ ...minimal, abilities: [ability] });
+    expect(parse({ type: 'transform', into: 'jellyling', afterFrames: 30 }).success).toBe(true);
+    expect(parse({ type: 'transform', into: 'jellyling' }).success).toBe(true);
+    expect(
+      parse({ type: 'mirrorPlayer', mode: 'opposite', delayFrames: 0, strength: 1 }).success,
+    ).toBe(true);
     for (const type of ['transform', 'mirrorPlayer']) {
-      const result = alienSchema.safeParse({ ...minimal, abilities: [{ type, anything: 1 }] });
-      expect([type, result.success]).toEqual([type, true]);
+      expect([type, parse({ type, anything: 1 }).success]).toEqual([type, false]);
     }
+    expect(parse({ type: 'transform', into: 'jellyling', afterFrames: 0 }).success).toBe(false);
+    expect(parse({ type: 'transform', afterFrames: 30 }).success).toBe(false);
+    // Delay and strength are the pack's to state; neither has a default.
+    expect(parse({ type: 'mirrorPlayer', mode: 'track', strength: 0.5 }).success).toBe(false);
+    expect(parse({ type: 'mirrorPlayer', mode: 'track', delayFrames: 4 }).success).toBe(false);
+    expect(
+      parse({ type: 'mirrorPlayer', mode: 'track', delayFrames: 4, strength: 1.5 }).success,
+    ).toBe(false);
+    expect(
+      parse({ type: 'mirrorPlayer', mode: 'mirror', delayFrames: 4, strength: 0.5 }).success,
+    ).toBe(false);
   });
 
   it('refuses captureBeam on an alien, and says where its switch is', () => {

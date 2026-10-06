@@ -47,17 +47,20 @@ because the synth is not on the fixed step.
 
 `docs/DESIGN.md` section 7.5 describes abilities as a fixed registry of engine
 behaviours that packs switch on and tune. `src/content/schema.ts` lists seven
-ability ids. Five are implemented by modules in `src/sim/abilities/`, and two —
-`transform` and `mirrorPlayer` — are **reserved and implemented nowhere**.
-<!-- check:count schema.abilityIds 7 sim.abilities.implemented 5 schema.reservedAbilityIds 2 -->
+ability ids, and all seven are implemented by modules in `src/sim/abilities/`.
+None is reserved.
+<!-- check:count schema.abilityIds 7 sim.abilities.implemented 7 schema.reservedAbilityIds 0 -->
 
-The two halves behave in opposite ways, and the difference is the whole hazard:
+The difference between the two kinds is the whole hazard, so know both even
+though only one exists today:
 
 - An **implemented** ability is strict. Its parameters are validated by a schema
   of its own, and the loader checks what it names and refuses one that could never
   act (§5, **Abilities**). A mistake is a load error with a file and a field.
-- A **reserved** ability is not. `alien.abilities` accepts either reserved id with
-  any parameters at all, and then nothing reads it.
+- A **reserved** ability is not. An id in `RESERVED_ABILITY_TYPES` is accepted on
+  an alien with any parameters at all, and then nothing reads it. `transform` and
+  `mirrorPlayer` were reserved until what each means was decided; if an id is ever
+  reserved again, a prompt that needs it is a refusal.
 
 `captureBeam` cannot be declared on an alien at all: it is the capture channel,
 switched on by `capture` in a `rules.json`, and a path's `trigger` naming it says
@@ -65,10 +68,14 @@ where in the captor's dive the beam opens (`src/sim/abilities/capture-beam.ts`).
 That trigger acts only for the enemy the channel has already chosen as captor on
 its capture dive; anywhere else it compiles into an event nobody acts on.
 
-So a prompt that needs an alien to turn into something else mid-flight, a mirrored
-player, or anything the five implemented abilities do not do, cannot be satisfied
-by content. That is a **refusal**, not a near miss to be approximated with a
-flight path or a reserved id (§9).
+So a prompt that needs anything the implemented abilities do not do — as §5
+specifies each, and no further — cannot be satisfied by content. That is a
+**refusal**, not a near miss to be approximated with a flight path or a
+neighbouring ability (§9). Two near misses were declined when the last two
+abilities were defined, and are worth recognising on sight: an alien that changes
+type **when it is hit** (`transform` fires on a timer or a trigger; a hit is
+`splitOnHit` or `shield`), and anything that **touches the fighter's controls**
+(`mirrorPlayer` moves the alien, never the fighter).
 
 ### 2.2 "Validated" means flown, within a protocol
 
@@ -91,13 +98,12 @@ be dull, unfair or not what was asked for. §10 is the rest.
 
 §10 is the substitute: play it.
 
-### 2.3 Four fields that validate and do nothing
+### 2.3 Three fields that validate and do nothing
 
 Spelt correctly, accepted by the schema, read by no code in `src/`:
 
 | Field             | What happens instead                                                                                                                                              |
 | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `alien.abilities` | only for a reserved id, `transform` or `mirrorPlayer` (§2.1); the implemented ones act                                                                            |
 | `alien.sounds`    | the manifest's `sounds` map is what plays; `src/audio/sfx.ts` has a `resolve` hook for this and no caller supplies one, because events do not yet carry the alien |
 | `stage.diveRules` | the attack director reads the rules layer's per-stage difficulty row                                                                                              |
 | `stage.modifiers` | nothing; there is no mechanism for a per-stage multiplier                                                                                                         |
@@ -225,6 +231,25 @@ says:
   never more than `maxAlive` of its own at once. It fires every `everyFrames`, at
   a path `trigger`, or both — and only once the formation has settled, on a stage
   where anything may attack.
+- `transform` — a **diving** enemy becomes the `into` alien and carries on. It
+  fires `afterFrames` into a dive flown as this alien, at a path `trigger` naming
+  `transform`, or both. Its position, its speed and its place on the path carry
+  over; its sprite, `hp` (whole again), score, hit box, dive paths, whether it
+  returns, how it fires and its abilities are the new alien's, and whatever the old
+  alien's abilities held — shield charges, timers — is lost. The change scores
+  nothing and raises `enemy-morphed`; a kill afterwards is worth the new alien's
+  value. The loader refuses an `into` the pack lacks or that names the alien
+  itself. `into` need not dive, because it finishes the dive it inherits; a chain
+  of transforms may lead back round. It is not the arcade's transform attack,
+  which is `transform` in a `rules.json`.
+- `mirrorPlayer` — a **diving** enemy copies the fighter's horizontal movement.
+  Each frame it closes `strength` (above 0, at most 1) of the sideways gap to the
+  fighter's column (`"mode": "track"`) or to that column mirrored about the
+  playfield's centre line (`"opposite"`), as the fighter stood `delayFrames`
+  frames ago. Its own path still decides its row and where the dive ends. All
+  three parameters are required; it takes no `trigger`, acts for the whole of
+  every dive, and does nothing in the formation or while no fighter is on the
+  field.
 
 Two rules hold for all of them. An alien that an ability puts on the field — a
 fragment or a minion — flies one of its **own** dive paths and leaves at the end
@@ -385,18 +410,19 @@ Classic's goldens fly through does**. Forge into a new pack, not into
 
 `docs/DESIGN.md` section 7.5 is explicit: when a prompt needs something the
 registry lacks, the generator says so and proposes a new-ability task rather than
-improvising. With five abilities implemented and two reserved (§2.1), most of
-what a prompt can ask an alien to _do_ is still outside it.
+improvising. With seven abilities implemented (§2.1), most of what a prompt can
+ask an alien to _do_ is still outside it.
 
 Refuse when the prompt needs any of these:
 
 - An **ability** the registry does not implement: anything an alien _does_ beyond
   moving, firing its configured pattern, taking `hp` hits, being worth points,
-  and the five abilities of §5 as they are specified there. Transforming,
-  mirroring the player, growing, healing, reflecting, stealing anything other than
-  the one capture the channel already implements — and a variation the
-  implemented ones do not offer, such as a shield that blocks from one side only
-  or minions that join the formation.
+  and the abilities of §5 as they are specified there. Growing, healing,
+  reflecting, stealing anything other than the one capture the channel already
+  implements, changing type on being hit, touching the fighter's controls — and a
+  variation the implemented ones do not offer, such as a shield that blocks from
+  one side only, minions that join the formation, or a mirror that copies the
+  fighter's vertical movement.
 - A **per-stage rule**: different lives, different bullet speeds, a different shot
   cap, a different diver limit for one stage. `stage.modifiers` and
   `stage.diveRules` look like the place and are read by nothing (§2.3); the real
