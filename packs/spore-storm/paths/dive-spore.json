@@ -1,0 +1,8 @@
+{
+  "id": "dive-spore",
+  "mirror": true,
+  "segments": [
+    { "type": "aimAtPlayer", "speed": 2.4, "duration": 36 },
+    { "type": "exitBottom", "speed": 2.4 }
+  ]
+}

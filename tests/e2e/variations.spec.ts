@@ -190,6 +190,7 @@ test('two variations are kept at once, found after a reload, and one is deleted'
   // Both on the list, the shipped games first; the last one made is chosen.
   expect(await page.evaluate(() => window.starSwarm?.games)).toEqual([
     'classic=STAR SWARM',
+    'spore-storm=SPORE STORM',
     'deep-sea=DEEP SEA',
     'swarm-remix=SWARM REMIX',
     'classic-2=REEFS',
@@ -214,6 +215,7 @@ test('two variations are kept at once, found after a reload, and one is deleted'
 
   expect(await page.evaluate(() => window.starSwarm?.games)).toEqual([
     'classic=STAR SWARM',
+    'spore-storm=SPORE STORM',
     'deep-sea=DEEP SEA',
     'swarm-remix=SWARM REMIX',
     'classic-2=REEFS',
@@ -223,7 +225,7 @@ test('two variations are kept at once, found after a reload, and one is deleted'
   // And it stays deleted.
   await page.reload();
   await page.waitForFunction(() => (window.starSwarm?.step ?? 0) > 0);
-  expect(await page.evaluate(() => window.starSwarm?.games)).toHaveLength(4);
+  expect(await page.evaluate(() => window.starSwarm?.games)).toHaveLength(5);
 });
 
 test('a variation that cannot work is refused, on the card, with the reason', async ({ page }) => {

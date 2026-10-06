@@ -1,0 +1,190 @@
+{
+  "id": "spore-storm",
+  "name": "Spore Storm",
+  "version": "0.1.0",
+  "description": "A game that uses four of the new abilities: every alien in it has one, and each one is drawn, heard and animated. An overlay on Classic for the rules, the badges and the challenge half of the stage sequence.",
+  "roles": {
+    "drone": {
+      "label": "Flicker"
+    },
+    "wing": {
+      "label": "Cyst"
+    },
+    "warden": {
+      "label": "Husk and brood"
+    }
+  },
+  "formations": {
+    "colony24": {
+      "id": "colony24",
+      "grid": {
+        "originX": 32,
+        "originY": 40,
+        "columnSpacing": 8,
+        "rowSpacing": 4
+      },
+      "slots": [
+        {
+          "row": 0,
+          "column": 6,
+          "role": "warden"
+        },
+        {
+          "row": 0,
+          "column": 12,
+          "role": "warden"
+        },
+        {
+          "row": 5,
+          "column": 2,
+          "role": "warden"
+        },
+        {
+          "row": 5,
+          "column": 8,
+          "role": "warden"
+        },
+        {
+          "row": 5,
+          "column": 10,
+          "role": "warden"
+        },
+        {
+          "row": 5,
+          "column": 16,
+          "role": "warden"
+        },
+        {
+          "row": 10,
+          "column": 2,
+          "role": "wing"
+        },
+        {
+          "row": 10,
+          "column": 4,
+          "role": "wing"
+        },
+        {
+          "row": 10,
+          "column": 6,
+          "role": "wing"
+        },
+        {
+          "row": 10,
+          "column": 8,
+          "role": "wing"
+        },
+        {
+          "row": 10,
+          "column": 10,
+          "role": "wing"
+        },
+        {
+          "row": 10,
+          "column": 12,
+          "role": "wing"
+        },
+        {
+          "row": 10,
+          "column": 14,
+          "role": "wing"
+        },
+        {
+          "row": 10,
+          "column": 16,
+          "role": "wing"
+        },
+        {
+          "row": 15,
+          "column": 0,
+          "role": "drone"
+        },
+        {
+          "row": 15,
+          "column": 2,
+          "role": "drone"
+        },
+        {
+          "row": 15,
+          "column": 4,
+          "role": "drone"
+        },
+        {
+          "row": 15,
+          "column": 6,
+          "role": "drone"
+        },
+        {
+          "row": 15,
+          "column": 8,
+          "role": "drone"
+        },
+        {
+          "row": 15,
+          "column": 10,
+          "role": "drone"
+        },
+        {
+          "row": 15,
+          "column": 12,
+          "role": "drone"
+        },
+        {
+          "row": 15,
+          "column": 14,
+          "role": "drone"
+        },
+        {
+          "row": 15,
+          "column": 16,
+          "role": "drone"
+        },
+        {
+          "row": 15,
+          "column": 18,
+          "role": "drone"
+        }
+      ]
+    }
+  },
+  "sounds": {
+    "shield-hit": "shield-ping",
+    "shield-restored": "shield-mend",
+    "enemy-split": "split-pop",
+    "enemy-teleported": "blink-zip",
+    "minions-spawned": "spore-plop"
+  },
+  "effects": {
+    "shield-hit": {
+      "sprite": "fx-shield",
+      "offsetX": -4,
+      "offsetY": -4
+    },
+    "shield-restored": {
+      "sprite": "fx-shield-up",
+      "offsetX": -4,
+      "offsetY": -4
+    },
+    "enemy-split": {
+      "sprite": "fx-split",
+      "offsetX": -4,
+      "offsetY": -4
+    },
+    "enemy-teleported": {
+      "sprite": "fx-blink",
+      "offsetX": -4,
+      "offsetY": -4
+    },
+    "minions-spawned": {
+      "sprite": "fx-spawn",
+      "offsetX": 0,
+      "offsetY": 2
+    }
+  },
+  "stageSequence": {
+    "normal": {
+      "rows": ["colony-1", "colony-2", "colony-3"],
+      "repeatLast": 2
+    }
+  }
+}

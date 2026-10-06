@@ -1,0 +1,9 @@
+{
+  "id": "flicker",
+  "role": "drone",
+  "sprite": "flicker",
+  "score": { "base": 50 },
+  "fire": { "pattern": "aimed", "shotsPerDive": 1, "cooldownFrames": 56 },
+  "dive": { "paths": ["dive-blink"] },
+  "abilities": [{ "type": "teleport", "margin": 24 }]
+}

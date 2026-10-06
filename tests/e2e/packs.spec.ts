@@ -111,6 +111,7 @@ test('a composed list is kept, played, drawn, and still there after a reload', a
   expect(await page.evaluate(() => window.starSwarm?.editorRows)).toEqual([
     'Classic=1',
     'Deep Sea=OFF',
+    'Spore Storm=OFF',
     'Swarm Remix=OFF',
   ]);
 

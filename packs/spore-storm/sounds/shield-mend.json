@@ -1,0 +1,20 @@
+{
+  "id": "shield-mend",
+  "wave": "sine",
+  "envelope": [0.01, 0.2, 0.1],
+  "volume": 0.28,
+  "sequence": [
+    {
+      "freq": 392,
+      "duration": 0.05
+    },
+    {
+      "freq": 523.25,
+      "duration": 0.05
+    },
+    {
+      "freq": 783.99,
+      "duration": 0.12
+    }
+  ]
+}

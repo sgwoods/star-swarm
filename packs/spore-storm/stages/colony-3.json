@@ -1,0 +1,148 @@
+{
+  "id": "colony-3",
+  "kind": "normal",
+  "formation": "colony24",
+  "waves": [
+    {
+      "at": 0,
+      "entryPath": "entry-rise",
+      "spacing": 10,
+      "slots": [
+        {
+          "alien": "cyst",
+          "home": 6,
+          "mirror": false
+        },
+        {
+          "alien": "cyst",
+          "home": 13,
+          "mirror": true
+        },
+        {
+          "alien": "cyst",
+          "home": 7,
+          "mirror": false
+        },
+        {
+          "alien": "cyst",
+          "home": 12,
+          "mirror": true
+        },
+        {
+          "alien": "husk",
+          "home": 2,
+          "mirror": false
+        },
+        {
+          "alien": "husk",
+          "home": 5,
+          "mirror": true
+        },
+        {
+          "alien": "husk",
+          "home": 3,
+          "mirror": false
+        },
+        {
+          "alien": "husk",
+          "home": 4,
+          "mirror": true
+        }
+      ]
+    },
+    {
+      "at": 150,
+      "entryPath": "entry-seep",
+      "spacing": 10,
+      "slots": [
+        {
+          "alien": "flicker",
+          "home": 14,
+          "mirror": false
+        },
+        {
+          "alien": "flicker",
+          "home": 23,
+          "mirror": true
+        },
+        {
+          "alien": "flicker",
+          "home": 15,
+          "mirror": false
+        },
+        {
+          "alien": "flicker",
+          "home": 22,
+          "mirror": true
+        },
+        {
+          "alien": "flicker",
+          "home": 16,
+          "mirror": false
+        },
+        {
+          "alien": "flicker",
+          "home": 21,
+          "mirror": true
+        },
+        {
+          "alien": "flicker",
+          "home": 17,
+          "mirror": false
+        },
+        {
+          "alien": "flicker",
+          "home": 20,
+          "mirror": true
+        },
+        {
+          "alien": "flicker",
+          "home": 18,
+          "mirror": false
+        },
+        {
+          "alien": "flicker",
+          "home": 19,
+          "mirror": true
+        }
+      ]
+    },
+    {
+      "at": 300,
+      "entryPath": "entry-drop",
+      "spacing": 10,
+      "slots": [
+        {
+          "alien": "brood",
+          "home": 0,
+          "mirror": false
+        },
+        {
+          "alien": "brood",
+          "home": 1,
+          "mirror": true
+        },
+        {
+          "alien": "cyst",
+          "home": 8,
+          "mirror": false
+        },
+        {
+          "alien": "cyst",
+          "home": 11,
+          "mirror": true
+        },
+        {
+          "alien": "cyst",
+          "home": 9,
+          "mirror": false
+        },
+        {
+          "alien": "cyst",
+          "home": 10,
+          "mirror": true
+        }
+      ]
+    }
+  ]
+}

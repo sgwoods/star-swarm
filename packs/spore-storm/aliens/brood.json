@@ -1,0 +1,22 @@
+{
+  "id": "brood",
+  "role": "warden",
+  "hp": 2,
+  "sprite": "brood",
+  "hitSprites": ["brood-hit"],
+  "score": {
+    "base": 200
+  },
+  "dive": {
+    "paths": ["dive-hatch"]
+  },
+  "abilities": [
+    {
+      "type": "spawnMinions",
+      "alien": "spore",
+      "count": 1,
+      "everyFrames": 180,
+      "maxAlive": 1
+    }
+  ]
+}

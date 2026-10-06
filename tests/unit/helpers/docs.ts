@@ -33,7 +33,12 @@ import { join, relative, resolve } from 'node:path';
 
 import { COUPLING_KINDS } from '../../../src/content/couplings.js';
 import { personaSchema } from '../../../src/content/personas.js';
-import type { Formation, Sprite, StageSequence } from '../../../src/content/schema.js';
+import type {
+  AlienAbility,
+  Formation,
+  Sprite,
+  StageSequence,
+} from '../../../src/content/schema.js';
 import {
   ABILITY_TYPES,
   CONTENT_DIRS,
@@ -613,6 +618,28 @@ function forgedFormation(): Formation {
   return formation;
 }
 
+/** The game that uses four of the new abilities: its own formation, which it declares one of. */
+function sporeFormation(): Formation {
+  const formations = [...installedPack('spore-storm').formations.values()];
+  const formation = formations[0];
+  if (formation === undefined || formations.length !== 1) {
+    throw new Error(
+      `packs/spore-storm declares ${String(formations.length)} formations, expected one`,
+    );
+  }
+  return formation;
+}
+
+/** An implemented ability's parameters, off the one Spore Storm alien that declares it. */
+function sporeAbility<T extends AlienAbility['type']>(type: T): Extract<AlienAbility, { type: T }> {
+  for (const alien of installedPack('spore-storm').aliens.values()) {
+    for (const ability of alien.abilities) {
+      if (ability.type === type) return ability as Extract<AlienAbility, { type: T }>;
+    }
+  }
+  throw new Error(`no packs/spore-storm alien declares ${type}`);
+}
+
 /**
  * The forged pack's own stage sequence.
  *
@@ -732,6 +759,7 @@ export function counters(root = REPO_ROOT): ReadonlyMap<string, () => number> {
     ['autoplay.personas', () => shippedPersonas().length],
     ['autoplay.classicPersonas', () => personasOf('classic').length],
     ['autoplay.forgedPersonas', () => personasOf('deep-sea').length],
+    ['autoplay.sporeStormPersonas', () => personasOf('spore-storm').length],
     [
       'autoplay.axes',
       () => Object.keys(personaSchema.shape).filter((key) => !PERSONA_LABELLING.has(key)).length,
@@ -864,6 +892,49 @@ export function counters(root = REPO_ROOT): ReadonlyMap<string, () => number> {
     ['deepSea.formationCaptiveSlots', () => forgedFormation().captiveSlots.length],
     ['deepSea.formationColumns', () => formationAxes(forgedFormation()).columns.length],
     ['deepSea.formationRows', () => formationAxes(forgedFormation()).rows.length],
+
+    /**
+     * The game that switches on four of the new abilities, through the real loader
+     * like the forged pack above — plus the two numbers its README argues from.
+     * Which events it binds is counted off the manifest, so a README saying every
+     * ability is heard and shown cannot outlive a binding somebody deleted.
+     */
+    ['sporeStorm.aliens', () => installedPack('spore-storm').aliens.size],
+    ['sporeStorm.paths', () => installedPack('spore-storm').paths.size],
+    ['sporeStorm.stages', () => installedPack('spore-storm').stages.size],
+    ['sporeStorm.sprites', () => installedPack('spore-storm').sprites.size],
+    ['sporeStorm.sounds', () => installedPack('spore-storm').sounds.size],
+    ['sporeStorm.palette', () => installedPack('spore-storm').manifest.palette.length],
+    [
+      'sporeStorm.sequenceNormal',
+      () => installedPack('spore-storm').manifest.stageSequence.normal.rows.length,
+    ],
+    [
+      'sporeStorm.sequenceChallenge',
+      () => installedPack('spore-storm').manifest.stageSequence.challenge.rows.length,
+    ],
+    ['sporeStorm.formationSlots', () => sporeFormation().slots.length],
+    ['sporeStorm.formationCaptiveSlots', () => sporeFormation().captiveSlots.length],
+    ['sporeStorm.formationColumns', () => formationAxes(sporeFormation()).columns.length],
+    ['sporeStorm.formationRows', () => formationAxes(sporeFormation()).rows.length],
+    [
+      'sporeStorm.abilityAliens',
+      () =>
+        [...installedPack('spore-storm').aliens.values()].filter(
+          (alien) => alien.abilities.length > 0,
+        ).length,
+    ],
+    [
+      'sporeStorm.boundSounds',
+      () => Object.keys(installedPack('spore-storm').manifest.sounds).length,
+    ],
+    [
+      'sporeStorm.boundEffects',
+      () => Object.keys(installedPack('spore-storm').manifest.effects).length,
+    ],
+    ['sporeStorm.shieldHits', () => sporeAbility('shield').hits],
+    ['sporeStorm.shieldRechargeFrames', () => sporeAbility('shield').rechargeFrames ?? 0],
+    ['sporeStorm.spawnEveryFrames', () => sporeAbility('spawnMinions').everyFrames ?? 0],
 
     /* The rules layer. */
     ['rules.ranks', () => Object.keys(classicRules().difficulty.ranks).length],

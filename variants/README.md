@@ -18,6 +18,7 @@ inside it, and `npm run validate-packs` checks both.
 variants/
   classic.json       the arcade game — the first entry, not a special case
   deep-sea.json      the forged game: one sentence, through /forge
+  spore-storm.json   the game that switches on four of the new abilities
   swarm-remix.json   a demonstration that a variant is only data
 ```
 
