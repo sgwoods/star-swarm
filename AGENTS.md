@@ -255,8 +255,7 @@ what the engine will actually honour. Neither copies `src/content/schema.ts`.
 Four things to know before touching either, because each is a trap the forge was
 built around:
 
-- **Four schema fields validate and are read by nothing**: `alien.abilities` for
-  the two reserved ids (`transform`, `mirrorPlayer`), `alien.sounds`,
+- **Three schema fields validate and are read by nothing**: `alien.sounds`,
   `stage.diveRules` and `stage.modifiers`. That is why a prompt the
   engine cannot satisfy has to be **refused** rather than approximated — nothing
   downstream can tell the difference. `tests/unit/forge-guard.test.ts` pins each

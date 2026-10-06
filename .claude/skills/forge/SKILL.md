@@ -22,9 +22,9 @@ Read `docs/content-guide.md` end to end. It is the state document for what a pac
 may say, and its section numbers are referenced throughout this file. It also
 carries the two things that decide most prompts:
 
-- **the ability registry is small**: an alien can split, shield, teleport and spawn
-  minions exactly as guide section 5 specifies, two more ids are reserved and do
-  nothing, and anything else an alien might _do_ is a refusal; and
+- **the ability registry is small**: an alien can split, shield, teleport, spawn
+  minions, change type and copy the fighter's movement exactly as guide section 5
+  specifies, and anything else an alien might _do_ is a refusal; and
 - **passing the validator means the stage was flown, within a protocol** — a floor,
   not a report — so step 5 below is not optional.
 
@@ -152,13 +152,14 @@ Proposed task: <a one-line ship task for the thing that is missing>.
 Two refusals are worth recognising on sight because they look forgeable and are
 not:
 
-- **"an alien that turns into another one mid-flight"**, or one that mirrors the
-  player — the two reserved abilities. The schema accepts
-  `abilities: [{ "type": "transform", … }]` with any parameters, the loader is
-  happy, and nothing reads it — so this one validates and silently does nothing,
-  which is worse than failing. `src/sim/abilities/` is where it would live, beside
-  the five that are implemented. (A splitting, shielded, teleporting or spawning
-  alien is forgeable — as the guide specifies each, and no further.)
+- **"an alien that changes into another one when you hit it"**, or one that
+  scrambles the player's controls — the two readings the captain declined when
+  `transform` and `mirrorPlayer` were defined. A `transform` fires on a timer or at
+  a path `trigger`, never on a hit, and a `mirrorPlayer` diver moves itself, never
+  the fighter, so neither prompt is either ability with different numbers. (An
+  alien that changes type mid-dive, or one that shadows or mirrors the fighter's
+  movement, is forgeable — as the guide specifies each, and no further; so are
+  splitting, shielded, teleporting and spawning aliens.)
 - **"a stage where the bullets are faster"**, and every other per-stage rule.
   `stage.modifiers` looks exactly like the place for it and is read by nothing. The
   real home is a `rules.json`, and a variant may not override one.

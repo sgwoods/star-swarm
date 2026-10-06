@@ -8,8 +8,8 @@
  *
  * - `src/content/schema.ts` lists every id, validates each implemented one's
  *   parameters with a schema of its own, and keeps the rest in
- *   `RESERVED_ABILITY_TYPES`, where any parameters validate and nothing reads
- *   them.
+ *   `RESERVED_ABILITY_TYPES`, where any parameters would validate and nothing
+ *   would read them — an empty list today, because every id has a module.
  * - {@link ABILITY_REGISTRY} below is typed over exactly the implemented ids, so
  *   an id added to the schema without a module — or a module whose id the schema
  *   reserves — is a build error rather than a mechanic that silently never runs.
@@ -42,10 +42,12 @@ import type { Enemy, Fleet, ScriptedTrigger } from '../enemies.js';
 import type { FormationState } from '../formation.js';
 import type { Vec2 } from '../paths.js';
 import { captureBeam } from './capture-beam.js';
+import { type MirrorState, mirrorPlayer } from './mirror-player.js';
 import { type ShieldState, shield } from './shield.js';
 import { type SpawnState, spawnMinions } from './spawn-minions.js';
 import { splitOnHit } from './split-on-hit.js';
 import { type TeleportState, teleport } from './teleport.js';
+import { type TransformState, transform } from './transform.js';
 
 /* -------------------------------------------------------------------------- */
 /* What a module is handed, and what it hands back                             */
@@ -76,6 +78,13 @@ export interface AbilityContext {
   readonly attacks: boolean;
   /** Whether the formation has settled and the dives are armed. */
   readonly armed: boolean;
+  /**
+   * The enemy the capture channel has chosen for the attempt in progress, if any.
+   *
+   * The channel chose it for its role, and its dive is the channel's capture dive,
+   * so an ability that would change what it *is* — `transform` — leaves it alone.
+   */
+  readonly captorId: number | undefined;
 }
 
 /**
@@ -91,6 +100,17 @@ export interface AbilityState {
   readonly shield: Map<number, ShieldState>;
   readonly teleport: Map<number, TeleportState>;
   readonly spawnMinions: Map<number, SpawnState>;
+  readonly transform: Map<number, TransformState>;
+  readonly mirrorPlayer: Map<number, MirrorState>;
+  /**
+   * Every enemy that has changed type this stage, and the alien it is now.
+   *
+   * Not state any module reads: a record, because an enemy's alien is not part of
+   * the per-enemy fingerprint, and a change of type must not be invisible to a
+   * replay comparison. It outlives the change on purpose — unlike everything
+   * else here, it is not the old type's to lose.
+   */
+  readonly transformed: Map<number, string>;
 }
 
 /** What one step of the registry did, for the world to turn into events. */
@@ -101,6 +121,8 @@ export interface AbilityStep {
   readonly spawned: { readonly parent: Enemy; readonly minions: readonly Enemy[] }[];
   /** Enemies whose shield was whole again on this frame. */
   readonly restored: Enemy[];
+  /** Enemies that became another alien on this frame, and the alien each was. */
+  readonly transformed: { readonly enemy: Enemy; readonly from: string }[];
 }
 
 /**
@@ -148,14 +170,30 @@ export interface AbilityModule<T extends ImplementedAbilityType> {
 export const ABILITY_REGISTRY: { readonly [K in ImplementedAbilityType]: AbilityModule<K> } = {
   captureBeam,
   splitOnHit,
+  transform,
   shield,
   teleport,
   spawnMinions,
+  mirrorPlayer,
 };
 
-/** The module an entry names, or `undefined` for a reserved id. */
-function moduleOf(ability: AlienAbility): AbilityModule<ImplementedAbilityType> | undefined {
-  if (!isImplementedAbility(ability.type)) return undefined;
+/**
+ * Is this entry one a module implements? Narrows it to that module's parameters.
+ *
+ * A predicate rather than a cast at each call, so the dispatch below is checked in
+ * both of the registry's states: with every id implemented, as now, and with an id
+ * reserved again, when an entry may be one that no module reads.
+ */
+function isImplementedEntry(
+  ability: AlienAbility,
+): ability is AbilityParams<ImplementedAbilityType> {
+  return isImplementedAbility(ability.type);
+}
+
+/** The module an implemented entry names. */
+function moduleOf(
+  ability: AbilityParams<ImplementedAbilityType>,
+): AbilityModule<ImplementedAbilityType> {
   // One cast, here, rather than one per hook call: the registry is keyed so that
   // `ABILITY_REGISTRY[ability.type]` is the module for exactly this entry, which
   // the type system cannot correlate across a union on its own.
@@ -179,7 +217,29 @@ function carriesAbilities(enemy: Enemy): boolean {
 
 /** Empty state, for a new stage. */
 export function createAbilityState(): AbilityState {
-  return { shield: new Map(), teleport: new Map(), spawnMinions: new Map() };
+  return {
+    shield: new Map(),
+    teleport: new Map(),
+    spawnMinions: new Map(),
+    transform: new Map(),
+    mirrorPlayer: new Map(),
+    transformed: new Map(),
+  };
+}
+
+/**
+ * Forget everything the modules held for one enemy.
+ *
+ * What a change of type costs it: shield charges, timers, a spawner's count of
+ * its minions and a mirror's memory all belong to the alien it was. The record
+ * of what it became is kept — see {@link AbilityState.transformed}.
+ */
+function forgetType(state: AbilityState, id: number): void {
+  state.shield.delete(id);
+  state.teleport.delete(id);
+  state.spawnMinions.delete(id);
+  state.transform.delete(id);
+  state.mirrorPlayer.delete(id);
 }
 
 /**
@@ -194,17 +254,26 @@ export function stepAbilities(
   ctx: AbilityContext,
   triggered: readonly ScriptedTrigger[],
 ): AbilityStep {
-  const out: AbilityStep = { teleported: [], spawned: [], restored: [] };
+  const out: AbilityStep = { teleported: [], spawned: [], restored: [], transformed: [] };
   // A snapshot: a minion launched on this frame acts from the next one.
   for (const enemy of [...ctx.fleet.enemies]) {
     if (enemy.state === 'dead' || !carriesAbilities(enemy)) continue;
     for (const ability of enemy.abilities) {
+      if (!isImplementedEntry(ability)) continue;
       const module = moduleOf(ability);
-      if (module?.step === undefined) continue;
+      if (module.step === undefined) continue;
       const fired = triggered.some(
         (event) => event.enemy.id === enemy.id && event.ability === ability.type,
       );
-      module.step(state, ctx, enemy, ability as AbilityParams<ImplementedAbilityType>, fired, out);
+      const changes = out.transformed.length;
+      module.step(state, ctx, enemy, ability, fired, out);
+      if (out.transformed.length > changes) {
+        // It became another alien on this frame. What the old one's abilities
+        // held goes with it, the rest of the old list does not act, and the new
+        // alien's abilities act from the next frame.
+        forgetType(state, enemy.id);
+        break;
+      }
     }
   }
   return out;
@@ -222,11 +291,10 @@ export function abilitiesAbsorbShot(
 ): ImplementedAbilityType | undefined {
   if (!carriesAbilities(enemy)) return undefined;
   for (const ability of enemy.abilities) {
+    if (!isImplementedEntry(ability)) continue;
     const module = moduleOf(ability);
-    if (module?.absorbShot === undefined) continue;
-    if (module.absorbShot(state, enemy, ability as AbilityParams<ImplementedAbilityType>)) {
-      return module.type;
-    }
+    if (module.absorbShot === undefined) continue;
+    if (module.absorbShot(state, enemy, ability)) return module.type;
   }
   return undefined;
 }
@@ -245,11 +313,10 @@ export function abilitiesNoteDestroyed(
   if (!carriesAbilities(enemy)) return [];
   const left: Enemy[] = [];
   for (const ability of enemy.abilities) {
+    if (!isImplementedEntry(ability)) continue;
     const module = moduleOf(ability);
-    if (module?.destroyed === undefined) continue;
-    left.push(
-      ...module.destroyed(state, ctx, enemy, ability as AbilityParams<ImplementedAbilityType>),
-    );
+    if (module.destroyed === undefined) continue;
+    left.push(...module.destroyed(state, ctx, enemy, ability));
   }
   return left;
 }
@@ -269,8 +336,16 @@ export function shieldRemaining(state: AbilityState, enemy: Enemy): number | und
  * golden in `tests/sim/golden/` still reproduces.
  */
 export function abilityFingerprint(state: AbilityState): readonly unknown[] | undefined {
-  if (state.shield.size + state.teleport.size + state.spawnMinions.size === 0) return undefined;
+  const maps = [
+    state.shield,
+    state.teleport,
+    state.spawnMinions,
+    state.transform,
+    state.mirrorPlayer,
+    state.transformed,
+  ] as const;
+  if (maps.every((map) => map.size === 0)) return undefined;
   const sorted = <T>(map: ReadonlyMap<number, T>): [number, T][] =>
     [...map].sort(([a], [b]) => a - b);
-  return [sorted(state.shield), sorted(state.teleport), sorted(state.spawnMinions)];
+  return maps.map((map) => sorted<unknown>(map));
 }

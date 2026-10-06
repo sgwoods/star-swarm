@@ -74,13 +74,24 @@ export type EnemyState =
 /** States that score the formation value rather than the doubled one. */
 const AT_HOME_VALUE: ReadonlySet<EnemyState> = new Set<EnemyState>(['home', 'returning']);
 
+/**
+ * One enemy, for one stage.
+ *
+ * Its fields are of three kinds. Its **place in the stage** — `id`, `home`, the
+ * wave it came in and the entry path it flew — never changes. What it **is** —
+ * everything {@link alienTraits} copies off its alien — changes for one reason
+ * only: a `transform` makes it a different alien mid-flight ({@link becomeAlien},
+ * `src/sim/abilities/transform.ts`), which is why those fields are not
+ * `readonly`. And its **state** — where it is and what it is doing — moves every
+ * frame.
+ */
 export interface Enemy {
   readonly id: number;
-  readonly alienId: string;
-  readonly role: string;
+  alienId: string;
+  role: string;
   /** Sprite id, and what it becomes after each hit it survives. */
-  readonly sprite: string;
-  readonly hitSprites: readonly string[];
+  sprite: string;
+  hitSprites: readonly string[];
   /**
    * Index into the formation's slots: this enemy's own home, for the stage, or
    * {@link NO_SLOT} when its script never addresses one. Which slot *table* it
@@ -121,11 +132,11 @@ export interface Enemy {
   /** The wave it belongs to, zero-based. Reported in events. */
   readonly wave: number;
 
-  readonly hp: number;
+  hp: number;
   /** Points before the moving multiplier; the alien's `score.base`. */
-  readonly scoreBase: number;
+  scoreBase: number;
   /** What a moving target's base value is multiplied by, for this alien. */
-  readonly movingMultiplier: number;
+  movingMultiplier: number;
   /**
    * Points this enemy's own kill pays on top of its doubled value — a captor's
    * escort bonus (`resolveEscortBonus`), and 0 for everything else.
@@ -139,18 +150,19 @@ export interface Enemy {
    * value (`docs/reference/arcade-reference.md` section 9).
    *
    * A fleet is built anew for every stage, so *this field being set here is the
-   * per-stage reset*. Nothing overwrites it yet because nothing launches escorts:
-   * Star Swarm's launcher sends one enemy of a role at a time, so the reachable
-   * value is the solo one. When escorts arrive this stops being `readonly` and
-   * `launchDive` in `./dive.js` is where the launch count is latched.
+   * per-stage reset*. Nothing overwrites it on a launch yet because nothing
+   * launches escorts: Star Swarm's launcher sends one enemy of a role at a time,
+   * so the reachable value is the solo one. When escorts arrive, `launchDive` in
+   * `./dive.js` is where the launch count is latched. A `transform` installs the
+   * new alien's solo value, because the record is its role's.
    */
-  readonly escortBonus: number;
-  readonly hitPadding: HitPadding;
+  escortBonus: number;
+  hitPadding: HitPadding;
 
   /** The attack paths this alien may dive along; empty for one that never dives. */
-  readonly divePaths: readonly string[];
+  divePaths: readonly string[];
   /** This alien's share of the dive lottery within its role. */
-  readonly diveWeight: number;
+  diveWeight: number;
   /**
    * False for an alien that leaves for good after a dive instead of returning.
    *
@@ -161,16 +173,17 @@ export interface Enemy {
    */
   returnsFromDive: boolean;
   /** How this alien bombs, or `undefined` for one that never does. */
-  readonly fire: EnemyFire | undefined;
+  fire: EnemyFire | undefined;
   /**
    * The engine abilities its alien switches on, with their parameters.
    *
    * Copied off the alien like everything else here, so the registry
    * (`./abilities/registry.ts`) works on the enemy and never looks an alien up.
-   * Left out of {@link enemyFingerprint}: it never changes, and what an ability
-   * *does* is carried in the world's ability state, which is fingerprinted.
+   * Left out of {@link enemyFingerprint}: it changes only with the alien, and what
+   * an ability *does* — including a change of alien — is carried in the world's
+   * ability state, which is fingerprinted.
    */
-  readonly abilities: readonly AlienAbility[];
+  abilities: readonly AlienAbility[];
 
   state: EnemyState;
   /** Sprite anchor, matching every other anchor in the simulation. */
@@ -375,30 +388,40 @@ interface EnemySeed {
   readonly wave: number;
 }
 
+/** What an enemy takes from its alien, as against from its place in the stage. */
+type AlienTraits = Pick<
+  Enemy,
+  | 'alienId'
+  | 'role'
+  | 'sprite'
+  | 'hitSprites'
+  | 'hp'
+  | 'scoreBase'
+  | 'movingMultiplier'
+  | 'escortBonus'
+  | 'hitPadding'
+  | 'divePaths'
+  | 'diveWeight'
+  | 'returnsFromDive'
+  | 'fire'
+  | 'abilities'
+>;
+
 /**
- * One enemy, from an alien and its place in the stage.
+ * Everything an enemy copies off its alien.
  *
- * Everything the simulation needs is copied off the alien here rather than looked
- * up per frame, which is what lets `stepFleet` and the attack director work on
- * plain values — and what keeps an `Enemy` serialisable for a fingerprint.
+ * One function for both of the times an enemy is handed an alien — when it is
+ * built, and when a `transform` makes it another one mid-flight — so a change of
+ * type changes exactly what creation took from the alien, and nothing that came
+ * from the enemy's place in the stage.
  */
-function createEnemy(alien: Alien, seed: EnemySeed, rules: Rules): Enemy {
+function alienTraits(alien: Alien, rules: Rules): AlienTraits {
   const fire = alien.fire;
   return {
-    id: seed.id,
     alienId: alien.id,
     role: alien.role,
     sprite: alien.sprite,
     hitSprites: alien.hitSprites,
-    home: seed.home,
-    homes: seed.homes,
-    inCaptiveSlot: seed.inCaptiveSlot ?? false,
-    phase: seed.id % rules.enemies.updatePhases,
-    launchFrame: seed.launchFrame,
-    path: seed.path,
-    mirror: seed.mirror,
-    trailing: seed.trailing,
-    wave: seed.wave,
     hp: alien.hp,
     scoreBase: alien.score.base,
     movingMultiplier: alien.score.movingMultiplier ?? rules.scoring.movingMultiplier,
@@ -419,6 +442,29 @@ function createEnemy(alien: Alien, seed: EnemySeed, rules: Rules): Enemy {
             spreadOffsets: fire.spreadOffsets,
           },
     abilities: alien.abilities,
+  };
+}
+
+/**
+ * One enemy, from an alien and its place in the stage.
+ *
+ * Everything the simulation needs is copied off the alien here rather than looked
+ * up per frame, which is what lets `stepFleet` and the attack director work on
+ * plain values — and what keeps an `Enemy` serialisable for a fingerprint.
+ */
+function createEnemy(alien: Alien, seed: EnemySeed, rules: Rules): Enemy {
+  return {
+    id: seed.id,
+    ...alienTraits(alien, rules),
+    home: seed.home,
+    homes: seed.homes,
+    inCaptiveSlot: seed.inCaptiveSlot ?? false,
+    phase: seed.id % rules.enemies.updatePhases,
+    launchFrame: seed.launchFrame,
+    path: seed.path,
+    mirror: seed.mirror,
+    trailing: seed.trailing,
+    wave: seed.wave,
     state: 'standby',
     x: 0,
     y: 0,
@@ -431,6 +477,29 @@ function createEnemy(alien: Alien, seed: EnemySeed, rules: Rules): Enemy {
     bombTimer: rules.enemies.bomberReadyTimers[alien.role] ?? 0,
     bombsLeft: 0,
   };
+}
+
+/**
+ * Make an enemy a different alien, without interrupting what it is doing.
+ *
+ * What a `transform` does to the enemy itself (`./abilities/transform.ts`). Its
+ * place in the stage — id, slot, wave — and its motion — position, heading, the
+ * flight it is on and how far along it is — are untouched, so it carries on
+ * along the same path at the same speed. Everything its alien gave it is the new
+ * alien's ({@link alienTraits}): sprite, `hp` with every hit against the old one
+ * forgotten, score, hit box, dive paths, whether it returns, how it fires and
+ * which abilities it carries.
+ *
+ * Bombing is the one thing in between, because it belongs to the attack run and
+ * the run goes on. The frames until it may fire again are a clock and keep
+ * running; the bombs left in the run are kept, but never more than the new
+ * alien's `shotsPerDive` and none for an alien that does not fire — so a change
+ * of type can neither reload a run nor leave a non-firing alien holding bombs.
+ */
+export function becomeAlien(enemy: Enemy, alien: Alien, rules: Rules): void {
+  Object.assign(enemy, alienTraits(alien, rules));
+  enemy.hitsRemaining = alien.hp;
+  enemy.bombsLeft = Math.min(enemy.bombsLeft, enemy.fire?.shotsPerDive ?? 0);
 }
 
 /**

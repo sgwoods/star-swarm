@@ -4,8 +4,10 @@
  * Each ability is flown through a real world over a probe pack loaded by the real
  * loader, so what is measured is what a pack would get: a document switches the
  * ability on, and the world does the rest. Whole-run behaviour — a persona
- * playing a pack that uses all four — is `tests/sim/ability-pack.test.ts`; this
- * file pins what each one does, frame by frame, and what the loader refuses.
+ * playing a pack that uses them — is `tests/sim/ability-pack.test.ts` for the
+ * first four and `tests/sim/morph-mirror-pack.test.ts` for `transform` and
+ * `mirrorPlayer`; this file pins what each one does, frame by frame, and what the
+ * loader refuses.
  *
  * The capture beam is the registry's first module and has its own suite
  * (`./capture.test.ts`) and its own goldens; what is pinned here is that moving it
@@ -35,6 +37,8 @@ import { createWorld, fingerprintWorld, stepWorld, type World } from '../../src/
 import { classicRules, classicStages, quickRunRules } from '../helpers/rules.js';
 
 const FIRE = frameOf('fire');
+const LEFT = frameOf('left');
+const RIGHT = frameOf('right');
 
 /* -------------------------------------------------------------------------- */
 /* A probe pack                                                                */
@@ -464,6 +468,399 @@ describe('spawnMinions', () => {
 });
 
 /* -------------------------------------------------------------------------- */
+/* transform                                                                    */
+/* -------------------------------------------------------------------------- */
+
+describe('transform', () => {
+  /**
+   * What the probe becomes: different in every trait an alien gives an enemy, so
+   * a trait that failed to change would show.
+   */
+  const HUSK = {
+    id: 'husk',
+    role: 'drone',
+    sprite: 'dot',
+    hp: 3,
+    hitSprites: ['dot', 'dot'],
+    score: { base: 40, movingMultiplier: 3 },
+    hitPadding: { x: 2, y: 2 },
+    dive: { paths: ['dive-trigger'], returns: false },
+  } as const;
+  const WITH_HUSK = { 'aliens/husk.json': HUSK };
+  const MORPH_PATH = {
+    'paths/dive-morph.json': {
+      id: 'dive-morph',
+      segments: [
+        { type: 'aimAtPlayer', speed: 1, duration: 10 },
+        { type: 'trigger', ability: 'transform' },
+        { type: 'exitBottom', speed: 1 },
+      ],
+    },
+  };
+
+  /** A world over the probe pack with the husk in it. */
+  function huskWorld(probe: Record<string, unknown>): World {
+    const content = contentOf(probePack(probe, { ...WITH_HUSK, ...MORPH_PATH }));
+    return createWorld({
+      seed: 'abilities',
+      rules: quickRunRules(),
+      stages: { stageFor: () => content },
+    });
+  }
+
+  it('becomes `into` after `afterFrames` of a dive, and not a frame before', () => {
+    const world = huskWorld({ abilities: [{ type: 'transform', into: 'husk', afterFrames: 20 }] });
+    const probe = diving(world);
+    const id = probe.id;
+
+    const quiet: SimEvent[] = [];
+    for (let step = 0; step < 19; step += 1) quiet.push(...stepWorld(world, EMPTY_FRAME));
+    expect(eventsOfType(quiet, 'enemy-morphed')).toEqual([]);
+    expect(probe.alienId).toBe('probe');
+
+    const [morph] = eventsOfType(stepWorld(world, EMPTY_FRAME), 'enemy-morphed');
+    expect(morph).toEqual({
+      type: 'enemy-morphed',
+      targetId: id,
+      fromAlienId: 'probe',
+      alienId: 'husk',
+      x: probe.x,
+      y: probe.y,
+    });
+    // The same enemy — one alien became one alien — and nothing was destroyed.
+    expect(probe.id).toBe(id);
+    expect(probe.alienId).toBe('husk');
+    expect(world.fleet.enemies.filter((enemy) => enemy.state !== 'dead')).toEqual([probe]);
+  });
+
+  it('keeps its position, its speed and its place on the path', () => {
+    const world = huskWorld({ abilities: [{ type: 'transform', into: 'husk', afterFrames: 20 }] });
+    const twin = huskWorld({});
+    const probe = diving(world);
+    const plain = diving(twin);
+    for (let step = 0; step < 60; step += 1) {
+      stepWorld(world, EMPTY_FRAME);
+      stepWorld(twin, EMPTY_FRAME);
+      // Frame for frame the flight a plain probe flies: the change never moved it.
+      expect([step, probe.x, probe.y, probe.pathFrame, probe.heading]).toEqual([
+        step,
+        plain.x,
+        plain.y,
+        plain.pathFrame,
+        plain.heading,
+      ]);
+    }
+    expect(probe.alienId).toBe('husk');
+    expect(probe.state).toBe('diving');
+  });
+
+  it('takes every trait from the new alien and loses the old one’s state', () => {
+    const world = huskWorld({
+      hp: 2,
+      hitSprites: ['dot'],
+      abilities: [
+        { type: 'shield', hits: 2 },
+        { type: 'transform', into: 'husk', afterFrames: 10 },
+      ],
+    });
+    const probe = diving(world);
+    // One hit taken against the old alien, and its shield already broken.
+    probe.hitsRemaining = 1;
+    world.abilities.shield.set(probe.id, { remaining: 0, sinceHit: 3 });
+    for (let step = 0; step < 10; step += 1) stepWorld(world, EMPTY_FRAME);
+
+    expect(probe).toMatchObject({
+      alienId: 'husk',
+      role: 'drone',
+      hp: 3,
+      // Whole: hits taken as the old alien are not carried into the new one.
+      hitsRemaining: 3,
+      hitSprites: ['dot', 'dot'],
+      scoreBase: 40,
+      movingMultiplier: 3,
+      hitPadding: HUSK.hitPadding,
+      divePaths: ['dive-trigger'],
+      returnsFromDive: false,
+      fire: undefined,
+      abilities: [],
+    });
+    // The shield was the old alien's, and its charges went with it; so did the timer.
+    expect(world.abilities.shield.has(probe.id)).toBe(false);
+    expect(world.abilities.transform.has(probe.id)).toBe(false);
+    // What it became is recorded, so a replay comparison can see the change.
+    expect(world.abilities.transformed.get(probe.id)).toBe('husk');
+  });
+
+  it('keeps the attack run’s bombs, but never more than the new alien may carry', () => {
+    const world = huskWorld({
+      fire: { pattern: 'aimed', shotsPerDive: 3, cooldownFrames: 90 },
+      abilities: [{ type: 'transform', into: 'husk', afterFrames: 5 }],
+    });
+    const probe = diving(world);
+    expect(probe.bombsLeft).toBe(3);
+    for (let step = 0; step < 5; step += 1) stepWorld(world, EMPTY_FRAME);
+    // The husk does not fire, so the run's allowance is gone with the old type.
+    expect(probe.alienId).toBe('husk');
+    expect(probe.bombsLeft).toBe(0);
+  });
+
+  it('scores as the new alien, and the change itself scores nothing', () => {
+    const world = huskWorld({ abilities: [{ type: 'transform', into: 'husk', afterFrames: 5 }] });
+    const probe = diving(world);
+    const change: SimEvent[] = [];
+    for (let step = 0; step < 5; step += 1) change.push(...stepWorld(world, EMPTY_FRAME));
+    expect(eventsOfType(change, 'enemy-morphed')).toHaveLength(1);
+    expect(eventsOfType(change, 'score-changed')).toEqual([]);
+    expect(eventsOfType(change, 'target-destroyed')).toEqual([]);
+
+    const kill = stepUntil(world, () => probe.state === 'dead', FIRE);
+    // Three hits, because the husk has three; the last is worth the husk's base
+    // doubled — tripled, by its own multiplier — because it was diving.
+    expect(eventsOfType(kill, 'target-hit')).toHaveLength(2);
+    const [destroyed] = eventsOfType(kill, 'target-destroyed');
+    expect(destroyed).toMatchObject({ targetId: probe.id, alienId: 'husk', score: 120 });
+    expect(eventsOfType(kill, 'score-changed').map((event) => event.delta)).toEqual([120]);
+  });
+
+  it('changes at a path trigger naming it, with no timer at all', () => {
+    const world = huskWorld({
+      dive: { paths: ['dive-morph'] },
+      abilities: [{ type: 'transform', into: 'husk' }],
+    });
+    const probe = diving(world, 'dive-morph');
+    const events: SimEvent[] = [];
+    for (let step = 0; step < 30; step += 1) events.push(...stepWorld(world, EMPTY_FRAME));
+    expect(eventsOfType(events, 'enemy-morphed')).toHaveLength(1);
+    expect(probe.alienId).toBe('husk');
+  });
+
+  it('never changes outside a dive', () => {
+    const world = huskWorld({ abilities: [{ type: 'transform', into: 'husk', afterFrames: 5 }] });
+    const probe = probeOf(world);
+    const events = stepUntil(world, () => probe.state === 'home');
+    world.dive.armed = false;
+    for (let step = 0; step < 200; step += 1) events.push(...stepWorld(world, EMPTY_FRAME));
+    expect(eventsOfType(events, 'enemy-morphed')).toEqual([]);
+    expect(probe.alienId).toBe('probe');
+  });
+
+  it('leaves the capture channel’s captor the type it was chosen for', () => {
+    const world = huskWorld({ abilities: [{ type: 'transform', into: 'husk', afterFrames: 5 }] });
+    const probe = diving(world);
+    world.capture.captorId = probe.id;
+    const events: SimEvent[] = [];
+    for (let step = 0; step < 30; step += 1) events.push(...stepWorld(world, EMPTY_FRAME));
+    expect(eventsOfType(events, 'enemy-morphed')).toEqual([]);
+    expect(probe.alienId).toBe('probe');
+  });
+
+  it('stops the old alien’s abilities on the frame it changes', () => {
+    // Both due on the same frame, the transform listed first: the teleport was
+    // the old alien's, and the old alien is gone.
+    const world = huskWorld({
+      abilities: [
+        { type: 'transform', into: 'husk', afterFrames: 10 },
+        { type: 'teleport', everyFrames: 10 },
+      ],
+    });
+    diving(world);
+    const events: SimEvent[] = [];
+    for (let step = 0; step < 10; step += 1) events.push(...stepWorld(world, EMPTY_FRAME));
+    expect(eventsOfType(events, 'enemy-morphed')).toHaveLength(1);
+    expect(eventsOfType(events, 'enemy-teleported')).toEqual([]);
+  });
+
+  it('hands over to the new alien’s own abilities on the next frame, even back again', () => {
+    // A chain that comes round is allowed — each link is one enemy becoming one —
+    // and each alien's timer counts its own frames of the dive from the frame
+    // after it arrived, so the changes land ten frames apart.
+    const cycler = {
+      ...HUSK,
+      id: 'cycler',
+      abilities: [{ type: 'transform', into: 'probe', afterFrames: 10 }],
+    };
+    const content = contentOf(
+      probePack(
+        { abilities: [{ type: 'transform', into: 'cycler', afterFrames: 10 }] },
+        { 'aliens/cycler.json': cycler },
+      ),
+    );
+    const world = createWorld({
+      seed: 'abilities',
+      rules: quickRunRules(),
+      stages: { stageFor: () => content },
+    });
+    const probe = diving(world);
+    const changes: [number, string, string][] = [];
+    for (let step = 1; step <= 30; step += 1) {
+      for (const event of eventsOfType(stepWorld(world, EMPTY_FRAME), 'enemy-morphed')) {
+        changes.push([step, event.fromAlienId, event.alienId]);
+      }
+    }
+    expect(changes).toEqual([
+      [10, 'probe', 'cycler'],
+      [20, 'cycler', 'probe'],
+      [30, 'probe', 'cycler'],
+    ]);
+    expect(probe.alienId).toBe('cycler');
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* mirrorPlayer                                                                 */
+/* -------------------------------------------------------------------------- */
+
+describe('mirrorPlayer', () => {
+  /** Slide right for 40 frames, then left for 40, then right: something to copy. */
+  const sweep = (step: number) => (Math.floor(step / 40) % 2 === 0 ? RIGHT : LEFT);
+
+  /** Dive the probe and record, after each step, the fighter's x and the probe's. */
+  function flown(
+    mirror: Record<string, unknown>,
+    steps: number,
+    input: (step: number) => number = sweep,
+  ): { readonly player: number[]; readonly probe: number[]; readonly world: World } {
+    const world = probeWorld({ abilities: [{ type: 'mirrorPlayer', ...mirror }] });
+    const probe = diving(world);
+    const player: number[] = [];
+    const xs: number[] = [];
+    for (let step = 0; step < steps; step += 1) {
+      stepWorld(world, input(step));
+      player.push(world.player.x);
+      xs.push(probe.x);
+    }
+    return { player, probe: xs, world };
+  }
+
+  it('tracks: at strength 1 its column is the fighter’s, `delayFrames` ago', () => {
+    const delay = 6;
+    const { player, probe } = flown({ mode: 'track', delayFrames: delay, strength: 1 }, 100);
+    for (let step = delay; step < 100; step += 1) {
+      expect(probe[step]).toBeCloseTo(player[step - delay]!, 9);
+    }
+    // And the fighter really did move, both ways, so the copy was of something.
+    expect(Math.max(...player) - Math.min(...player)).toBeGreaterThan(40);
+  });
+
+  it('holds the opposite position: the fighter’s column mirrored about the centre line', () => {
+    const delay = 6;
+    const { player, probe, world } = flown(
+      { mode: 'opposite', delayFrames: delay, strength: 1 },
+      100,
+    );
+    const { width } = world.rules.playfield;
+    for (let step = delay; step < 100; step += 1) {
+      expect(probe[step]).toBeCloseTo(width - player[step - delay]!, 9);
+    }
+  });
+
+  it('moves the way the fighter moved, or the other way, `delayFrames` later', () => {
+    // A still fighter for 30 frames, then a slide right. The probe's sideways
+    // motion against an unmirrored twin changes direction because, and only
+    // `delayFrames` after, the fighter started to move.
+    const delay = 10;
+    const still = (step: number) => (step < 30 ? EMPTY_FRAME : RIGHT);
+    const twin = probeWorld({});
+    const plain = diving(twin);
+    const base: number[] = [];
+    for (let step = 0; step < 80; step += 1) {
+      stepWorld(twin, still(step));
+      base.push(plain.x);
+    }
+    for (const [mode, sign] of [
+      ['track', 1],
+      ['opposite', -1],
+    ] as const) {
+      const { probe } = flown({ mode, delayFrames: delay, strength: 0.2 }, 80, still);
+      const offset = probe.map((x, step) => x - base[step]!);
+      // Before the delay is up there is nothing old enough to copy.
+      for (let step = 0; step < delay; step += 1) expect(offset[step]).toBe(0);
+      // Long after the fighter set off, the probe is still being pulled its way
+      // (or the other way), frame after frame.
+      for (let step = 30 + delay + 2; step < 80; step += 1) {
+        const pulled = offset[step]! - offset[step - 1]!;
+        expect([mode, step, Math.sign(pulled)]).toEqual([mode, step, sign]);
+      }
+    }
+  });
+
+  it('eases in below strength 1, and leaves the row and the path to the path', () => {
+    const strength = 0.25;
+    const twin = probeWorld({});
+    const plain = diving(twin);
+    const world = probeWorld({
+      abilities: [{ type: 'mirrorPlayer', mode: 'opposite', delayFrames: 0, strength }],
+    });
+    const probe = diving(world);
+    const { width } = world.rules.playfield;
+    for (let step = 0; step < 60; step += 1) {
+      const [x, plainX] = [probe.x, plain.x];
+      stepWorld(world, EMPTY_FRAME);
+      stepWorld(twin, EMPTY_FRAME);
+      expect(probe.y).toBe(plain.y);
+      expect(probe.pathFrame).toBe(plain.pathFrame);
+      // The flight moved it sideways exactly as it moved the unmirrored twin, and
+      // the pull then closed `strength` of what was left of the gap — no more.
+      const flew = x + (plain.x - plainX);
+      const target = width - world.player.x;
+      expect(target - probe.x).toBeCloseTo((1 - strength) * (target - flew), 9);
+    }
+  });
+
+  it('never moves an enemy in its slot', () => {
+    const world = probeWorld({
+      abilities: [{ type: 'mirrorPlayer', mode: 'track', delayFrames: 0, strength: 1 }],
+    });
+    const twin = probeWorld({});
+    const probe = probeOf(world);
+    const plain = probeOf(twin);
+    stepUntil(world, () => probe.state === 'home');
+    stepUntil(twin, () => plain.state === 'home');
+    world.dive.armed = false;
+    twin.dive.armed = false;
+    for (let step = 0; step < 120; step += 1) {
+      stepWorld(world, sweep(step));
+      stepWorld(twin, sweep(step));
+      expect(probe.x).toBe(plain.x);
+    }
+    expect(world.abilities.mirrorPlayer.size).toBe(0);
+  });
+
+  it('copies nothing while there is no fighter, and forgets what it had seen', () => {
+    const world = probeWorld({
+      abilities: [{ type: 'mirrorPlayer', mode: 'opposite', delayFrames: 4, strength: 0.5 }],
+    });
+    const twin = probeWorld({});
+    const probe = diving(world);
+    const plain = diving(twin);
+    for (const each of [world, twin]) {
+      each.player.alive = false;
+      each.player.respawnTimer = 10_000;
+    }
+    for (let step = 0; step < 60; step += 1) {
+      stepWorld(world, EMPTY_FRAME);
+      stepWorld(twin, EMPTY_FRAME);
+      expect(probe.x).toBe(plain.x);
+    }
+    expect(world.abilities.mirrorPlayer.has(probe.id)).toBe(false);
+  });
+
+  it('draws no random number, so a seed’s draws are unchanged by it', () => {
+    const world = probeWorld({
+      abilities: [{ type: 'mirrorPlayer', mode: 'track', delayFrames: 3, strength: 0.5 }],
+    });
+    const twin = probeWorld({});
+    diving(world);
+    diving(twin);
+    for (let step = 0; step < 60; step += 1) {
+      stepWorld(world, sweep(step));
+      stepWorld(twin, sweep(step));
+    }
+    expect(world.rng.getState()).toEqual(twin.rng.getState());
+  });
+});
+
+/* -------------------------------------------------------------------------- */
 /* What the loader refuses                                                      */
 /* -------------------------------------------------------------------------- */
 
@@ -500,6 +897,9 @@ describe('the loader holds each ability to doing something', () => {
     expect(refusals({ abilities: [{ type: 'teleport' }] })).toEqual([
       expect.stringContaining('teleport never fires'),
     ]);
+    expect(refusals({ abilities: [{ type: 'transform', into: 'shard' }] })).toEqual([
+      expect.stringContaining('transform never fires'),
+    ]);
     expect(
       refusals({ abilities: [{ type: 'spawnMinions', alien: 'shard', maxAlive: 1 }] }),
     ).toEqual([expect.stringContaining('spawnMinions never fires')]);
@@ -513,5 +913,31 @@ describe('the loader holds each ability to doing something', () => {
     expect(refusals({ abilities: [{ type: 'splitOnHit', into: 'ghost', count: 2 }] })).toEqual([
       expect.stringContaining('no alien with id "ghost"'),
     ]);
+    expect(
+      refusals({ abilities: [{ type: 'transform', into: 'ghost', afterFrames: 10 }] }),
+    ).toEqual([expect.stringContaining('no alien with id "ghost"')]);
+  });
+
+  it('refuses a transform into the alien that declares it', () => {
+    expect(
+      refusals({ abilities: [{ type: 'transform', into: 'probe', afterFrames: 10 }] }),
+    ).toEqual([expect.stringContaining('transform changes nothing')]);
+  });
+
+  it('accepts a transform into an alien that never dives, and a chain that comes round', () => {
+    // The changed enemy carries on the dive it inherited, so its new alien needs
+    // no dive paths of its own; and each link is one enemy becoming one enemy.
+    expect(
+      refusals(
+        { abilities: [{ type: 'transform', into: 'shard', afterFrames: 10 }] },
+        {
+          'aliens/shard.json': {
+            ...SHARD,
+            dive: undefined,
+            abilities: [{ type: 'transform', into: 'probe', afterFrames: 10 }],
+          },
+        },
+      ).filter((message) => message.includes('transform')),
+    ).toEqual([]);
   });
 });

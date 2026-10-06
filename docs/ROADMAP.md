@@ -34,17 +34,15 @@ was never a deployment question:
 
 ## Next: Milestone 3 — configurable
 
-- **Ship: the two reserved abilities, and a game that uses the new four.** The
-  ability registry and its first four new abilities have landed, and so have the
-  playability checks in the validator; both moved to
+- **Ship: a game that uses the new six abilities.** The ability registry and all
+  six of its new abilities have landed — `transform` and `mirrorPlayer` last, once
+  what each means had been decided — and so have the playability checks in the
+  validator; all of it moved to
   [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#44-where-a-second-game-plugs-in)
   ([§4.4](ARCHITECTURE.md#44-where-a-second-game-plugs-in) and
   [§4.7](ARCHITECTURE.md#47-the-playability-pass)), which is where a thing that
-  exists is described. `transform` and `mirrorPlayer` will each need a
-  specification before a module — what an alien turning into another one
-  mid-flight keeps, and what mirroring the player means for its controls — and no
-  installed pack will switch the four on until a variant does, along with the
-  sounds and effects their events want.
+  exists is described. No installed pack will switch the six on until a variant
+  does, along with the sounds and effects their events want.
 
 Also in this milestone, because they are the same kind of work:
 
@@ -69,7 +67,7 @@ fails validation for being unplayable rather than merely malformed, and a pack
 with a new ability plays without an engine change — the first met by the pack
 manager and the stage-sequence editor, the second by the validator's playability
 pass, and the third by `tests/sim/ability-pack.test.ts`. What the milestone still
-owes is the second game and the two reserved abilities above.
+owes is the second game and a game that uses the new abilities.
 
 ## Now: Milestone 4 — prompt forge
 

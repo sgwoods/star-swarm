@@ -223,9 +223,15 @@ export function loadPack(source: PackSource): LoadResult {
    * - An alien an ability puts on the field has to be able to fly: fragments and
    *   minions take one of their own dive paths, so one with none is refused here
    *   rather than appearing frozen.
-   * - `teleport` and `spawnMinions` fire on a timer, at a path trigger, or both.
-   *   With no timer, one of the alien's own dive paths has to carry the trigger,
-   *   or it never fires.
+   * - `teleport`, `spawnMinions` and `transform` fire on a timer, at a path
+   *   trigger, or both. With no timer, one of the alien's own dive paths has to
+   *   carry the trigger, or it never fires.
+   *
+   * And one way it could act and still change nothing: a `transform` into the
+   * alien that declares it. Its `into` may name any other alien, whether or not
+   * that one dives — it carries on the dive it inherits — and a chain of
+   * transforms may lead back round, because each link is one enemy becoming one
+   * enemy and nothing accumulates.
    */
   const checkAbility = (file: string, field: string, alien: Alien, ability: AlienAbility): void => {
     const flies = (id: string, at: string): void => {
@@ -269,6 +275,25 @@ export function loadPack(source: PackSource): LoadResult {
             file,
             field: `${field}.everyFrames`,
             message: `teleport never fires: there is no "everyFrames" and none of this alien's dive paths has a trigger naming it`,
+          });
+        }
+        return;
+      case 'transform':
+        if (!aliens.has(ability.into)) missing(file, `${field}.into`, 'alien', ability.into);
+        else if (ability.into === alien.id) {
+          errors.push({
+            pack,
+            file,
+            field: `${field}.into`,
+            message: `transform changes nothing: "into" is "${alien.id}", the alien that declares it`,
+          });
+        }
+        if (ability.afterFrames === undefined && !triggered(ability.type)) {
+          errors.push({
+            pack,
+            file,
+            field: `${field}.afterFrames`,
+            message: `transform never fires: there is no "afterFrames" and none of this alien's dive paths has a trigger naming it`,
           });
         }
         return;

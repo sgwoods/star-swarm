@@ -11,17 +11,23 @@
  *    rule fails the build before anybody reviews it.
  * 2. **Refusing is a required feature, because nothing downstream catches the
  *    alternative.** `docs/DESIGN.md` section 7.5 asks the generator to decline a
- *    prompt the ability registry cannot satisfy. The registry implements five of
- *    the seven ids the schema reserves, and the rest of this file is the reason
- *    the other two matter: the schema *accepts* a reserved ability, the loader is
- *    happy, the gate passes, and the simulation does nothing — so a pack that
- *    improvised one would be indistinguishable from a pack that worked, right up
- *    to somebody playing it. The same is true of two stage fields and of a role
- *    the difficulty rows do not name. Each is asserted here as an *identity*
- *    between a world that states the thing and a world that does not, which is
- *    the only form of "silently nothing" that cannot rot — and an implemented
- *    ability is asserted as the opposite, so the day one stops acting, this says
- *    so.
+ *    prompt the ability registry cannot satisfy. A field the schema *accepts* and
+ *    the simulation ignores is the trap: the loader is happy, the gate passes, and
+ *    the game does nothing — so a pack that improvised one would be
+ *    indistinguishable from a pack that worked, right up to somebody playing it.
+ *    Two stage fields and a role the difficulty rows do not name are like that,
+ *    and each is asserted here as an *identity* between a world that states the
+ *    thing and a world that does not, which is the only form of "silently
+ *    nothing" that cannot rot. Every implemented ability is asserted as the
+ *    opposite, so the day one stops acting, this says so.
+ *
+ *    Two ability ids used to be in the first group. `transform` and
+ *    `mirrorPlayer` were reserved — accepted with any parameters and read by
+ *    nothing — and this file pinned that identity, which is what made `/forge`
+ *    refuse a prompt needing either. Both have modules now, so the identity was
+ *    turned round deliberately rather than deleted: the reserved list is pinned
+ *    empty, the improvisation it used to swallow is pinned as a load error, and
+ *    each of the two is pinned as changing the world.
  *
  * `docs/content-guide.md` sections 2 and 9 are the author-facing statement of all
  * of it; this is the machine-checked one.
@@ -273,17 +279,58 @@ function fingerprintOf(alien: Record<string, unknown>, stage: Record<string, unk
   return fingerprintWorld(world);
 }
 
+/**
+ * One run of a world in which the probe dives, fingerprinted as it goes.
+ *
+ * {@link fingerprintOf} shoots the probe before it ever leaves its slot, and the
+ * two abilities that act only on a dive would pass its identity without having
+ * been asked anything. So this holds fire and keeps the fighter moving — sliding
+ * one way and then the other, which is what a mirror has to copy — under the
+ * shipped rules, whose difficulty rows launch the probe's role, less the return
+ * leg the probe pack does not carry.
+ */
+function divingFingerprintOf(alien: Record<string, unknown>): string {
+  const pack = probePack(alien, PLAIN_STAGE);
+  const content = resolveStageContent(pack, [...pack.stages.values()][0]!);
+  if (content === undefined) throw new Error('the probe stage resolved to nothing');
+  // The probe pack carries no return leg, so a diver that misses leaves the field
+  // instead of asking for Classic's.
+  const rules = structuredClone(classicRules());
+  delete rules.enemies.dive.returnPath;
+  const world = createWorld({
+    seed: 'forge-guard-dive',
+    rules,
+    stages: { stageFor: () => content },
+  });
+  const LEFT = 1 << 0;
+  const RIGHT = 1 << 1;
+  let dived = false;
+  const prints: string[] = [];
+  for (let step = 0; step < 3_000; step += 1) {
+    stepWorld(world, Math.floor(step / 45) % 2 === 0 ? LEFT : RIGHT);
+    dived ||= world.fleet.enemies.some((enemy) => enemy.state === 'diving');
+    // Sampled through the run, not once at the end: the lone probe clears its
+    // stage by leaving it, and ability state is per stage.
+    if (step % 10 === 0) prints.push(fingerprintWorld(world));
+  }
+  // A probe that never dived would make the comparison below say nothing.
+  if (!dived) throw new Error('the probe never dived, so a dive-only ability was never asked');
+  return prints.join('\n');
+}
+
 describe('the engine accepts content it cannot honour, which is why /forge must refuse', () => {
-  it('loads an alien carrying a reserved ability, with parameters nobody validates', () => {
-    // `docs/DESIGN.md` section 7.5's registry reserves these ids and implements
-    // them nowhere, and their schema is deliberately loose about parameters until
-    // something can say what one would mean. So this passes — which is the problem.
-    const parsed = alienSchema.parse({
-      ...PLAIN_ALIEN,
-      abilities: RESERVED_ABILITY_TYPES.map((type) => ({ type, into: 'nothing', count: 99 })),
-    });
-    expect(parsed.abilities.map((ability) => ability.type)).toEqual([...RESERVED_ABILITY_TYPES]);
-    expect(() => probePack({ ...parsed }, PLAIN_STAGE)).not.toThrow();
+  it('reserves no ability id: the improvisation a reserved id used to swallow is a load error', () => {
+    // This used to load an alien declaring `transform` and `mirrorPlayer` with
+    // parameters nobody validated, and pass — which was the problem it pinned.
+    // Both now have a module and a strict schema of their own, so the same
+    // document is refused, and the list of ids that would accept it is empty. An
+    // id reserved again fails the first assertion, and is the day `/forge` goes
+    // back to refusing a prompt that needs it.
+    expect(RESERVED_ABILITY_TYPES).toEqual([]);
+    for (const type of ['transform', 'mirrorPlayer']) {
+      const improvised = { ...PLAIN_ALIEN, abilities: [{ type, into: 'nothing', count: 99 }] };
+      expect([type, alienSchema.safeParse(improvised).success]).toEqual([type, false]);
+    }
   });
 
   it('refuses an implemented ability whose parameters are wrong or lead nowhere', () => {
@@ -297,6 +344,14 @@ describe('the engine accepts content it cannot honour, which is why /forge must 
       { type: 'teleport' },
       { type: 'spawnMinions', alien: 'shard' },
       { type: 'captureBeam' },
+      { type: 'transform' },
+      { type: 'transform', into: 'nothing', afterFrames: 10 },
+      { type: 'transform', into: 'probe', afterFrames: 10 },
+      { type: 'transform', into: 'shard' },
+      { type: 'mirrorPlayer' },
+      { type: 'mirrorPlayer', mode: 'sideways', delayFrames: 0, strength: 1 },
+      { type: 'mirrorPlayer', mode: 'track', delayFrames: 4, strength: 0 },
+      { type: 'mirrorPlayer', mode: 'track', delayFrames: 4, strength: 2 },
     ];
     for (const ability of bad) {
       let refused = false;
@@ -322,23 +377,28 @@ describe('the engine accepts content it cannot honour, which is why /forge must 
     const modules = readdirSync(abilities).filter((name) => name.endsWith('.ts'));
     expect(modules.length).toBe(implemented.length + 1);
     expect(modules).toContain('registry.ts');
-    for (const reserved of RESERVED_ABILITY_TYPES) {
-      const file = `${reserved.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}.ts`;
-      expect(modules).not.toContain(file);
+    const fileOf = (id: string): string =>
+      `${id.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}.ts`;
+    for (const reserved of RESERVED_ABILITY_TYPES as readonly string[]) {
+      expect(modules).not.toContain(fileOf(reserved));
     }
+    for (const id of implemented) expect(modules).toContain(fileOf(id));
   });
 
-  it('plays a world identically whether or not an alien declares a reserved ability', () => {
-    // The identity is the whole point: a reserved ability on an alien that is shot
-    // dead changes nothing at all, so a forged pack that improvised one would look
-    // exactly like a forged pack that worked.
-    const plain = fingerprintOf(PLAIN_ALIEN, PLAIN_STAGE);
-    for (const type of RESERVED_ABILITY_TYPES) {
-      const withAbility = fingerprintOf(
-        { ...PLAIN_ALIEN, abilities: [{ type, into: 'shard', count: 2 }] },
-        PLAIN_STAGE,
-      );
-      expect([type, withAbility]).toEqual([type, plain]);
+  it('plays a world differently when an alien declares `transform` or `mirrorPlayer`', () => {
+    // The turned-round identity. While the two were reserved this asserted that
+    // declaring either changed nothing at all; now each must change the world,
+    // and the same dive with and without it must disagree. If either ever comes
+    // out equal, its module has stopped acting and `/forge` would be back to
+    // refusing it.
+    const plain = divingFingerprintOf(PLAIN_ALIEN);
+    for (const ability of [
+      { type: 'transform', into: 'shard', afterFrames: 10 },
+      { type: 'mirrorPlayer', mode: 'track', delayFrames: 8, strength: 0.25 },
+      { type: 'mirrorPlayer', mode: 'opposite', delayFrames: 8, strength: 0.25 },
+    ]) {
+      const withAbility = divingFingerprintOf({ ...PLAIN_ALIEN, abilities: [ability] });
+      expect([ability, withAbility === plain]).toEqual([ability, false]);
     }
   });
 

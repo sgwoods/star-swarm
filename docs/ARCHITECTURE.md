@@ -65,7 +65,7 @@ doing it. Milestone 3 has begun: the variant concept, the start-up selector and
 the player-settings menu are in ([§4.5](#45-variants-the-games-this-build-offers)
 and [§6](#6-settings-and-the-difficulty-preset)), the validator flies every
 stage it passes ([§4.7](#47-the-playability-pass)), and the ability registry is
-in, with four abilities a pack's aliens switch on beside the capture beam
+in, with six abilities a pack's aliens switch on beside the capture beam
 ([§4.4](#44-where-a-second-game-plugs-in)).
 [§5](#5-what-is-not-here-yet) is what is left.
 <!-- check:count classic.stages.normal 13 classic.sequence.normal 17 classic.stages.challenge 8 -->
@@ -755,24 +755,38 @@ of a pack rather than a branch in the engine.
 The beam is the first module of the **ability registry** in `src/sim/abilities/`,
 and every other ability is on the same side of the same line. An ability is engine
 behaviour a pack switches on and tunes, never one it defines: `splitOnHit`,
-`shield`, `teleport` and `spawnMinions` are each a module of hooks the world calls
-at fixed points of a step, switched on by an entry in an alien's `abilities` whose
-parameters that ability's own schema validates — and `teleport` and `spawnMinions`
-can be told _when_ by the same kind of `trigger` the beam uses. `ABILITY_REGISTRY`
-is typed over exactly the ids the schema implements, so an id without a module, or
-a module for an id still reserved, does not build. The capture beam is the one
+`transform`, `shield`, `teleport`, `spawnMinions` and `mirrorPlayer` are each a
+module of hooks the world calls at fixed points of a step, switched on by an entry
+in an alien's `abilities` whose parameters that ability's own schema validates —
+and `transform`, `teleport` and `spawnMinions` can be told _when_ by the same kind
+of `trigger` the beam uses. `ABILITY_REGISTRY` is typed over exactly the ids the
+schema implements, so an id without a module, or a module for an id still
+reserved, does not build — and no id is reserved now. The capture beam is the one
 registered ability that is a channel rather than something an enemy carries, which
 is why `rules.capture` switches it on and an alien may not. Content that declares no
 ability passes through the registry untouched and fingerprints byte for byte as it
 did before the registry existed, so every golden still reproduces.
-<!-- check:count sim.abilities.implemented 5 schema.reservedAbilityIds 2 -->
+<!-- check:count sim.abilities.implemented 7 schema.reservedAbilityIds 0 -->
+
+Two of those six were reserved — named in the schema, read by nothing — until
+what each _means_ was decided, and the decision is the module. A `transform` is
+a change of type on a trigger: a diving enemy becomes one other alien and keeps
+its position, its speed and its place on the path, loses everything that belonged
+to the old alien, and is worth what the new one is worth. It is not the arcade's
+transform attack, which turns one enemy into a group and stays in the rules layer
+as `rules.transform`. A `mirrorPlayer` diver copies the fighter's horizontal
+movement — closing on the fighter's column or on its mirror image, as it stood a
+pack-stated number of frames ago and by a pack-stated fraction each frame — so it
+moves because the fighter moved. `src/sim/abilities/README.md` carries both
+definitions in full.
 
 The roadmap's test of all this is that a pack with a new ability plays without an
 engine change, and `tests/sim/ability-pack.test.ts` is that test rather than a
 claim about the loader: a pack of nothing but documents, layered over Classic the
-way `packs/deep-sea/` is, switches on all four and is played to the end of its
-stage by an autoplay persona — splitting, shielding, teleporting and spawning on
-the way.
+way `packs/deep-sea/` is, switches on four of the new abilities and is played to
+the end of its stage by an autoplay persona — splitting, shielding, teleporting
+and spawning on the way. `tests/sim/morph-mirror-pack.test.ts` is the same test
+for the other two, changing type and mirroring the fighter.
 
 The split follows the classification in the rules-and-scoring scout report
 (section 9), not a fresh decision:
@@ -943,12 +957,11 @@ got wrong before it got them right.
 described:
 
 - **Only the registry's abilities can be composed.** `src/content/schema.ts` lists
-  seven ability ids: five are implemented in `src/sim/abilities/` and validate
-  their own parameters, and two are reserved, validate with anything and do
-  nothing ([§5](#5-what-is-not-here-yet)). So an alien can split, shield, teleport
-  and spawn as those modules specify, and a prompt that needs anything else an
-  alien might _do_ is refused.
-  <!-- check:count schema.abilityIds 7 sim.abilities.implemented 5 sim.abilities.modules 6 -->
+  seven ability ids, all seven implemented in `src/sim/abilities/`, each
+  validating its own parameters. So an alien can split, shield, teleport, spawn,
+  change type and copy the fighter as those modules specify, and a prompt that
+  needs anything else an alien might _do_ is refused.
+  <!-- check:count schema.abilityIds 7 sim.abilities.implemented 7 sim.abilities.modules 8 -->
 - **Passing the validator means the stage was flown, within a protocol.**
   `npm run validate-packs` starts the simulation for every stage every variant
   plays and fails a pack for being unplayable ([§4.7](#47-the-playability-pass)).
@@ -961,11 +974,13 @@ described:
 **Refusing is a feature of the skill, not a failure of it** — `docs/DESIGN.md`
 section 7.5 asks for it — and the reason it has to happen at generation time is
 machine-checked. `tests/unit/forge-guard.test.ts` asserts that a world plays
-_identically_ whether or not an alien declares a reserved ability, whether or not
-a stage states `modifiers` or `diveRules`, and that an alien in a role no
-difficulty row names never launches — and, the other way round, that an
-implemented ability does change the world, so the line between the two cannot
-quietly move. Each of those validates, passes the gate, and does nothing —
+_identically_ whether or not a stage states `modifiers` or `diveRules`, and that an
+alien in a role no difficulty row names never launches — and, the other way round,
+that an implemented ability does change the world, so the line between the two
+cannot quietly move. It used to assert the identity for the two reserved ability
+ids as well; with both implemented it pins the reserved list empty and asserts
+the opposite for each. Each of the first group validates, passes the gate, and
+does nothing —
 so a pack that improvised around a missing capability would be indistinguishable
 from one that worked until somebody played it. The same file holds every pack and
 every variant to `docs/DESIGN.md` section 2: a scan for the original's name and for
@@ -1061,18 +1076,14 @@ stale absence list is the failure mode this section is most prone to — a docum
 describing as deliberately absent something that shipped two merges ago.
 [`docs/ROADMAP.md`](ROADMAP.md) is where each of these is scheduled.
 
-- **Two of the registry's seven ids.** `transform` and `mirrorPlayer` are reserved
-  in `src/content/schema.ts` and implemented nowhere: an alien may declare either
-  with any parameters and nothing reads it, so `/forge` **refuses** a prompt that
-  needs one rather than producing something adjacent ([§4.6](#46-the-forge)). The
-  other five are in `src/sim/abilities/` ([§4.4](#44-where-a-second-game-plugs-in)).
-  <!-- check:count schema.abilityIds 7 schema.reservedAbilityIds 2 sim.abilities.implemented 5 -->
-- **Nothing in a shipped game uses the four new abilities.** They are reached only
-  by a pack that switches them on, and no installed pack does yet; the one that
-  plays them is the test's (`tests/sim/ability-pack.test.ts`). Their events —
-  `shield-hit`, `shield-restored`, `enemy-split`, `enemy-teleported` and
-  `minions-spawned` — are ones a pack may bind a sound or an effect to, and none
-  does, so a shield hit is not yet visible on screen.
+- **Nothing in a shipped game uses the six new abilities.** They are reached only
+  by a pack that switches them on, and no installed pack does yet; the packs that
+  play them are the tests' (`tests/sim/ability-pack.test.ts` and
+  `tests/sim/morph-mirror-pack.test.ts`). Their events — `shield-hit`,
+  `shield-restored`, `enemy-split`, `enemy-teleported`, `minions-spawned` and
+  `enemy-morphed` — are ones a pack may bind a sound or an effect to, and none
+  does, so a shield hit is not yet visible on screen. `mirrorPlayer` raises no
+  event: what it does is the diver's motion.
 - **Music** is named in the design plan and is not written yet.
   <!-- check:absent src/audio/music.ts -->
 - **No stage is a boss stage.** `boss` is one of the three stage kinds the schema

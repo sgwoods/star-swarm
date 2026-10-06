@@ -323,20 +323,18 @@ export const ABILITY_TYPES = [
 export type AbilityType = (typeof ABILITY_TYPES)[number];
 
 /**
- * Ids the schema reserves and no module implements.
+ * Ids the schema reserves and no module implements — none, today.
  *
- * Kept loose — any parameters validate — because there is nothing yet to say
- * what a parameter would mean, and kept *visibly* separate so nothing implies
- * the registry is seven abilities deep. `transform` here is an alien ability; the
- * arcade's transform attack is a rules-layer mechanic (`rules.transform`) and is
- * not it. `tests/unit/forge-guard.test.ts` pins that declaring one of these on an
- * alien changes nothing at all, which is why `/forge` refuses a prompt needing
- * one.
+ * Kept, empty, because it is how an ability is born: an id the design names
+ * before anything can say what its parameters would mean is listed here, its
+ * entry validates with any parameters (`z.looseObject({ type: z.literal(id) })`)
+ * and nothing reads it, and the registry's mapped type refuses a module for it.
+ * Moving the id out of this list is the ship task. `transform` and
+ * `mirrorPlayer` were the last two to leave it. `tests/unit/forge-guard.test.ts`
+ * pins the list empty, so the day an id is reserved again that test says so —
+ * and `/forge` goes back to refusing a prompt that needs it.
  */
-export const RESERVED_ABILITY_TYPES = [
-  'transform',
-  'mirrorPlayer',
-] as const satisfies readonly AbilityType[];
+export const RESERVED_ABILITY_TYPES = [] as const satisfies readonly AbilityType[];
 
 export type ReservedAbilityType = (typeof RESERVED_ABILITY_TYPES)[number];
 export type ImplementedAbilityType = Exclude<AbilityType, ReservedAbilityType>;
@@ -423,9 +421,43 @@ const spawnMinionsAbilitySchema = z.strictObject({
   spacing: z.number().nonnegative().default(8),
 });
 
-/** A reserved id: accepted with any parameters, and read by nothing. */
-const reservedAbilitySchema = <T extends ReservedAbilityType>(type: T) =>
-  z.looseObject({ type: z.literal(type) });
+/**
+ * During a dive, the enemy becomes one `into` alien: a change of **type**, not a
+ * new enemy. It happens `afterFrames` frames into a dive flown as this alien, at
+ * every `trigger` segment naming `transform` on the path it is flying, or both —
+ * the loader refuses an alien that would never change, and one that would change
+ * into itself.
+ *
+ * Its position, its speed and its place on the path carry over; everything that
+ * belongs to the old type — `hp` and the hits taken against it, shield charges,
+ * ability timers, how it fires and how much it is worth — does not, and its value
+ * is the new alien's (`src/sim/abilities/transform.ts`). Not the arcade's
+ * transform attack, which turns one enemy into a group and is `rules.transform`.
+ */
+const transformAbilitySchema = z.strictObject({
+  type: z.literal('transform'),
+  /** The alien it becomes. Another alien in the same pack. */
+  into: refSchema,
+  /** Frames of a dive, flown as this alien, after which it changes. Omitted means only at a trigger. */
+  afterFrames: framesSchema.positive().optional(),
+});
+
+/**
+ * While diving, the enemy copies the fighter's horizontal movement: it closes on
+ * the fighter's column (`track`) or on the column mirrored about the playfield's
+ * centre line (`opposite`), as the fighter stood `delayFrames` frames ago, by
+ * `strength` of the remaining gap each frame. Its own flight carries on, displaced
+ * sideways; the row is the path's (`src/sim/abilities/mirror-player.ts`).
+ */
+const mirrorPlayerAbilitySchema = z.strictObject({
+  type: z.literal('mirrorPlayer'),
+  /** `track` follows the fighter's column; `opposite` holds its mirror image. */
+  mode: z.enum(['track', 'opposite']),
+  /** How many frames old the fighter position it copies is. 0 copies this frame's. */
+  delayFrames: framesSchema,
+  /** The fraction of the remaining horizontal gap closed each frame: above 0, at most 1. */
+  strength: z.number().positive().max(1),
+});
 
 export const abilitySchema = z
   .discriminatedUnion('type', [
@@ -434,8 +466,8 @@ export const abilitySchema = z
     shieldAbilitySchema,
     teleportAbilitySchema,
     spawnMinionsAbilitySchema,
-    reservedAbilitySchema('transform'),
-    reservedAbilitySchema('mirrorPlayer'),
+    transformAbilitySchema,
+    mirrorPlayerAbilitySchema,
   ])
   .describe('an entry in the engine ability registry, plus its parameters');
 
@@ -513,9 +545,9 @@ export const pathSegmentSchema = z.discriminatedUnion('type', [
    * Where in a flight an ability fires. Which ability is a registry id, so a
    * misspelt one is a load error rather than an event nobody listens for; whether
    * it does anything is the flyer's business — `captureBeam` acts only for the
-   * captor the channel chose, `teleport` and `spawnMinions` only for an alien that
-   * declares them. No implemented ability reads `params` (it is tuned on the
-   * alien), so stating any on one is refused rather than ignored.
+   * captor the channel chose, `teleport`, `spawnMinions` and `transform` only for
+   * an alien that declares them. No implemented ability reads `params` (it is
+   * tuned on the alien), so stating any on one is refused rather than ignored.
    */
   z
     .strictObject({

@@ -4,13 +4,13 @@ Pure game simulation. What is here: `world.ts`, `player.ts`, `shots.ts`,
 `collision.ts`, `lives.ts`, `events.ts`, `enemies.ts`, `formation.ts`, `paths.ts`
 (segment interpreter), `dive.ts` and `challenge.ts`, and the ability registry in
 `abilities/` — which holds the capture channel as `abilities/capture-beam.ts`
-beside the four abilities a pack's aliens switch on (its own README). What
+beside the six abilities a pack's aliens switch on (its own README). What
 `docs/DESIGN.md` section 9 also lists and is not here: `scoring.ts` and
 `stages.ts` were never written — scoring lives in `enemies.ts` and `world.ts`, and
 resolving a stage number to its documents is content work in
 `src/content/stages.ts`. `docs/ARCHITECTURE.md` §5 records both divergences.
 <!-- check:absent src/sim/scoring.ts src/sim/stages.ts -->
-<!-- check:count sim.modules 11 sim.abilities.modules 6 -->
+<!-- check:count sim.modules 11 sim.abilities.modules 8 -->
 
 Milestone 1 landed the player half: `world.ts`, `player.ts`, `shots.ts`,
 `collision.ts`, `lives.ts` and `events.ts`. Milestone 2's first task replaced

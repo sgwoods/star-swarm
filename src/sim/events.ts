@@ -353,6 +353,24 @@ export interface MinionsSpawnedEvent {
   readonly group: readonly number[];
 }
 
+/**
+ * A diving enemy became another alien (`src/sim/abilities/transform.ts`).
+ *
+ * Not `enemy-transformed`, which is the arcade's transform attack turning one
+ * enemy into a group: this is one enemy changing type and carrying on, with the
+ * same id. Nothing is destroyed and nothing scores.
+ */
+export interface EnemyMorphedEvent {
+  readonly type: 'enemy-morphed';
+  readonly targetId: number;
+  /** The alien it was. */
+  readonly fromAlienId: string;
+  /** The alien it is now. */
+  readonly alienId: string;
+  readonly x: number;
+  readonly y: number;
+}
+
 export type SimEvent =
   | StageStartedEvent
   | ShotFiredEvent
@@ -386,7 +404,8 @@ export type SimEvent =
   | ShieldRestoredEvent
   | EnemySplitEvent
   | EnemyTeleportedEvent
-  | MinionsSpawnedEvent;
+  | MinionsSpawnedEvent
+  | EnemyMorphedEvent;
 
 export type SimEventType = SimEvent['type'];
 
