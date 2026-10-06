@@ -79,8 +79,6 @@ thing that exists is described. What the milestone still owes:
   requests. `/lab` previews movement paths today and nothing else; what the
   capture half would be is set out in
   [Capturing gameplay video](#capturing-gameplay-video) below.
-- **Ship: `audio/music.ts`** — the jingles the plan's section 5 asks for, as pack
-  data like every other sound. <!-- check:absent src/audio/music.ts -->
 
 One thing the forge **found** rather than built: the rules layer couples a pack to
 numbers it cannot change — which roles may attack at all, how wide a formation has

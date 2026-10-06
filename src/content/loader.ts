@@ -459,6 +459,9 @@ export function loadPack(source: PackSource): LoadResult {
   for (const [event, sound] of Object.entries(manifest.sounds)) {
     requireRef(MANIFEST_FILE, `sounds.${event}`, 'sounds', sound);
   }
+  manifest.music.forEach((cue, index) => {
+    requireRef(MANIFEST_FILE, `music[${String(index)}].sound`, 'sounds', cue.sound);
+  });
 
   // The event → effect bindings the renderer reads, on the same terms: a misspelt
   // sprite id is a load failure rather than a death that draws nothing.

@@ -4,6 +4,7 @@ import {
   DEFAULT_ENVELOPE,
   DEFAULT_VOLUME,
   NOISE_Q,
+  STOP_FADE_SECONDS,
   buildSoundPlan,
   createSynth,
   playPlan,
@@ -157,6 +158,94 @@ describe('buildSoundPlan — a sequence', () => {
     expect(third?.gain[0]?.time).toBeCloseTo(0.2, 10);
     expect(third?.gain.at(-1)?.time).toBeCloseTo(0.4, 10);
     expect(third?.stop).toBeCloseTo(0.4, 10);
+  });
+});
+
+describe('buildSoundPlan — rests and parts, which make a jingle music', () => {
+  const tune = parse({
+    id: 'tune',
+    wave: 'square',
+    duty: 0.25,
+    volume: 0.3,
+    envelope: [0.01, 0.05, 0.04],
+    vibrato: { rate: 6, depth: 0.01 },
+    sequence: [
+      { freq: 784, duration: 0.1 },
+      { rest: true, duration: 0.1 },
+      { freq: 587, duration: 0.2 },
+    ],
+    parts: [
+      { wave: 'triangle', volume: 0.4, sequence: [{ freq: 98, duration: 0.4 }] },
+      {
+        sequence: [
+          { rest: true, duration: 0.2 },
+          { freq: 494, duration: 0.3 },
+        ],
+      },
+    ],
+  });
+
+  it('builds no voice for a rest, and still advances the clock past it', () => {
+    const plan = buildSoundPlan(tune);
+    const melody = plan.voices.filter((voice) => voice.wave === 'square' && voice.start < 0.2);
+
+    expect(melody.map((voice) => voice.start)).toEqual([0]);
+    expect(
+      plan.voices.some((voice) => voice.start === 0.2 && voice.frequency[0]?.value === 587),
+    ).toBe(true);
+  });
+
+  it('starts every part with the sound, so the lines sound together', () => {
+    const plan = buildSoundPlan(tune);
+    const bass = plan.voices.find((voice) => voice.wave === 'triangle');
+    const harmony = plan.voices.find((voice) => voice.frequency[0]?.value === 494);
+
+    expect(bass?.start).toBe(0);
+    expect(harmony?.start).toBeCloseTo(0.2, 10);
+  });
+
+  it('lasts as long as its longest line', () => {
+    // The melody ends at 0.4 s, the bass at 0.4 s, the harmony at 0.5 s.
+    expect(buildSoundPlan(tune).duration).toBeCloseTo(0.5, 10);
+  });
+
+  it('gives a part the sound’s wave, volume and duty when it states none of its own', () => {
+    const plan = buildSoundPlan(tune);
+    const harmony = plan.voices.find((voice) => voice.frequency[0]?.value === 494);
+    const bass = plan.voices.find((voice) => voice.wave === 'triangle');
+
+    expect(harmony?.wave).toBe('square');
+    expect(harmony?.gain[1]?.value).toBe(0.3);
+    expect(harmony?.pulse).toBeDefined();
+    expect(bass?.gain[1]?.value).toBe(0.4);
+  });
+
+  it('never hands a part the melody’s vibrato, which a part could not switch off', () => {
+    const plan = buildSoundPlan(tune);
+
+    expect(plan.voices.find((voice) => voice.frequency[0]?.value === 784)?.vibrato).toBeDefined();
+    expect(plan.voices.find((voice) => voice.wave === 'triangle')?.vibrato).toBeUndefined();
+    expect(plan.voices.find((voice) => voice.frequency[0]?.value === 494)?.vibrato).toBeUndefined();
+  });
+
+  it('refuses a sequence that is nothing but rests', () => {
+    expect(
+      soundSchema.safeParse({
+        id: 'hush',
+        wave: 'square',
+        sequence: [{ rest: true, duration: 0.1 }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('refuses a rest that also states a pitch, rather than guessing which was meant', () => {
+    expect(
+      soundSchema.safeParse({
+        id: 'which',
+        wave: 'square',
+        sequence: [{ rest: true, freq: 440, duration: 0.1 }],
+      }).success,
+    ).toBe(false);
   });
 });
 
@@ -428,6 +517,101 @@ describe('createSynth — the autoplay rule', () => {
     synth.close();
     expect(synth.available).toBe(false);
     expect(synth.unlock()).toBe(true);
+  });
+});
+
+describe('createSynth — a sound that may have to stop early', () => {
+  const tune = parse({
+    id: 'tune',
+    wave: 'square',
+    sequence: [
+      { freq: 523, duration: 0.2 },
+      { freq: 659, duration: 0.2 },
+    ],
+    parts: [{ wave: 'triangle', sequence: [{ freq: 131, duration: 0.4 }] }],
+  });
+
+  it('plays through its own gain under the master, so a cut touches nothing else', () => {
+    const context = fakeAudioContext();
+    const synth = createSynth({ createContext: () => context });
+    synth.unlock();
+    const master = context.nodes[0];
+
+    expect(synth.start(tune)).toBeDefined();
+
+    const bus = context.nodes[1];
+    expect(bus?.kind).toBe('gain');
+    expect(bus?.connectedTo).toEqual([master]);
+    expect(context.nodes.filter((node) => node.kind === 'oscillator')).toHaveLength(3);
+  });
+
+  it('fades the gain out and stops every voice, the notes not yet reached included', () => {
+    const context = fakeAudioContext();
+    const synth = createSynth({ createContext: () => context });
+    synth.unlock();
+    const playback = synth.start(tune);
+    (context as { currentTime: number }).currentTime = 0.1;
+
+    playback?.stop();
+
+    const bus = context.nodes[1];
+    expect(bus?.params.gain).toEqual([
+      { kind: 'set', value: 1, time: 0.1 },
+      { kind: 'linear', value: 0, time: 0.1 + STOP_FADE_SECONDS },
+    ]);
+    const oscillators = context.nodes.filter((node) => node.kind === 'oscillator');
+    // The second melody note starts at 0.2: stopping it before then means it never sounds.
+    for (const oscillator of oscillators) {
+      expect(oscillator.stopped).toBeCloseTo(0.1 + STOP_FADE_SECONDS, 10);
+    }
+  });
+
+  it('can be stopped twice without scheduling a second fade', () => {
+    const context = fakeAudioContext();
+    const synth = createSynth({ createContext: () => context });
+    synth.unlock();
+    const playback = synth.start(tune);
+
+    playback?.stop();
+    playback?.stop();
+
+    expect(context.nodes[1]?.params.gain).toHaveLength(2);
+  });
+
+  it('obeys mute and volume through the same master as every effect', () => {
+    const context = fakeAudioContext();
+    const synth = createSynth({ createContext: () => context, volume: 0.5 });
+    synth.unlock();
+    const master = context.nodes[0];
+
+    synth.setMuted(true);
+    const before = context.nodes.length;
+    expect(synth.start(tune)).toBeUndefined();
+    expect(context.nodes).toHaveLength(before);
+
+    synth.setMuted(false);
+    synth.start(tune);
+    synth.setVolume(0.2);
+    expect(master?.gainValue).toBe(0.2);
+  });
+
+  it('is silent and harmless before it is unlocked, and with no audio at all', () => {
+    expect(createSynth({ createContext: () => fakeAudioContext() }).start(tune)).toBeUndefined();
+
+    const none = createSynth({ createContext: () => undefined });
+    none.unlock();
+    expect(none.start(tune)).toBeUndefined();
+  });
+
+  it('swallows a failure, reporting it, rather than taking the frame down', () => {
+    const context = fakeAudioContext();
+    const errors: unknown[] = [];
+    const synth = createSynth({ createContext: () => context, onError: (e) => errors.push(e) });
+    synth.unlock();
+    context.failNextOscillator = true;
+
+    expect(() => synth.start(tune)).not.toThrow();
+    expect(errors).toHaveLength(1);
   });
 });
 

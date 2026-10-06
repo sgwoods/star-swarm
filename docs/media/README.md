@@ -185,6 +185,14 @@ The clips are screen recordings of the dev build.
 - `arch-lab.gif` — the `/lab` previewer: an entry path playing, then scrubbed
   frame by frame with the readout following, then the same path mirrored, then a
   dive path flown from the slot marker.
+- `classic-music.mp4` — the Classic jingles, for listening rather than watching:
+  `game-start`, `stage-start`, `captured`, `rescue`, `challenge-results` and
+  `challenge-perfect` in turn, each under a title card naming the cue that plays
+  it and with a waveform strip, and 0.7 s of silence between them. The audio is
+  the real `src/audio/synth.ts`: each pack document went through `buildSoundPlan`
+  and `playPlan` into an `OfflineAudioContext` in Chrome at 44.1 kHz with the
+  master gain at 1. It was rendered, not recorded, so it has no room noise and no
+  dropped notes; `ffmpeg` joined the cards to the audio as AAC.
 
 The two build-stamp stills are ordinary screenshots of the dev build at a
 viewport 576 pixels tall, so the canvas takes a 2x scale, cropped to the

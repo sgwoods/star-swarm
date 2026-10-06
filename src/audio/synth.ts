@@ -31,7 +31,7 @@
  */
 
 import { createRng } from '../engine/rng.js';
-import type { Sound } from '../content/schema.js';
+import type { Sound, SoundStep } from '../content/schema.js';
 
 /* -------------------------------------------------------------------------- */
 /* The plan                                                                     */
@@ -224,54 +224,99 @@ function buildVoice(spec: VoiceSpec): VoicePlan {
   return noise ? { ...pitched, q: NOISE_Q } : pitched;
 }
 
-/**
- * Turn a validated sound definition into the graph to build for it.
- *
- * A `sequence` is a jingle: one voice per step, laid end to end, each step free
- * to state its own wave and volume. Without one the sound is a single voice
- * whose length is its envelope.
- */
-export function buildSoundPlan(sound: Sound): SoundPlan {
-  const envelope = sound.envelope ?? DEFAULT_ENVELOPE;
-  const volume = sound.volume ?? DEFAULT_VOLUME;
-  const voices: VoicePlan[] = [];
+/** What a line of a jingle inherits from the sound it belongs to. */
+interface LineDefaults {
+  readonly wave: Waveform;
+  readonly envelope: Envelope;
+  readonly volume: number;
+  readonly duty: number | undefined;
+  readonly vibrato: Sound['vibrato'];
+}
 
-  if (sound.sequence !== undefined) {
-    let start = 0;
-    for (const step of sound.sequence) {
+/**
+ * One line of a jingle: one voice per note, laid end to end from the sound's
+ * start, each note free to state its own wave and volume. A rest advances the
+ * clock and builds nothing. Returns where the line ends.
+ */
+function sequenceVoices(
+  steps: readonly SoundStep[],
+  line: LineDefaults,
+  voices: VoicePlan[],
+): number {
+  let start = 0;
+  for (const step of steps) {
+    if (!('rest' in step)) {
       voices.push(
         buildVoice({
-          wave: step.wave ?? sound.wave,
+          wave: step.wave ?? line.wave,
           pitch: step.freq,
           start,
           duration: step.duration,
-          envelope: scaleEnvelope(envelope, step.duration),
-          volume: step.volume ?? volume,
-          duty: sound.duty,
-          vibrato: sound.vibrato,
+          envelope: scaleEnvelope(line.envelope, step.duration),
+          volume: step.volume ?? line.volume,
+          duty: line.duty,
+          vibrato: line.vibrato,
         }),
       );
-      start += step.duration;
     }
-    return { id: sound.id, duration: start, voices };
+    start += step.duration;
+  }
+  return start;
+}
+
+/**
+ * Turn a validated sound definition into the graph to build for it.
+ *
+ * A `sequence` is a jingle: one voice per note, laid end to end. Its `parts`
+ * are further lines sounding at the same time, each starting with the sound and
+ * taking its wave, envelope, volume and duty from the sound when it omits them. Without a sequence the
+ * sound is a single voice whose length is its envelope.
+ */
+export function buildSoundPlan(sound: Sound): SoundPlan {
+  const line: LineDefaults = {
+    wave: sound.wave,
+    envelope: sound.envelope ?? DEFAULT_ENVELOPE,
+    volume: sound.volume ?? DEFAULT_VOLUME,
+    duty: sound.duty,
+    vibrato: sound.vibrato,
+  };
+  const voices: VoicePlan[] = [];
+  let duration: number;
+
+  if (sound.sequence !== undefined) {
+    duration = sequenceVoices(sound.sequence, line, voices);
+  } else {
+    // The schema refuses a sound with neither `freq` nor `sequence`, so this is
+    // the single-tone case and the pitch is there.
+    const envelope = line.envelope;
+    duration = envelope[0] + envelope[1] + envelope[2];
+    voices.push(
+      buildVoice({
+        ...line,
+        pitch: sound.freq ?? 440,
+        start: 0,
+        duration,
+      }),
+    );
   }
 
-  // The schema refuses a sound with neither `freq` nor `sequence`, so this is
-  // the single-tone case and the pitch is there.
-  const pitch = sound.freq ?? 440;
-  const duration = envelope[0] + envelope[1] + envelope[2];
-  voices.push({
-    ...buildVoice({
-      wave: sound.wave,
-      pitch,
-      start: 0,
-      duration,
-      envelope,
-      volume,
-      duty: sound.duty,
-      vibrato: sound.vibrato,
-    }),
-  });
+  for (const part of sound.parts ?? []) {
+    const end = sequenceVoices(
+      part.sequence,
+      {
+        wave: part.wave ?? line.wave,
+        envelope: part.envelope ?? line.envelope,
+        volume: part.volume ?? line.volume,
+        duty: part.duty ?? line.duty,
+        // Not inherited: a wobble is one line's character, and a part has no way
+        // to say "none" — a bass that shook with its melody could not be written.
+        vibrato: part.vibrato,
+      },
+      voices,
+    );
+    duration = Math.max(duration, end);
+  }
+
   return { id: sound.id, duration, voices };
 }
 
@@ -328,6 +373,11 @@ export interface SynthFilter extends SynthNode {
 }
 
 export type SynthPeriodicWave = object;
+
+/** A node `playPlan` started, and can therefore be stopped early. */
+export interface SynthSource {
+  stop(when: number): unknown;
+}
 
 export interface SynthContext {
   readonly currentTime: number;
@@ -392,13 +442,17 @@ function applyRamps(param: SynthParam, ramps: readonly ParamRamp[], at: number):
  * Every voice is `source → [filter] → gain → destination`, with vibrato as a
  * sine oscillator through its own gain into the pitch parameter. Nodes are
  * started and stopped explicitly, so they are collected when the voice ends.
+ *
+ * Returns every source it started, so a caller that has to end the sound early
+ * — the music channel cutting one jingle for the next — can stop them.
  */
 export function playPlan(
   context: SynthContext,
   plan: SoundPlan,
   destination: SynthNode,
   at: number = context.currentTime,
-): void {
+): SynthSource[] {
+  const sources: SynthSource[] = [];
   for (const voice of plan.voices) {
     const amp = context.createGain();
     amp.gain.value = 0;
@@ -417,6 +471,7 @@ export function playPlan(
       filter.connect(amp);
       source.start(at + voice.start);
       source.stop(at + voice.stop);
+      sources.push(source);
       continue;
     }
 
@@ -443,12 +498,15 @@ export function playPlan(
       depth.connect(oscillator.frequency);
       lfo.start(at + voice.start);
       lfo.stop(at + voice.stop);
+      sources.push(lfo);
     }
 
     oscillator.connect(amp);
     oscillator.start(at + voice.start);
     oscillator.stop(at + voice.stop);
+    sources.push(oscillator);
   }
+  return sources;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -470,11 +528,31 @@ export interface Synth {
   unlock(): boolean;
   /** Play a sound definition. A no-op while locked, muted or unavailable. */
   play(sound: Sound): void;
+  /**
+   * Play a sound that may have to end before it finishes — the music channel's
+   * jingles. `undefined` wherever `play` would have been a no-op. It goes
+   * through the same master gain, so volume and mute reach it exactly as they
+   * reach an effect.
+   */
+  start(sound: Sound): Playback | undefined;
   setVolume(volume: number): void;
   setMuted(muted: boolean): void;
   /** Release the context. The synth can be unlocked again afterwards. */
   close(): void;
 }
+
+/** A sound started by `Synth.start`. */
+export interface Playback {
+  /**
+   * Fade it out over {@link STOP_FADE_SECONDS} and stop every voice, including
+   * notes not yet reached. Safe to call twice, after the sound has ended, and
+   * after the synth has closed.
+   */
+  stop(): void;
+}
+
+/** Long enough that cutting a held note does not click, short enough to read as a cut. */
+export const STOP_FADE_SECONDS = 0.03;
 
 export interface SynthOptions {
   /** Master volume, 0…1. */
@@ -573,6 +651,37 @@ export function createSynth(options: SynthOptions = {}): Synth {
         playPlan(context, planFor(sound), master);
       } catch (error) {
         report(error);
+      }
+    },
+
+    start(sound: Sound): Playback | undefined {
+      if (muted || context === undefined || master === undefined) return undefined;
+      const owner = context;
+      try {
+        // Its own gain stage under the master, so a cut can fade this sound
+        // alone without touching the master the settings own.
+        const bus = owner.createGain();
+        bus.gain.value = 1;
+        bus.connect(master);
+        const sources = playPlan(owner, planFor(sound), bus);
+        let stopped = false;
+        return {
+          stop(): void {
+            if (stopped) return;
+            stopped = true;
+            try {
+              const now = owner.currentTime;
+              bus.gain.setValueAtTime(1, now);
+              bus.gain.linearRampToValueAtTime(0, now + STOP_FADE_SECONDS);
+              for (const source of sources) source.stop(now + STOP_FADE_SECONDS);
+            } catch (error) {
+              report(error);
+            }
+          },
+        };
+      } catch (error) {
+        report(error);
+        return undefined;
       }
     },
 

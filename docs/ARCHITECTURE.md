@@ -498,7 +498,7 @@ flowchart TB
 
     subgraph presentation["The presentation half — subscribers"]
         render["src/render/<br/>canvas · sprites · text · starfield"]
-        audio["src/audio/<br/>synth · event to sound"]
+        audio["src/audio/<br/>synth · event to sound<br/>music channel"]
         ui["src/ui/<br/>flow · attract · HUD<br/>results · high scores"]
     end
 
@@ -573,7 +573,7 @@ golden recorded on either architecture replays byte for byte on the other.
 | `src/sim/`     | The world and one step of it: player, shots, collisions, lives, enemies, formation, the path interpreter, dives, enemy fire, challenge stages, and the ability registry with capture in it. |
 | `src/content/` | The content platform: the Zod schemas, the loader, the registry, the module that interprets a rules document, stage resolution, and what a pack mix is coupled to.                          |
 | `src/render/`  | The 224×288 backbuffer presented at a whole-number scale, sprite rasterisation, the pixel font, the starfield, one-shot effect animations, scene composition, and the optional CRT filter.  |
-| `src/audio/`   | A parametric synth over Web Audio, and the mapping from simulation events to sounds.                                                                                                        |
+| `src/audio/`   | A parametric synth over Web Audio, the mapping from simulation events to sounds, and the music channel the jingles play on.                                                                 |
 | `src/ui/`      | The game-flow state machine, attract mode, the HUD, the menus and the pack manager, the results card, the high-score table — and the dev-only `/lab`.                                       |
 
 Four properties worth knowing, because each one is load-bearing:
@@ -597,7 +597,16 @@ Four properties worth knowing, because each one is load-bearing:
   gesture unlocks one, and every call into Web Audio is wrapped, so a browser
   that blocks audio leaves the game running correctly in silence. Which event
   plays which sound is the pack's `sounds` map; `src/audio/sfx.ts` names no
-  effect of its own. **The picture works the same way**: the manifest's `effects`
+  effect of its own. **Jingles are the same data on a channel of their own**: the
+  manifest's `music` is an ordered list of cues, and `src/audio/music.ts` starts
+  the sound named by the earliest cue anything in a step matches, cutting the
+  jingle still playing — effects stack, two tunes at once do not. A cue may narrow
+  on an event's fields, which is how Classic tells a new game's `stage-started`
+  from every later one, and a jingle is an ordinary sound whose `parts` sound
+  beside its `sequence`. The channel hears a player's game only — not the attract
+  demo, and a pause cuts it — and plays through the same master gain as every
+  effect, so the volume and mute settings reach it with no control of its own.
+  **The picture works the same way**: the manifest's `effects`
   map says which event plays which sprite animation, and `src/render/effects.ts`
   names no explosion of its own either.
 
@@ -875,8 +884,8 @@ pack possible.** `src/content/registry.ts` composes the layered packs' manifests
 field by field rather than taking the last one whole: `roles`, `formations` and
 `sounds` merge per key, the palette is a **union** (it is a permission list that
 `src/render/sprites.ts` checks membership in and never indexes), and
-`stageBadges` and each half of `stageSequence` are replaced by the last pack that
-states a non-empty one. Rules are the whole document from the last pack that ships
+`stageBadges`, `music` and each half of `stageSequence` are replaced by the last
+pack that states a non-empty one. Rules are the whole document from the last pack that ships
 one — less any rank's own sequence for a half that a pack layered after it states,
 since that rank override is a statement about the same half and the later one
 wins. Without it the Deep Sea game would play its own stages at its default rank
@@ -1084,8 +1093,6 @@ describing as deliberately absent something that shipped two merges ago.
   `enemy-morphed` — are ones a pack may bind a sound or an effect to, and none
   does, so a shield hit is not yet visible on screen. `mirrorPlayer` raises no
   event: what it does is the diver's motion.
-- **Music** is named in the design plan and is not written yet.
-  <!-- check:absent src/audio/music.ts -->
 - **No stage is a boss stage.** `boss` is one of the three stage kinds the schema
   admits, and no pack document uses it — what a boss stage would be has never
   been specified ([`docs/IDEAS.md`](IDEAS.md)).
@@ -1192,16 +1199,16 @@ volume, mute, the CRT option, the control scheme, and the games the player has
 made, each a whole variant document ([below](#a-players-variations)). Where each one
 arrives:
 
-| Setting      | Applied by                                                                   |
-| ------------ | ---------------------------------------------------------------------------- |
-| `variant`    | which game `src/ui/flow.ts` builds every world from, shipped or the player's |
-| `difficulty` | a preset id → a rank → the rules layer's own tables                          |
-| `autoplay`   | a persona id → the pilot the flow hands the controls to ([§7](#7-autoplay))  |
-| `volume`     | `Synth.setVolume`                                                            |
-| `muted`      | `Synth.setMuted`                                                             |
-| `controls`   | the keyboard map handed to `createKeyboardInput`, one of three schemes       |
-| `crt`        | `Display.setFilter` with the scanline filter from `src/render/crt.ts`        |
-| `variations` | the player's own games, listed after the shipped ones and played as written  |
+| Setting      | Applied by                                                                     |
+| ------------ | ------------------------------------------------------------------------------ |
+| `variant`    | which game `src/ui/flow.ts` builds every world from, shipped or the player's   |
+| `difficulty` | a preset id → a rank → the rules layer's own tables                            |
+| `autoplay`   | a persona id → the pilot the flow hands the controls to ([§7](#7-autoplay))    |
+| `volume`     | `Synth.setVolume`, on the one master gain every effect and jingle goes through |
+| `muted`      | `Synth.setMuted`, on the same master gain                                      |
+| `controls`   | the keyboard map handed to `createKeyboardInput`, one of three schemes         |
+| `crt`        | `Display.setFilter` with the scanline filter from `src/render/crt.ts`          |
+| `variations` | the player's own games, listed after the shipped ones and played as written    |
 
 <!-- check:count ui.controlSchemes 3 -->
 

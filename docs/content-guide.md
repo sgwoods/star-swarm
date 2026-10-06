@@ -174,6 +174,22 @@ steps for a jingle. Which event plays which sound is the manifest's `sounds` map
 keyed by simulation event name; `src/audio/sfx.ts` names no effect of its own.
 Replacing one binding in an overlay replaces that key and nothing else.
 
+**Music.** A jingle is a sound too: a `sequence` for the melody, `{ "rest": true,
+"duration": … }` steps where it breathes, and `parts` — further sequences that
+start with it and sound beside it. A part takes the sound's wave, envelope,
+volume and duty when it omits them, but **never its vibrato**, so a wobbling lead
+does not drag its bass along. Which event starts which jingle is the manifest's
+`music`, an **ordered** list of `{ event, when?, sound }` cues played on one
+channel by `src/audio/music.ts`: in any step the earliest cue that matches wins,
+and a new jingle cuts the last. Two consequences a generator gets wrong:
+
+- **Order is priority.** Steps raise several events at once — a challenge stage's
+  last kill ends it and starts the next stage in one step — so the cue that should
+  win goes first, and a `when` cue goes before the plain cue for the same event.
+- **One event, one channel.** An event bound in both `sounds` and `music` plays an
+  effect over its own jingle. An overlay that states `music` replaces the whole
+  list, because a per-entry merge of a priority order means nothing.
+
 **Path.** Twelve segment types, and the contract splits in two.
 <!-- check:count schema.pathSegments 12 -->
 

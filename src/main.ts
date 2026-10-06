@@ -18,7 +18,7 @@
  * every other.
  */
 
-import { createSfx, createSynth, type Sfx } from './audio/index.js';
+import { createMusic, createSfx, createSynth, type Music, type Sfx } from './audio/index.js';
 import { bundledPackSources, bundledVariantSources } from './content/bundle.js';
 import type { ContentError, LoadedPack } from './content/index.js';
 import {
@@ -48,7 +48,7 @@ import {
 } from './ui/build-info.js';
 import { drawBuildLine, drawBuildStamp } from './ui/build-stamp.js';
 import { createComposer } from './ui/compose.js';
-import { createGameFlow, type FlowVariant, type GamePhase } from './ui/flow.js';
+import { createGameFlow, type FlowStep, type FlowVariant, type GamePhase } from './ui/flow.js';
 import {
   createHighScoreBoard,
   drawInitialsEntry,
@@ -196,8 +196,8 @@ const synth = createSynth({
 /**
  * Everything derived from pack data, built when a variant comes into force and
  * never per frame: the sheet rasterises every sprite frame up front
- * (`src/render/README.md`), and the sound and explosion maps are the variant's
- * own `sounds` and `effects`.
+ * (`src/render/README.md`), and the sound, music and explosion maps are the
+ * variant's own `sounds`, `music` and `effects`.
  *
  * These are `let` rather than `const` because a variant is chosen at run time,
  * and they have no initialiser because {@link applyVariant} is the only thing
@@ -208,6 +208,7 @@ const synth = createSynth({
  */
 let sprites: SpriteSheet;
 let sfx: Sfx;
+let music: Music | undefined;
 let effects: Effects;
 
 /**
@@ -238,6 +239,13 @@ function applyVariant(chosen: FlowVariant): void {
     player: synth,
     sounds: variant.registry.sounds,
     bindings: variant.registry.manifest.sounds,
+  });
+  // A jingle belongs to the game that started it.
+  music?.stop();
+  music = createMusic({
+    player: synth,
+    sounds: variant.registry.sounds,
+    cues: variant.registry.manifest.music,
   });
   effects = createEffects({
     bindings: variant.registry.manifest.effects,
@@ -302,6 +310,24 @@ function applyEvents(events: readonly SimEvent[]): void {
   effects.handle(events);
 }
 
+/**
+ * The music channel hears a player's game and nothing else.
+ *
+ * Not the attract demo: it starts a fresh game every cycle and runs behind every
+ * menu, so it would replay the opening jingle over the settings screen. And a
+ * held game cuts its jingle rather than carrying on under the pause card, for the
+ * reason the starfield stops: a tune still playing reads as a game still running.
+ * Neither is a decision the simulation hears about — the music is in wall time
+ * and only ever reads the events.
+ */
+function playMusic(step: FlowStep): void {
+  if (step.demo || step.phase === 'paused' || step.phase === 'exit-confirm') {
+    music?.stop();
+    return;
+  }
+  music?.handle(step.events);
+}
+
 const loop = createLoop({
   update() {
     // Exactly one input sample per simulation step (docs/DESIGN.md pillar 4).
@@ -311,7 +337,9 @@ const loop = createLoop({
     // Inside `update` rather than `render` because an effect's length is written
     // in simulation frames, so it must not depend on the display's rate.
     effects.advance();
-    applyEvents(flow.step(frame).events);
+    const step = flow.step(frame);
+    applyEvents(step.events);
+    playMusic(step);
     // The menu writes settings; this is where they reach the things outside the
     // flow. Cheap and idempotent, so it runs every step rather than needing a
     // change notification the menu would have to remember to send.

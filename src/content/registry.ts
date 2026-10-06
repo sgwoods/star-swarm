@@ -125,10 +125,11 @@ const EMPTY_TABLE: SequenceTable = { rows: [], repeatLast: 1 };
  * - **`palette` is a union**, in layering order. It is a *permission list*:
  *   `src/render/sprites.ts` checks membership in it and never indexes it, so an
  *   overlay adding two colours must not have to restate the base's fourteen.
- * - **`stageBadges`, and each half of `stageSequence` on its own, are replaced by
- *   the last pack that states a non-empty one.** Those are ordered tables where a
- *   per-entry merge would mean nothing — a sequence is a sequence, not a set —
- *   and the two halves move separately because they already plateau separately.
+ * - **`stageBadges`, `music`, and each half of `stageSequence` on its own, are
+ *   replaced by the last pack that states a non-empty one.** Those are ordered
+ *   tables where a per-entry merge would mean nothing — a sequence is a sequence,
+ *   not a set, and music cues are ranked by their order — and the two halves move
+ *   separately because they already plateau separately.
  * - **`id`, `name`, `version` and `description` come from the last pack**, which
  *   is the one the registry reports as {@link ContentRegistry.active}.
  *
@@ -176,6 +177,12 @@ export function composeManifest(
     formations: mergeRecords(packs, (manifest) => manifest.formations),
     sounds: mergeRecords(packs, (manifest) => manifest.sounds),
     effects: mergeRecords(packs, (manifest) => manifest.effects),
+    music: lastStated(
+      packs,
+      (manifest) => manifest.music,
+      (music) => music.length > 0,
+      [],
+    ),
     stageBadges: lastStated(
       packs,
       (manifest) => manifest.stageBadges,
