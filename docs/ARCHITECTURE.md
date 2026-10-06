@@ -46,9 +46,10 @@ one game on the platform, declared as a document under
 [`variants/`](../variants/): a display name, the packs it layers, and the
 difficulty presets a player may pick from. Star Swarm is `variants/classic.json`
 and is the first entry in that list rather than a case the others work around.
-Three variants ship: the arcade game, a demonstration overlay, and the forged
-Deep Sea game ([§4.6](#46-the-forge)).
-<!-- check:count variants.count 3 variants.demonstrations 1 -->
+Four variants ship: the arcade game, a demonstration overlay, the forged Deep Sea
+game ([§4.6](#46-the-forge)), and Spore Storm, the game that switches on four of
+the new abilities ([§4.4](#44-where-a-second-game-plugs-in)).
+<!-- check:count variants.count 4 variants.demonstrations 1 -->
 
 That split is the whole architecture, and it is enforced rather than trusted —
 see [§3](#3-the-layers).
@@ -65,7 +66,8 @@ doing it. Milestone 3 has begun: the variant concept, the start-up selector and
 the player-settings menu are in ([§4.5](#45-variants-the-games-this-build-offers)
 and [§6](#6-settings-and-the-difficulty-preset)), the validator flies every
 stage it passes ([§4.7](#47-the-playability-pass)), and the ability registry is
-in, with six abilities a pack's aliens switch on beside the capture beam
+in, with six abilities a pack's aliens switch on beside the capture beam and a
+shipped game that switches on four of them
 ([§4.4](#44-where-a-second-game-plugs-in)).
 [§5](#5-what-is-not-here-yet) is what is left.
 <!-- check:count classic.stages.normal 13 classic.sequence.normal 17 classic.stages.challenge 8 -->
@@ -797,6 +799,23 @@ the end of its stage by an autoplay persona — splitting, shielding, teleportin
 and spawning on the way. `tests/sim/morph-mirror-pack.test.ts` is the same test
 for the other two, changing type and mirroring the fighter.
 
+**And a game a player can start uses those four.**
+[`packs/spore-storm/`](../packs/spore-storm/), named by
+`variants/spore-storm.json`, is the same kind of overlay on Classic: four aliens in
+its formation, each carrying exactly one of `splitOnHit`, `shield`, `teleport` and
+`spawnMinions`, and two more that an ability puts on the field. Its point is that each ability is **readable** — a
+watcher can say what each alien does without being told — so every event the four
+raise is bound to a sound and to an effect in its manifest, exactly as a fighter's
+death is, and none of it is code. `tests/sim/spore-storm.test.ts` holds it to that:
+one ability per alien, every event bound and centred, and all four happening on
+stage 1 of every seed under the persona the attract demo flies first. The pack's
+README carries what playing it measured, and the one rules-layer coupling it found
+that `docs/content-guide.md` does not list ([§5](#5-what-is-not-here-yet)). It
+predates `transform` and `mirrorPlayer` and uses neither, so those two are still in
+no shipped game.
+
+![Spore Storm, chosen from the start-up selector and played by an autoplay persona: cysts splitting, a husk's shield lighting up, a flicker teleporting and a brood spawning](media/m3-spore-storm.gif)
+
 The split follows the classification in the rules-and-scoring scout report
 (section 9), not a fresh decision:
 
@@ -1066,8 +1085,12 @@ mid-dive, out of reach of a slot check; and the wall check is the single fighter
 Flying every shipped stage measured about fifteen seconds when the pass landed and
 about thirty-six once all thirteen Classic scripts did: 53 flights across the three
 variants against 37, with Classic's later scripts first flown on harder difficulty
-rows. The shipped tree is flown twice per CI run — by its own step and by the test
-that wraps it, under a 180-second timeout.
+rows. Spore Storm added eleven more — its own three stages and Classic's eight
+challenge scripts as it plays them, 64 flights across four variants — and about
+six seconds: timed in one process, its flights take 6.1 s against Deep Sea's
+6.0 s for the same eleven and Classic's 15.1 s for twenty-one. The shipped tree is
+flown twice per CI run — by its own step and by the test that wraps it, under a
+180-second timeout — so a game of this size costs CI about twelve seconds.
 `tests/unit/playability.test.ts` pins its thresholds from both edges, and
 `tests/sim/validate-packs-playability.test.ts` runs the script over the shipped
 tree, which passes, and over `tests/fixtures/unplayable/` layered on Classic,
@@ -1085,14 +1108,22 @@ stale absence list is the failure mode this section is most prone to — a docum
 describing as deliberately absent something that shipped two merges ago.
 [`docs/ROADMAP.md`](ROADMAP.md) is where each of these is scheduled.
 
-- **Nothing in a shipped game uses the six new abilities.** They are reached only
-  by a pack that switches them on, and no installed pack does yet; the packs that
-  play them are the tests' (`tests/sim/ability-pack.test.ts` and
-  `tests/sim/morph-mirror-pack.test.ts`). Their events — `shield-hit`,
-  `shield-restored`, `enemy-split`, `enemy-teleported`, `minions-spawned` and
-  `enemy-morphed` — are ones a pack may bind a sound or an effect to, and none
-  does, so a shield hit is not yet visible on screen. `mirrorPlayer` raises no
-  event: what it does is the diver's motion.
+- **Two of the six new abilities are in no shipped game.** `transform` and
+  `mirrorPlayer` are reached only by a pack that switches them on, and no
+  installed pack does yet; the pack that plays them is the test's
+  (`tests/sim/morph-mirror-pack.test.ts`). The event `transform` raises —
+  `enemy-morphed` — is one a pack may bind a sound or an effect to, and none does.
+  `mirrorPlayer` raises no event: what it does is the diver's motion. The other
+  four are switched on by Spore Storm, which binds every event they raise
+  ([§4.4](#44-where-a-second-game-plugs-in)).
+- **A game layered over Classic's rules cannot switch off Classic's transform
+  attack, or choose what it turns into.** `rules.transform` is the arcade's
+  one-into-a-trio attack — not the `transform` ability — and its `types` name three
+  of Classic's aliens, so from stage 4, once a stage, Deep Sea and Spore Storm each
+  turn one of their own drones or wings into three of Classic's scourges. An
+  overlay cannot change a rules field ([§4.5](#45-variants-the-games-this-build-offers)),
+  and `docs/content-guide.md` section 7 does not list this among the couplings a
+  pack meets; `packs/spore-storm/README.md` has the measurement.
 - **No stage is a boss stage.** `boss` is one of the three stage kinds the schema
   admits, and no pack document uses it — what a boss stage would be has never
   been specified ([`docs/IDEAS.md`](IDEAS.md)).
@@ -1526,10 +1557,10 @@ cards' captions, `AUTO NORMAL` beside `SCORE 2860`.
 
 The cabinet can play itself, as one of several named **personas**, so that the game
 can be watched rather than played. `beginner`, `normal`, `expert` and `astronaut`
-ship with the Classic game, and the forged Deep Sea game declares two of its own —
-six across the build, because a persona belongs to the variant it plays and there
-is no way for one document to reference another's.
-<!-- check:count autoplay.classicPersonas 4 autoplay.forgedPersonas 2 autoplay.personas 6 -->
+ship with the Classic game, and the forged Deep Sea game and Spore Storm declare
+two each — eight across the build, because a persona belongs to the variant it
+plays and there is no way for one document to reference another's.
+<!-- check:count autoplay.classicPersonas 4 autoplay.forgedPersonas 2 autoplay.sporeStormPersonas 2 autoplay.personas 8 -->
 
 **An input log was the wrong shape for this, which is why autoplay was not built on
 the attract demo — and why the attract demo is now built on autoplay.** A log
@@ -1626,18 +1657,18 @@ Nobody has to choose anything to watch. When the cabinet is sitting in attract, 
 demo behind the cards is flown by the active game's own personas, one after
 another — the variant's `defaultPersona` first, then on through the list in menu
 order and round again. Which personas exist is read from the variant and nowhere
-else: Classic cycles four, Deep Sea two, and Swarm Remix, which declares none, is
-demonstrated by the hand-written input log in `src/ui/attract.ts` that every game
-used before. That log is not a leg of the cycle: between two personas it would be a
-fifth player with no name to show.
+else: Classic cycles four, Deep Sea and Spore Storm two each, and Swarm Remix,
+which declares none, is demonstrated by the hand-written input log in
+`src/ui/attract.ts` that every game used before. That log is not a leg of the
+cycle: between two personas it would be a fifth player with no name to show.
 
 **The cycle turns on a finished run.** Each persona plays one game from the start,
 and the next takes over on the step after its game over — so a persona holds the
 screen for as long as it stays alive, which on the Classic demo seed runs from
 about half a minute for the beginner to two and a half for the astronaut. There is
 a ceiling of three minutes a turn; it exists so a persona that never dies cannot
-keep the others off the screen, and Deep Sea's astronaut is the one shipped leg
-that reaches it.
+keep the others off the screen, and the astronauts of Deep Sea and Spore Storm
+are the shipped legs that reach it.
 
 **It repeats exactly.** Every leg starts the same world from the same seed — the
 same fleet, flown by somebody else — at the rank in force, and each pilot draws

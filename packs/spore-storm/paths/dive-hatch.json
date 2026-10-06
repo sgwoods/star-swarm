@@ -1,0 +1,11 @@
+{
+  "id": "dive-hatch",
+  "mirror": true,
+  "segments": [
+    { "type": "arc", "radius": 20, "degrees": 40, "dir": "cw", "speed": 1.5 },
+    { "type": "sine", "amplitude": 8, "wavelength": 56, "duration": 40, "speed": 1.5 },
+    { "type": "trigger", "ability": "spawnMinions" },
+    { "type": "aimAtPlayer", "speed": 1.6, "duration": 40 },
+    { "type": "exitBottom", "speed": 1.6 }
+  ]
+}

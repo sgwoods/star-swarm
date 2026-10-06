@@ -1,0 +1,9 @@
+{
+  "id": "dive-scatter",
+  "mirror": true,
+  "segments": [
+    { "type": "arc", "radius": 14, "degrees": 50, "dir": "cw", "speed": 2.1 },
+    { "type": "aimAtPlayer", "speed": 2.1, "duration": 24 },
+    { "type": "exitBottom", "speed": 2.1 }
+  ]
+}

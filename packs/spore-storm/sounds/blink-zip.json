@@ -1,0 +1,11 @@
+{
+  "id": "blink-zip",
+  "wave": "sine",
+  "freq": [260, 1800],
+  "vibrato": {
+    "rate": 30,
+    "depth": 0.2
+  },
+  "envelope": [0.002, 0.07, 0.05],
+  "volume": 0.3
+}

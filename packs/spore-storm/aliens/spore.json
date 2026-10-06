@@ -1,0 +1,7 @@
+{
+  "id": "spore",
+  "role": "drone",
+  "sprite": "spore",
+  "score": { "base": 20 },
+  "dive": { "paths": ["dive-spore"] }
+}

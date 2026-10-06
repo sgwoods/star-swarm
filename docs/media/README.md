@@ -182,6 +182,18 @@ The clips are screen recordings of the dev build.
   seed is stage 1 cleared and most of stage 2 fought. At `max_colors=48`: the selector and
   the settings card put text and plate colours on screen that a playfield alone
   does not, and 64 bought nothing visible here.
+- `m3-spore-storm.gif` — the game that uses four of the new abilities, played: one
+  unedited take from live play at the dev build, recorded the way `m4-forge.gif`
+  was. The start-up selector with the cursor moved onto `SPORE STORM`, the settings
+  card opened with **Esc** and the `AUTOPLAY` row taken across to `ASTRONAUT`, then
+  play — and from that moment the controls are untouched. Within the first twenty
+  seconds every one of the four happens on screen: cysts shot during their entry
+  tear open and fly on as two cystlets, a husk's field lights up as a ring where a
+  shot strikes it, a flicker stops mid-dive and folds back in elsewhere under a
+  collapsing ring, and a brood drops yellow spores at the fighter. Twenty-six
+  seconds at `fps=15` rather than the usual 10, because each ability's effect lasts
+  under a third of a second and ten frames a second drops most of them; at
+  `max_colors=48`, as for `m4-forge.gif`.
 - `arch-lab.gif` — the `/lab` previewer: an entry path playing, then scrubbed
   frame by frame with the readout following, then the same path mirrored, then a
   dive path flown from the slot marker.

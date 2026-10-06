@@ -1,0 +1,38 @@
+{
+  "id": "spore-storm",
+  "name": "SPORE STORM",
+  "description": "EVERY ALIEN HAS A TRICK",
+  "packs": ["classic", "spore-storm"],
+  "order": 40,
+  "autoplay": {
+    "personas": [
+      {
+        "id": "normal",
+        "label": "NORMAL",
+        "description": "PLAYS IT SAFE",
+        "reactionSteps": 9,
+        "aimTolerance": 6,
+        "threatHorizon": 130,
+        "dodgeMargin": 12,
+        "shotDiscipline": 0.4,
+        "panic": 0.15,
+        "engage": 0.25,
+        "rescue": false
+      },
+      {
+        "id": "astronaut",
+        "label": "ASTRONAUT",
+        "description": "SHOOTS DIVERS, RESCUES",
+        "reactionSteps": 1,
+        "aimTolerance": 2,
+        "threatHorizon": 288,
+        "dodgeMargin": 24,
+        "shotDiscipline": 1,
+        "panic": 0,
+        "engage": 1,
+        "rescue": true
+      }
+    ],
+    "defaultPersona": "normal"
+  }
+}

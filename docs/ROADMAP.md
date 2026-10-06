@@ -37,12 +37,14 @@ was never a deployment question:
 - **Ship: a game that uses the new six abilities.** The ability registry and all
   six of its new abilities have landed — `transform` and `mirrorPlayer` last, once
   what each means had been decided — and so have the playability checks in the
-  validator; all of it moved to
+  validator and a game that switches four of them on, `splitOnHit`, `shield`,
+  `teleport` and `spawnMinions`, with the sounds and effects their events want;
+  all of it moved to
   [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#44-where-a-second-game-plugs-in)
   ([§4.4](ARCHITECTURE.md#44-where-a-second-game-plugs-in) and
   [§4.7](ARCHITECTURE.md#47-the-playability-pass)), which is where a thing that
-  exists is described. No installed pack will switch the six on until a variant
-  does, along with the sounds and effects their events want.
+  exists is described. No installed pack will switch `transform` or `mirrorPlayer`
+  on until a variant does, along with the sound and effect `enemy-morphed` wants.
 
 Also in this milestone, because they are the same kind of work:
 
@@ -84,10 +86,12 @@ One thing the forge **found** rather than built: the rules layer couples a pack 
 numbers it cannot change — which roles may attack at all, how wide a formation has
 to be for the breathe table it will run under, and the absolute enemy count at
 which bombing turns continuous. The pack manager says so on its card when a mix
-meets one ([`docs/ARCHITECTURE.md`](ARCHITECTURE.md#the-pack-manager-and-the-stage-sequence-editor));
-nothing in this roadmap will let a pack change them, because rules stay a whole
-document, and whether one ever should is a question for the captain rather than a
-task.
+meets one ([`docs/ARCHITECTURE.md`](ARCHITECTURE.md#the-pack-manager-and-the-stage-sequence-editor)).
+The game that uses the new abilities found one more that the card does not report:
+the aliens Classic's transform attack turns a layered game's own aliens into
+([`docs/ARCHITECTURE.md`](ARCHITECTURE.md#5-what-is-not-here-yet)). Nothing in
+this roadmap will let a pack change them, because rules stay a whole document, and
+whether one ever should is a question for the captain rather than a task.
 
 _Exit check:_ one sentence becomes a validated, playable pack with a preview clip
 attached to its own pull request — met for `packs/deep-sea/`, and the remaining

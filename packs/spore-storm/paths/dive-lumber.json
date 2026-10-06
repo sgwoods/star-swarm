@@ -1,0 +1,10 @@
+{
+  "id": "dive-lumber",
+  "mirror": true,
+  "segments": [
+    { "type": "arc", "radius": 18, "degrees": 20, "dir": "ccw", "speed": 1.4 },
+    { "type": "sine", "amplitude": 12, "wavelength": 64, "duration": 60, "speed": 1.4 },
+    { "type": "aimAtPlayer", "speed": 1.5, "duration": 50 },
+    { "type": "exitBottom", "speed": 1.5 }
+  ]
+}

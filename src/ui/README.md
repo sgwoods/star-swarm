@@ -42,11 +42,11 @@ The front-end shell around it landed with Milestone 2:
   which ends it.
 - **The variant's personas fly it, in turn.** The `defaultPersona` first, then on
   through the list in menu order, each playing one whole game; the next takes over
-  on the step after a game over, with a three-minute ceiling that only Deep Sea's
-  astronaut reaches. Every leg starts the same world from the same seed and each
-  pilot has a seed the cycle never advances, so the cycle repeats exactly. The
-  header of `attract.ts` is the argument for flying it this way rather than with
-  the input log.
+  on the step after a game over, with a three-minute ceiling that only the
+  astronauts of Deep Sea and Spore Storm reach. Every leg starts the same world
+  from the same seed and each pilot has a seed the cycle never advances, so the
+  cycle repeats exactly. The header of `attract.ts` is the argument for flying it
+  this way rather than with the input log.
 - **A variant with no personas is flown by the input log**, `DEMO_SCRIPT`,
   through `createReplaySource` (`src/engine/replay.ts`). It is that variant's whole
   demo and never a leg of a persona cycle. No run in the log is longer than ~130

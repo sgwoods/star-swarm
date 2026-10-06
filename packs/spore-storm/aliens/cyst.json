@@ -1,0 +1,9 @@
+{
+  "id": "cyst",
+  "role": "wing",
+  "sprite": "cyst",
+  "score": { "base": 80 },
+  "fire": { "pattern": "straight", "shotsPerDive": 1, "cooldownFrames": 60 },
+  "dive": { "paths": ["dive-furrow"] },
+  "abilities": [{ "type": "splitOnHit", "into": "cystlet", "count": 2, "spacing": 12 }]
+}

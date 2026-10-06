@@ -1,0 +1,10 @@
+{
+  "id": "entry-rise",
+  "mirror": true,
+  "start": [32, 304],
+  "segments": [
+    { "type": "bezier", "to": [96, 168], "c1": [16, 232], "c2": [104, 224], "speed": 1.9 },
+    { "type": "sine", "amplitude": 10, "wavelength": 48, "duration": 40, "speed": 1.9 },
+    { "type": "toSlot", "speed": 1.9 }
+  ]
+}

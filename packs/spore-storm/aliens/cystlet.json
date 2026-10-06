@@ -1,0 +1,7 @@
+{
+  "id": "cystlet",
+  "role": "wing",
+  "sprite": "cystlet",
+  "score": { "base": 40 },
+  "dive": { "paths": ["dive-scatter"] }
+}

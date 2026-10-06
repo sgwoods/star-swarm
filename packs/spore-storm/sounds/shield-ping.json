@@ -1,0 +1,7 @@
+{
+  "id": "shield-ping",
+  "wave": "triangle",
+  "freq": [1900, 2700],
+  "envelope": [0.002, 0.03, 0.12],
+  "volume": 0.32
+}

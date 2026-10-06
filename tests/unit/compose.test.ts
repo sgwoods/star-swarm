@@ -253,6 +253,7 @@ describe('the pack manager lists what is installed, and offers what it holds', (
     expect(composer.installed).toEqual([
       { id: 'classic', name: 'Classic', rules: true, stages: 21 },
       { id: 'deep-sea', name: 'Deep Sea', rules: false, stages: 3 },
+      { id: 'spore-storm', name: 'Spore Storm', rules: false, stages: 3 },
       { id: 'swarm-remix', name: 'Swarm Remix', rules: false, stages: 0 },
     ]);
   });

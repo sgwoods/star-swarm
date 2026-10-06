@@ -1,0 +1,11 @@
+{
+  "id": "spore-plop",
+  "wave": "sawtooth",
+  "freq": [520, 110],
+  "vibrato": {
+    "rate": 18,
+    "depth": 0.25
+  },
+  "envelope": [0.004, 0.06, 0.1],
+  "volume": 0.24
+}

@@ -1,0 +1,9 @@
+{
+  "id": "husk",
+  "role": "warden",
+  "sprite": "husk",
+  "score": { "base": 150 },
+  "fire": { "pattern": "aimed", "shotsPerDive": 2, "cooldownFrames": 44 },
+  "dive": { "paths": ["dive-lumber"] },
+  "abilities": [{ "type": "shield", "hits": 2, "rechargeFrames": 900 }]
+}

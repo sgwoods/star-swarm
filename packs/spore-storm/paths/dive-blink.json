@@ -1,0 +1,15 @@
+{
+  "id": "dive-blink",
+  "mirror": true,
+  "segments": [
+    { "type": "arc", "radius": 20, "degrees": 60, "dir": "cw", "speed": 1.7 },
+    { "type": "wait", "frames": 14 },
+    { "type": "trigger", "ability": "teleport" },
+    { "type": "wait", "frames": 12 },
+    { "type": "aimAtPlayer", "speed": 2, "duration": 34 },
+    { "type": "trigger", "ability": "teleport" },
+    { "type": "wait", "frames": 8 },
+    { "type": "aimAtPlayer", "speed": 2.2, "duration": 30 },
+    { "type": "exitBottom", "speed": 2.2 }
+  ]
+}

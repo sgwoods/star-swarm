@@ -1,0 +1,17 @@
+{
+  "id": "split-pop",
+  "wave": "square",
+  "duty": 0.3,
+  "envelope": [0.002, 0.1, 0.06],
+  "volume": 0.3,
+  "sequence": [
+    {
+      "freq": [880, 520],
+      "duration": 0.05
+    },
+    {
+      "freq": [700, 300],
+      "duration": 0.07
+    }
+  ]
+}

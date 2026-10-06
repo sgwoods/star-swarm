@@ -38,6 +38,13 @@ for what a document may say and what the engine will actually honour;
 [`deep-sea/`](deep-sea/) is the one it produced. A forged pack is an ordinary pack
 and gets no exemption from anything on this page.
 
+**An ability is switched on, never written.** [`spore-storm/`](spore-storm/) is the
+game that uses four of the new abilities: each alien in its formation names one of
+them in its own document, two of its dive paths say where in a flight one fires,
+and its `pack.json` binds every event they raise to a sound and an effect. The
+behaviour itself is the engine's (`src/sim/abilities/`), so the whole game is
+documents like every other pack here.
+
 `npm run validate-packs` schema-checks then reference-checks every pack, then every
 variant, and must pass in CI; a pack that fails validation never loads. It succeeds
 on an empty tree and on a pack whose content directories are still empty.
