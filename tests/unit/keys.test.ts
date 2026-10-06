@@ -16,6 +16,7 @@ import {
 } from '../../src/ui/packs.js';
 import { exitConfirmUnderLines, PAUSE_TEXT } from '../../src/ui/pause.js';
 import { CONTROL_SCHEMES } from '../../src/ui/settings.js';
+import { createNameEntry, deleteConfirmNotes, nameEntryNotes } from '../../src/ui/variations.js';
 
 describe('one press, read the same way on every card', () => {
   const press = (...actions: readonly Action[]) => cardPress(EMPTY_FRAME, frameOf(...actions));
@@ -71,14 +72,36 @@ function everyHelpLine(): {
   const help = (lines: readonly { text: string; tone: string }[]): string[] =>
     lines.filter((line) => line.tone === 'help').map((line) => line.text);
   return [
-    ...help(variantSelectNotes('', true)).map((text) => ({ card: 'selector', text, cells: 24 })),
+    ...help(variantSelectNotes('', { demonstrations: true, variations: true })).map((text) => ({
+      card: 'selector',
+      text,
+      cells: 24,
+    })),
     ...help(settingsNotes('', true)).map((text) => ({ card: 'settings', text, cells: 25 })),
     { card: 'pause', text: PAUSE_TEXT.pausedKeys, cells: 24 },
     ...help(exitConfirmUnderLines(0, 1)).map((text) => ({ card: 'exit', text, cells: 24 })),
     ...initialsEntryKeys().map((text) => ({ card: 'entry', text, cells: 23 })),
     ...help(packEditorNotes(packCard())).map((text) => ({ card: 'packs', text, cells: 25 })),
     ...help(stageEditorNotes(stageCard())).map((text) => ({ card: 'stages', text, cells: 25 })),
+    // The naming card's verbs change with where its cursor is, so every state is read.
+    ...nameCards().flatMap((entry) =>
+      help(nameEntryNotes(entry, 'create', 'BASE', '')).map((text) => ({
+        card: 'name',
+        text,
+        cells: 25,
+      })),
+    ),
+    ...help(deleteConfirmNotes('MINE')).map((text) => ({ card: 'delete', text, cells: 25 })),
   ];
+}
+
+/** The naming card on `END` with letters taken, on a letter, and with none taken. */
+function nameCards(): ReturnType<typeof createNameEntry>[] {
+  const atEnd = createNameEntry({ start: 'MINE', check: () => undefined });
+  const onLetter = createNameEntry({ start: 'MINE', check: () => undefined });
+  onLetter.next();
+  const empty = createNameEntry({ start: '', check: () => undefined });
+  return [atEnd, onLetter, empty];
 }
 
 /** The two cards the settings screen opens, over one pack and one stage, judged fine. */
@@ -111,8 +134,8 @@ describe('every card says how to work it in one voice', () => {
 
   it('builds every line of help on every card from that vocabulary', () => {
     const lines = everyHelpLine();
-    // Seven cards, two lines each but the pause card's one.
-    expect(new Set(lines.map((line) => line.card)).size).toBe(7);
+    // Nine cards, two lines each but the pause card's one.
+    expect(new Set(lines.map((line) => line.card)).size).toBe(9);
     for (const { card, text } of lines) {
       for (const pair of text.split(KEY_PAIR_GAP)) {
         const key = pair.slice(0, pair.indexOf(' '));

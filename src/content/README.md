@@ -4,18 +4,18 @@ The content platform: what a pack may contain, how one is loaded, and how the
 rules layer over it is read. `docs/DESIGN.md` section 7 defines the content
 model and section 6 the rules layer.
 
-| File           | What it is                                                                                                  |
-| -------------- | ----------------------------------------------------------------------------------------------------------- |
-| `schema.ts`    | Zod schemas and inferred types for every content kind, the manifest and the rules                           |
-| `loader.ts`    | Pure: documents in, a validated pack or a list of errors out                                                |
-| `fs.ts`        | **Node only.** Reads a pack directory into the shape `loader.ts` takes                                      |
-| `bundle.ts`    | **Vite only.** The same walk over the same tree, through `import.meta.glob`                                 |
-| `registry.ts`  | Layers loaded packs into one lookup; a later pack wins, manifest and rules included                         |
-| `variants.ts`  | A **variant**: one game, as a `variants/<id>.json` document — its packs and its difficulty presets          |
-| `rules.ts`     | Reads the rules layer: rank tables, stage sequences, cadence, plateaus, and everything the simulation steps |
-| `stages.ts`    | A stage _number_ to the resolved `StageContent` the simulation is handed                                    |
-| `couplings.ts` | What a pack mix is coupled to under its rules, for the pack manager to say on its card                      |
-| `errors.ts`    | `ContentError`, and the per-file report both the loader and the validator print                             |
+| File           | What it is                                                                                                                     |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `schema.ts`    | Zod schemas and inferred types for every content kind, the manifest and the rules                                              |
+| `loader.ts`    | Pure: documents in, a validated pack or a list of errors out                                                                   |
+| `fs.ts`        | **Node only.** Reads a pack directory into the shape `loader.ts` takes                                                         |
+| `bundle.ts`    | **Vite only.** The same walk over the same tree, through `import.meta.glob`                                                    |
+| `registry.ts`  | Layers loaded packs into one lookup; a later pack wins, manifest and rules included                                            |
+| `variants.ts`  | A **variant**: one game, as a `variants/<id>.json` document — its packs and its difficulty presets, and a player's copy of one |
+| `rules.ts`     | Reads the rules layer: rank tables, stage sequences, cadence, plateaus, and everything the simulation steps                    |
+| `stages.ts`    | A stage _number_ to the resolved `StageContent` the simulation is handed                                                       |
+| `couplings.ts` | What a pack mix is coupled to under its rules, for the pack manager to say on its card                                         |
+| `errors.ts`    | `ContentError`, and the per-file report both the loader and the validator print                                                |
 
 Three things worth knowing before changing anything here.
 

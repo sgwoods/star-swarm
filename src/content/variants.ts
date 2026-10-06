@@ -113,6 +113,27 @@ export const variantSchema = z.strictObject({
    * world (`./personas.ts`). Omitted means this game offers no autoplay.
    */
   autoplay: variantAutoplaySchema.default({ personas: [] }),
+  /**
+   * The combat stages' order, as stage ids, stated after every pack. Omitted
+   * means the packs' own sequence at the rank in force.
+   *
+   * A selection like `packs`, never an override: it chooses an order among the
+   * stage documents the packs already hold, and every id must be a combat stage
+   * one of them ships. A player's order from the stage-sequence editor is this
+   * field of their variation (`src/ui/flow.ts`), which is what keeps a variation,
+   * a forged game and a shipped game one kind of document.
+   */
+  stages: z.array(idSchema).optional(),
+  /**
+   * The game this one was made from, when a player made it by editing another.
+   *
+   * **Provenance, never a reference.** The loader does not resolve it and nothing
+   * about how the game plays is read from it: a variation is a whole document of
+   * its own, so it plays the same whether the game it names changes, is renamed
+   * or is no longer installed. The front end reads it to say where a game came
+   * from and which game to fall back to when this one will not load.
+   */
+  derivedFrom: idSchema.optional(),
 });
 
 export type Variant = z.infer<typeof variantSchema>;
@@ -155,12 +176,13 @@ export interface ResolvedVariant {
   /** The pack ids it layers, in order. What the settings menu shows. */
   readonly packs: readonly string[];
   /**
-   * The combat stages' order, when one was stated after every pack — a player's,
-   * from {@link resolveVariant} — and `undefined` when the packs' own sequence
-   * plays. A variant document cannot state one: a variant selects packs, and this
-   * is the player-settings layer choosing an order among what they hold.
+   * The combat stages' order when the document states one — a player's
+   * variation, from the stage-sequence editor — and `undefined` when the packs'
+   * own sequence plays.
    */
   readonly stages: readonly string[] | undefined;
+  /** The game this one was made from, when it was made by editing one. Provenance only. */
+  readonly derivedFrom: string | undefined;
   /** Those packs, composed. */
   readonly registry: ContentRegistry;
   /** The rules in force. Present by construction: a variant without them fails to load. */
@@ -250,8 +272,7 @@ export type VariantLoadResult =
   | { readonly ok: false; readonly errors: readonly ContentError[] };
 
 /**
- * A player's choice for one variant: a pack list in place of the document's own,
- * and an order for the combat stages, stated after every pack.
+ * A pack list and a stage order in place of the ones a document states.
  *
  * Both are the player-settings layer of `docs/DESIGN.md` section 6 — "active
  * packs" — and neither reaches the rules: the pack list chooses which documents
@@ -263,10 +284,21 @@ export interface VariantChoice {
   /** Pack ids to layer, in order, instead of the document's own `packs`. */
   readonly packs?: readonly string[] | undefined;
   /**
-   * Stage ids to play as the combat stages, in order, cycling once past the end.
-   * Challenge stages keep the packs' own sequence and the rules' own cadence.
+   * Stage ids to play as the combat stages, in order, cycling once past the end,
+   * instead of the document's own `stages`. Challenge stages keep the packs' own
+   * sequence and the rules' own cadence.
    */
   readonly stages?: readonly string[] | undefined;
+}
+
+export interface ResolveOptions {
+  /**
+   * Ids the document may not take, because a game this build ships already has
+   * them. A player's variation is resolved on its own rather than beside every
+   * shipped document, so the duplicate-id rule `loadVariants` applies between
+   * documents is applied here against these.
+   */
+  readonly reserved?: readonly string[];
 }
 
 export type VariantResolveResult =
@@ -326,9 +358,9 @@ function parseDocuments(sources: readonly VariantSource[]): {
 function resolveDocument(
   { file, variant }: ParsedDocument,
   packs: ReadonlyMap<string, LoadedPack>,
-  stages: readonly string[] | undefined,
 ): { readonly errors: readonly ContentError[]; readonly variant?: ResolvedVariant } {
   const errors: ContentError[] = [];
+  const stages = variant.stages;
   const layered: LoadedPack[] = [];
   let missing = false;
   variant.packs.forEach((id, index) => {
@@ -505,6 +537,7 @@ function resolveDocument(
       file,
       packs: variant.packs,
       stages,
+      derivedFrom: variant.derivedFrom,
       registry,
       rules,
       presets,
@@ -533,7 +566,7 @@ export function loadVariants(
   const { errors, parsed } = parseDocuments(sources);
   const resolved: ResolvedVariant[] = [];
   for (const document of parsed) {
-    const result = resolveDocument(document, packs, undefined);
+    const result = resolveDocument(document, packs);
     errors.push(...result.errors);
     if (result.variant !== undefined) resolved.push(result.variant);
   }
@@ -542,14 +575,16 @@ export function loadVariants(
 }
 
 /**
- * Resolve one variant document **as a player chose it**: with a different pack
- * list, an order for its combat stages, or both.
+ * Resolve one variant document on its own — a player's variation, or a shipped
+ * document **as a player chose it**, with a different pack list, an order for its
+ * combat stages, or both.
  *
- * The same two passes {@link loadVariants} runs, over the same document with its
- * `packs` replaced — so a list a player composes is refused for exactly the
- * reasons a variant document naming it would be, and the editor and the gate
- * cannot disagree about what loads. The stage order is checked against the
- * packs it will play over: every id a combat stage those packs hold.
+ * The same two passes {@link loadVariants} runs, over the same document with
+ * `packs` and `stages` replaced when the choice states them — so a list a player
+ * composes is refused for exactly the reasons a variant document naming it would
+ * be, and the editor and the gate cannot disagree about what loads. The stage
+ * order is checked against the packs it will play over: every id a combat stage
+ * those packs hold.
  *
  * Nothing here decides what a refusal *does*; `src/ui/compose.ts` turns the
  * errors into a reason a player can read.
@@ -558,10 +593,25 @@ export function resolveVariant(
   source: VariantSource,
   packs: ReadonlyMap<string, LoadedPack>,
   choice: VariantChoice = {},
+  options: ResolveOptions = {},
 ): VariantResolveResult {
   const { errors, parsed } = parseDocuments([source]);
   const document = parsed[0];
   if (errors.length > 0 || document === undefined) return { ok: false, errors };
+  const taken = options.reserved ?? [];
+  if (taken.includes(document.variant.id)) {
+    return {
+      ok: false,
+      errors: [
+        {
+          pack: VARIANTS_GROUP,
+          file: document.file,
+          field: 'id',
+          message: `duplicate variant id "${document.variant.id}"; a shipped game already has it`,
+        },
+      ],
+    };
+  }
   if (choice.packs !== undefined && choice.packs.length === 0) {
     return {
       ok: false,
@@ -575,13 +625,119 @@ export function resolveVariant(
       ],
     };
   }
-  const chosen: ParsedDocument =
-    choice.packs === undefined
-      ? document
-      : { file: document.file, variant: { ...document.variant, packs: [...choice.packs] } };
-  const result = resolveDocument(chosen, packs, choice.stages);
+  const chosen: ParsedDocument = {
+    file: document.file,
+    variant: {
+      ...document.variant,
+      ...(choice.packs === undefined ? {} : { packs: [...choice.packs] }),
+      ...(choice.stages === undefined ? {} : { stages: [...choice.stages] }),
+    },
+  };
+  const result = resolveDocument(chosen, packs);
   if (result.variant === undefined) return { ok: false, errors: result.errors };
   return { ok: true, variant: result.variant };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Documents a player makes                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A variant document as JSON holds it, before the schema has read it.
+ *
+ * What the front end keeps for a player's variation, because a stored document
+ * outlives the build that wrote it: it is validated when it is played, never
+ * coerced when it is read, so one that stops loading is kept as written rather
+ * than repaired.
+ */
+export type VariantDocument = Readonly<Record<string, unknown>>;
+
+/** Is this value an object a document can be read from? Arrays are not. */
+export function isVariantDocument(value: unknown): value is VariantDocument {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** A string array out of a document field, or `undefined` when it is not one. */
+function idsOf(value: unknown): readonly string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.filter((id): id is string => typeof id === 'string');
+}
+
+/**
+ * The pack list and stage order a document states, read leniently — what the
+ * pack manager opens on. Nothing here validates: a document that names a pack
+ * this build lacks reads back that pack, so the card can show it as missing.
+ */
+export function listsOf(document: VariantDocument): {
+  readonly packs: readonly string[];
+  readonly stages: readonly string[] | undefined;
+} {
+  return { packs: idsOf(document.packs) ?? [], stages: idsOf(document.stages) };
+}
+
+/** The same document with its pack list replaced. */
+export function withPacks(document: VariantDocument, packs: readonly string[]): VariantDocument {
+  return { ...document, packs: [...packs] };
+}
+
+/** The same document with its stage order replaced, or removed for `undefined`. */
+export function withStages(
+  document: VariantDocument,
+  stages: readonly string[] | undefined,
+): VariantDocument {
+  const { stages: _dropped, ...rest } = document;
+  return stages === undefined ? rest : { ...rest, stages: [...stages] };
+}
+
+export interface DeriveOptions {
+  /** The new document's id. The caller chooses one no game has. */
+  readonly id: string;
+  /** What the selector shows. */
+  readonly name: string;
+  /** The id of the game it is made from. Recorded as `derivedFrom`. */
+  readonly from: string;
+  readonly packs: readonly string[];
+  /** The combat stages' order, or `undefined` for the packs' own. */
+  readonly stages?: readonly string[] | undefined;
+}
+
+/**
+ * A new variant document made from another: what a player's edit to a shipped
+ * game becomes.
+ *
+ * **A copy, not a delta.** Everything the base states comes across — its
+ * difficulty presets and its autoplay personas included — so the result is a
+ * whole document that loads on its own, passes exactly the checks any variant
+ * passes, and could be dropped into `variants/` as it is. Four fields are the
+ * new game's own: the `id` and `name` it is given, `derivedFrom` naming the base,
+ * and the pack list and stage order the player chose. Three are not copied,
+ * because each is a claim about the base rather than about the copy: its
+ * `description`, its selector `order` and its `demonstration` mark.
+ *
+ * `base` is the base's document as JSON holds it, or `undefined` when the base is
+ * not in this build — a settings document can outlive the game it was written
+ * against — in which case the copy is the four fields alone and its presets come
+ * from the ranks its rules declare.
+ */
+export function deriveVariant(
+  base: VariantDocument | undefined,
+  options: DeriveOptions,
+): VariantDocument {
+  const {
+    description: _description,
+    order: _order,
+    demonstration: _demonstration,
+    stages: _stages,
+    ...kept
+  } = base ?? {};
+  return {
+    ...kept,
+    id: options.id,
+    name: options.name,
+    derivedFrom: options.from,
+    packs: [...options.packs],
+    ...(options.stages === undefined ? {} : { stages: [...options.stages] }),
+  };
 }
 
 /** Selector order: the declared `order`, then the id, so it is never arbitrary. */

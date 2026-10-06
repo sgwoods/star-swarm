@@ -1,7 +1,7 @@
 /**
  * The game-state machine (docs/DESIGN.md section 4, "Game flow").
  *
- * One explicit machine rather than flags spread through the loop. There are twelve
+ * One explicit machine rather than flags spread through the loop. There are fourteen
  * phases and every transition is named here:
  *
  * ```
@@ -16,6 +16,11 @@
  *
  *   settings ──L/R on PACKS──▶ packs ──keep or cancel──▶ settings
  *   settings ──L/R on STAGES─▶ stages ─keep or cancel──▶ settings
+ *                         packs/stages ──keep, on a shipped game──▶ name ──kept──▶ settings
+ *                                                      ▲            │ cancelled
+ *                                                      └────────────┘
+ *   settings ──L/R on NAME───▶ name ───kept or cancelled──▶ settings
+ *   settings ──L/R on DELETE─▶ delete ─either answer──────▶ settings
  *
  *   playing ──pause──▶ paused ──pause──▶ playing
  *      │                  │  ▲
@@ -46,6 +51,10 @@
  *   phases for the same reason: "settings, but showing another card" is a flag.
  *   Each edits a draft and returns to `settings` either way, keeping the draft or
  *   throwing it away; the settings cursor is where it was.
+ * - **`name`** and **`delete`** are the cards a player's variation is named and
+ *   removed with (`./variations.ts`). Keeping an edit to a *shipped* game goes
+ *   through `name` first, because what is kept is a new game and a new game has a
+ *   name; cancelling it goes back to the card the edit was made on, draft intact.
  *
  * The two after them are the pause and the way out, and they are phases for the
  * third time for the same reason — a boolean `paused` beside `phase` is "playing,
@@ -82,14 +91,21 @@
  *   subscribes, and a flow that reached for a canvas would be the same mistake as
  *   a sim that did.
  *
- * And one that the pack manager added: **the variant in force is the chosen
- * variant as the player composed it.** The selector and the `GAME` row choose a
- * *base* — a variant as its document declares it — and the player's stored pack
- * list and stage order for that base are composed over it
- * ({@link FlowCommon.composer}). A stored choice that no longer composes — a pack
- * this build does not install, a stage the list no longer holds — is set aside,
- * not repaired: the base plays, the settings rows say so, and the stored choice
- * stays in the document for the day it loads again.
+ * And the one the player's variations added: **a shipped game always plays as
+ * it ships.** The selector and the `GAME` row choose a *game* — a shipped variant,
+ * or one of the player's variations, each a whole variant document — and nothing
+ * stored is ever composed over a shipped one. An edit to a shipped game is kept
+ * as a new variation derived from it (`deriveVariant`), named on the `name` card,
+ * and chosen; the shipped game stays on the list beside it, unchanged. A
+ * variation is the player's sandbox: the cards edit it in place.
+ *
+ * Every variation is judged by {@link FlowCommon.composer} exactly as the pack
+ * manager judges a draft — the loader's own passes, then the structural half of
+ * the playability pass — when it is chosen or the selector's cursor reaches it,
+ * not when the list opens. One that will not load — a pack this build does not
+ * install, a field a later build added — is set aside, not repaired: the game it
+ * was made from plays in its place, the settings rows say so, and the document
+ * stays in the store for the day it loads again, still listed and deletable.
  */
 
 import type { Persona } from '../content/personas.js';
@@ -97,8 +113,15 @@ import { personaOf } from '../content/personas.js';
 import { combatStageNumber } from '../content/rules.js';
 import type { Rules } from '../content/schema.js';
 import type { StageSource } from '../content/stages.js';
-import type { DifficultyPreset, VariantChoice } from '../content/variants.js';
-import { rankFor } from '../content/variants.js';
+import {
+  deriveVariant,
+  type DifficultyPreset,
+  listsOf,
+  rankFor,
+  type VariantDocument,
+  withPacks,
+  withStages,
+} from '../content/variants.js';
 import {
   type Action,
   ACTION_BIT,
@@ -122,6 +145,8 @@ import {
   createSettingsMenu,
   createVariantMenu,
   type EditorCard,
+  MENU_TEXT,
+  type MenuGame,
   type SettingsMenu,
   type VariantMenu,
 } from './menus.js';
@@ -131,12 +156,28 @@ import {
   createStageEditor,
   type PackComposer,
   type PackEditor,
+  sameList,
   type StageEditor,
   type Verdict,
 } from './packs.js';
 import { createExitConfirm, type ExitConfirm } from './pause.js';
 import { countEvents, EMPTY_STATS, type ResultRow, resultRows, type RunStats } from './results.js';
-import { DEFAULT_SETTINGS, type Settings, type SettingsStore } from './settings.js';
+import {
+  DEFAULT_SETTINGS,
+  freshVariationId,
+  freshVariationName,
+  type Settings,
+  type SettingsStore,
+  type VariationDocument,
+} from './settings.js';
+import {
+  createDeleteConfirm,
+  createNameEntry,
+  type DeleteConfirm,
+  type NameEntry,
+  type NamePurpose,
+  nameRefusal,
+} from './variations.js';
 
 export type GamePhase =
   | 'variant-select'
@@ -144,6 +185,8 @@ export type GamePhase =
   | 'settings'
   | 'packs'
   | 'stages'
+  | 'name'
+  | 'delete'
   | 'playing'
   | 'paused'
   | 'exit-confirm'
@@ -184,6 +227,32 @@ export interface FlowVariant {
    * difficulty preset that only reached `createWorld` would apply half of it.
    */
   stagesFor: (rank?: string) => StageSource;
+}
+
+/**
+ * One game on the list: a shipped variant, or a variation the player made.
+ *
+ * What the selector and the `GAME` row step through. A variation's entry is built
+ * from its stored document without judging it, so a list of them is cheap; whether
+ * it loads is asked when it is chosen or the selector's cursor reaches it.
+ */
+export interface GameEntry extends MenuGame {
+  /** The variant, for a shipped game. */
+  readonly shipped: FlowVariant | undefined;
+  /** The document as stored, for a variation. */
+  readonly document: VariationDocument | undefined;
+  /** For a variation, the id of the game it was made from, when it names one. */
+  readonly derivedFrom: string | undefined;
+}
+
+/** The naming card as the flow has it open: the entry, and what it is naming. */
+export interface Naming {
+  readonly entry: NameEntry;
+  readonly purpose: NamePurpose;
+  /** The name of the game it comes from. */
+  readonly from: string;
+  /** Its name before this card, when renaming. */
+  readonly was: string;
 }
 
 /** How long each waiting phase holds, in simulation steps. Ours, not arcade values. */
@@ -238,13 +307,13 @@ interface FlowCommon {
    */
   readonly onVariantChange?: (variant: FlowVariant) => void;
   /**
-   * What composes a variant from the player's stored pack list and stage order,
-   * and judges a draft on the pack manager's cards — `src/ui/compose.ts` over the
-   * packs this build loaded.
+   * What resolves a player's variation and judges a draft on the pack manager's
+   * cards — `src/ui/compose.ts` over the packs this build loaded.
    *
    * Omitted means there is nothing to compose with: every variant plays as its
-   * document declares it, the `PACKS` row reads as it always did and the `STAGES`
-   * row is not shown. That is what a test of the machine on its own wants.
+   * document declares it, stored variations are not offered, the `PACKS` row
+   * reads as it always did and the `STAGES` row is not shown. That is what a test
+   * of the machine on its own wants.
    */
   readonly composer?: PackComposer<FlowVariant>;
 }
@@ -295,18 +364,21 @@ export interface GameFlow {
   /** Rank taken by the most recent submission, for highlighting a row. */
   readonly lastRank: number | undefined;
   readonly demo: AttractDemo;
-  /** Every game this build offers, in selector order, each as its document declares it. */
+  /** Every game this build ships, in selector order, each as its document declares it. */
   readonly variants: readonly FlowVariant[];
+  /** Every game on the list: the shipped ones, then the player's variations. */
+  readonly games: readonly GameEntry[];
+  /** The game chosen — shipped, or a variation. */
+  readonly game: GameEntry;
   /**
-   * The game in force: the chosen variant, composed from the player's stored pack
-   * list and stage order when they compose. Every world the flow creates comes
-   * from it.
+   * The game in force: the chosen one, unless it is a variation that will not
+   * load, when it is the game that variation was made from. Every world the flow
+   * creates comes from it.
    */
   readonly variant: FlowVariant;
   /**
-   * Why the stored pack list or stage order for the chosen variant is not what is
-   * playing, or `undefined` when it is (or nothing is stored). The verdict the
-   * pack manager would give it.
+   * Why the chosen variation is not what is playing, or `undefined` when it is
+   * (a shipped game always is). The verdict the pack manager would give it.
    */
   readonly setAside: Verdict | undefined;
   /** The difficulty rank the next game will run at — the preset, resolved. */
@@ -327,13 +399,17 @@ export interface GameFlow {
   /** The player's settings, as they stand. */
   readonly settings: Settings;
   /** The start-up list, present only during `variant-select`. */
-  readonly variantMenu: VariantMenu<FlowVariant> | undefined;
+  readonly variantMenu: VariantMenu<GameEntry> | undefined;
   /** The settings rows, present only during `settings`. */
   readonly settingsMenu: SettingsMenu | undefined;
   /** The pack manager's draft, present only during `packs`. */
   readonly packEditor: PackEditor | undefined;
   /** The stage-sequence editor's draft, present only during `stages`. */
   readonly stageEditor: StageEditor | undefined;
+  /** The naming card, present only during `name`. */
+  readonly naming: Naming | undefined;
+  /** The delete card's cursor, present only during `delete`. */
+  readonly deleteConfirm: DeleteConfirm | undefined;
   /** The exit confirmation's cursor, present only during `exit-confirm`. */
   readonly exitConfirm: ExitConfirm | undefined;
   /** Rows the results screen shows for the run just played. */
@@ -378,6 +454,11 @@ function variantOfRules(rules: Rules, stages: StageSource | undefined): FlowVari
   };
 }
 
+/** Whether two stage orders are the same: both the packs' own, or the same ids in order. */
+function sameOrder(a: readonly string[] | undefined, b: readonly string[] | undefined): boolean {
+  return a === undefined || b === undefined ? a === b : sameList(a, b);
+}
+
 /**
  * Build the machine.
  *
@@ -407,42 +488,98 @@ export function createGameFlow(options: FlowOptions): GameFlow {
 
   const composer = options.composer;
 
-  /** The player's stored pack list and stage order for one variant, as ids. */
-  const choiceOf = (chosen: FlowVariant): VariantChoice => {
-    const settings = settingsValue();
-    return { packs: settings.packs[chosen.id], stages: settings.stages[chosen.id] };
+  /** Each shipped game's entry, built once: the list's first part never changes. */
+  const shippedEntries: readonly GameEntry[] = variants.map((shipped) => ({
+    id: shipped.id,
+    name: shipped.name,
+    description: shipped.description,
+    demonstration: shipped.demonstration,
+    variation: false,
+    shipped,
+    document: undefined,
+    derivedFrom: undefined,
+  }));
+
+  /**
+   * A variation's entry, built once per stored document and never by judging it.
+   *
+   * Listed under its own id — unless a shipped game has that id too, which a later
+   * build can bring about by shipping one. Such a variation is refused (the
+   * duplicate-id rule) and still has to be reachable to be deleted, so it is
+   * listed under its id with a `+` no id may contain: one list, no two entries
+   * alike. Everything that writes it addresses it by the document's own id.
+   */
+  const shippedIds = new Set(variants.map((shipped) => shipped.id));
+  const variationEntries = new WeakMap<VariationDocument, GameEntry>();
+  const entryOfVariation = (document: VariationDocument): GameEntry => {
+    const known = variationEntries.get(document);
+    if (known !== undefined) return known;
+    const derivedFrom = typeof document.derivedFrom === 'string' ? document.derivedFrom : undefined;
+    const from = variants.find((shipped) => shipped.id === derivedFrom)?.name ?? derivedFrom;
+    const entry: GameEntry = {
+      id: shippedIds.has(document.id) ? `+${document.id}` : document.id,
+      name:
+        typeof document.name === 'string' && document.name.length > 0 ? document.name : document.id,
+      description: from === undefined ? 'YOURS' : `YOURS, FROM ${from}`,
+      demonstration: false,
+      variation: true,
+      shipped: undefined,
+      document,
+      derivedFrom,
+    };
+    variationEntries.set(document, entry);
+    return entry;
   };
 
   /**
-   * A variant as the player composed it, and why the stored choice is set aside
-   * when it is. Nothing stored, or nothing to compose with, is the base itself.
+   * Every game on the list: the shipped ones in selector order, then the
+   * player's variations in the order they were made. Without a composer nothing
+   * can judge a variation, so none is offered — they stay in the store.
+   */
+  const gamesNow = (): readonly GameEntry[] =>
+    composer === undefined
+      ? shippedEntries
+      : [...shippedEntries, ...settingsValue().variations.map(entryOfVariation)];
+
+  const firstEntry = shippedEntries[0];
+  if (firstEntry === undefined) throw new Error('a flow needs at least one variant');
+
+  // The remembered game, if it is still on the list. A settings document
+  // outlives the build it was written against, so an id nobody offers any more
+  // reads as "the first one" rather than as a failure.
+  let chosenId: string =
+    gamesNow().find((entry) => entry.id === settingsValue().variant)?.id ?? firstEntry.id;
+  const chosenEntry = (): GameEntry =>
+    gamesNow().find((entry) => entry.id === chosenId) ?? firstEntry;
+
+  /** The shipped game a variation was made from, or the first when it names none here. */
+  const referenceOf = (entry: GameEntry): FlowVariant =>
+    variants.find((shipped) => shipped.id === entry.derivedFrom) ?? first;
+
+  /**
+   * A game as it plays, and why it is set aside when it is.
    *
-   * Strict on purpose, like `personaOf`: a stored list that will not compose
-   * plays the base whole, not some part of the list that happens to load —
-   * silently playing a mix nobody chose is worse than playing the game as shipped
-   * and saying so.
+   * A shipped game is itself, always: nothing stored is composed over it. A
+   * variation is judged, and one that will not load plays the game it was made
+   * from — whole, not some part of the document that happens to load, the way
+   * `personaOf` is strict: silently playing a mix nobody chose is worse than
+   * playing the game as shipped and saying so.
    */
   const composeFor = (
-    chosen: FlowVariant,
+    entry: GameEntry,
   ): { readonly variant: FlowVariant; readonly setAside: Verdict | undefined } => {
-    const choice = choiceOf(chosen);
-    if (composer === undefined || (choice.packs === undefined && choice.stages === undefined)) {
-      return { variant: chosen, setAside: undefined };
+    if (entry.shipped !== undefined) return { variant: entry.shipped, setAside: undefined };
+    if (composer === undefined || entry.document === undefined) {
+      return { variant: referenceOf(entry), setAside: undefined };
     }
-    const result = composer.compose(chosen.id, choice);
+    const result = composer.compose(entry.document);
     return result.variant === undefined
-      ? { variant: chosen, setAside: result.verdict }
+      ? { variant: referenceOf(entry), setAside: result.verdict }
       : { variant: result.variant, setAside: undefined };
   };
 
-  // The remembered variant, if it is still installed. A settings document
-  // outlives the build it was written against, so an id nobody offers any more
-  // reads as "the first one" rather than as a failure.
-  const remembered = variants.find((variant) => variant.id === settingsValue().variant);
-  /** The variant chosen, as its document declares it: what the selector lists. */
-  let base: FlowVariant = remembered ?? first;
-  const composed = composeFor(base);
-  /** The variant in force: {@link base} as the player composed it. */
+  const composed = composeFor(chosenEntry());
+  /** The variant in force: the chosen game, or what it was made from when it will not load. */
   let variant: FlowVariant = composed.variant;
   let setAside: Verdict | undefined = composed.setAside;
 
@@ -493,7 +630,7 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     if (rankOf() !== demoRank) demo = buildDemo();
   };
 
-  let phase: GamePhase = variants.length > 1 ? 'variant-select' : 'attract';
+  let phase: GamePhase = gamesNow().length > 1 ? 'variant-select' : 'attract';
   let steps = 0;
   let phaseSteps = 0;
   let games = 0;
@@ -512,11 +649,31 @@ export function createGameFlow(options: FlowOptions): GameFlow {
    * impossible to stop.
    */
   let previousHuman: InputFrame = 0;
-  let variantMenu: VariantMenu<FlowVariant> | undefined;
+  let variantMenu: VariantMenu<GameEntry> | undefined;
   let settingsMenu: SettingsMenu | undefined;
   let confirm: ExitConfirm | undefined;
   let packEditor: PackEditor | undefined;
   let stageEditor: StageEditor | undefined;
+  /**
+   * The document the open pack or stage card edits: the chosen variation's own,
+   * or — over a shipped game — a new variation derived from it, with an id no
+   * game has, which keeping will name. `reference` is the shipped game's own
+   * document in that second case, and what a draft equal to it is judged as.
+   */
+  let editing:
+    | { readonly document: VariantDocument; readonly reference: VariantDocument | undefined }
+    | undefined;
+  let naming:
+    | (Naming & {
+        /** The document a kept name is written into. */
+        readonly document: VariantDocument;
+        /** Where cancelling goes: the card the edit was made on, or the settings. */
+        readonly back: GamePhase;
+      })
+    | undefined;
+  let deleting: DeleteConfirm | undefined;
+  /** The settings row the open card came from, which the cursor goes back to. */
+  let openedFrom: EditorCard | undefined;
   /** Where the settings screen returns to. */
   let settingsFrom: GamePhase = 'attract';
 
@@ -565,29 +722,15 @@ export function createGameFlow(options: FlowOptions): GameFlow {
   };
 
   /**
-   * Put a variant in force: rebuild the demo, remember the choice, and tell
-   * whoever owns the presentation. One function, because the selector and the
-   * settings menu's `GAME` row must not be two ways of doing this.
-   */
-  const selectVariant = (next: FlowVariant): void => {
-    if (next.id === base.id) return;
-    base = next;
-    writeSettings({ variant: next.id });
-    const composition = composeFor(next);
-    variant = composition.variant;
-    setAside = composition.setAside;
-    demo = buildDemo();
-    options.onVariantChange?.(variant);
-  };
-
-  /**
-   * Put the stored choice for the chosen variant back in force, after a card kept
-   * one. The same consequences as {@link selectVariant} — a fresh demo, and
-   * whoever owns the presentation told — because a pack list changes the sprites,
-   * the sounds and the palette exactly as a different game does.
+   * Put the chosen game in force — or what it was made from, when it will not
+   * load — and, when that is a different variant, rebuild the demo and tell
+   * whoever owns the presentation. One function, because the selector, the
+   * `GAME` row, keeping a card and deleting a variation must not be four ways of
+   * doing this: a pack list changes the sprites, the sounds and the palette
+   * exactly as a different game does.
    */
   const recompose = (): void => {
-    const composition = composeFor(base);
+    const composition = composeFor(chosenEntry());
     setAside = composition.setAside;
     if (composition.variant === variant) return;
     variant = composition.variant;
@@ -595,35 +738,77 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     options.onVariantChange?.(variant);
   };
 
-  /** A per-variant record from the settings with one variant's list replaced, or removed. */
-  const withList = (
-    record: Readonly<Record<string, readonly string[]>>,
-    list: readonly string[] | undefined,
-  ): Readonly<Record<string, readonly string[]>> => {
-    const next: Record<string, readonly string[]> = { ...record };
-    if (list === undefined) delete next[base.id];
-    else next[base.id] = list;
-    return next;
+  /** Choose a game from the list, remember it, and put it in force. */
+  const selectGame = (id: string): void => {
+    if (id === chosenId || !gamesNow().some((entry) => entry.id === id)) return;
+    chosenId = id;
+    writeSettings({ variant: id });
+    recompose();
   };
 
+  /** The stored variations with one replaced, appended, or — for `undefined` — removed. */
+  const withVariation = (
+    id: string,
+    document: VariationDocument | undefined,
+  ): readonly VariationDocument[] => {
+    const stored = settingsValue().variations;
+    if (document === undefined) return stored.filter((entry) => entry.id !== id);
+    return stored.some((entry) => entry.id === id)
+      ? stored.map((entry) => (entry.id === id ? document : entry))
+      : [...stored, document];
+  };
+
+  /** Every game's name but one: what a new name may not be. */
+  const namesBut = (id: string | undefined): readonly string[] =>
+    gamesNow()
+      .filter((entry) => entry.id !== id)
+      .map((entry) => entry.name);
+
   /**
-   * Open the pack manager or the stage-sequence editor over the chosen variant.
+   * Open the pack manager or the stage-sequence editor over the chosen game.
    *
-   * Both start from what is **stored**, not from what is in force: when a stored
-   * choice is set aside, the card is where the player sees it and mends it — a
-   * missing pack is a row of its own on the pack card, and every verdict on the
-   * stage card names what the stored pack list lacks.
+   * Over a variation the cards edit its stored document — not what is in force:
+   * when it will not load, the card is where the player sees why and mends it,
+   * a missing pack being a row of its own. Over a shipped game they edit a new
+   * variation derived from it, which only exists if it is kept and named.
    */
-  const openEditor = (card: EditorCard): void => {
+  const openEditor = (card: 'packs' | 'stages'): void => {
     if (composer === undefined) return;
-    const { packs, stages } = choiceOf(base);
-    const chosen = base;
+    const chosen = chosenEntry();
+    let document: VariantDocument;
+    let reference: VariantDocument | undefined;
+    if (chosen.document !== undefined) {
+      document = chosen.document;
+    } else {
+      reference = composer.documentOf(chosen.id);
+      if (reference === undefined) return;
+      const own = listsOf(reference);
+      document = deriveVariant(reference, {
+        id: freshVariationId(chosen.id, [
+          ...shippedIds,
+          ...settingsValue().variations.map((stored) => stored.id),
+        ]),
+        name: freshVariationName(chosen.name, namesBut(undefined)),
+        from: chosen.id,
+        packs: own.packs,
+        stages: own.stages,
+      });
+    }
+    editing = { document, reference };
+    const { packs, stages } = listsOf(document);
+    // A draft that is the shipped game's own lists is the shipped game: what the
+    // gate flew, unjudged, and nothing to keep.
+    const ownVerdict = reference === undefined ? undefined : composer.compose(reference).verdict;
     if (card === 'packs') {
       packEditor = createPackEditor({
         installed: composer.installed,
-        start: packs ?? chosen.packs,
-        own: chosen.packs,
-        judge: (draft) => composer.judgePacks(chosen.id, draft, stages),
+        start: packs,
+        own: packs,
+        makesNew: reference !== undefined,
+        judge: (draft) =>
+          ownVerdict !== undefined && sameList(draft, packs)
+            ? ownVerdict
+            : composer.judgePacks(document, draft),
       });
       enter('packs');
       return;
@@ -631,13 +816,108 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     // The challenge cadence is the rules', so the rules in force number the rows.
     const rules = variant.rules;
     stageEditor = createStageEditor({
-      options: composer.stageOptions(chosen.id, packs),
-      own: composer.ownStages(chosen.id, packs, rankOf()),
+      makesNew: reference !== undefined,
+      options: composer.stageOptions(document, packs),
+      own: composer.ownStages(document, packs, rankOf()),
       stored: stages,
       numberOf: (position) => combatStageNumber(rules, position),
-      judge: (draft) => composer.compose(chosen.id, { packs, stages: draft }).verdict,
+      judge: (draft) =>
+        ownVerdict !== undefined && sameOrder(draft, stages)
+          ? ownVerdict
+          : composer.judgeStages(document, draft),
     });
     enter('stages');
+  };
+
+  /**
+   * A card kept a changed document. Over a variation it is written in place; over
+   * a shipped game it is a new game, so the naming card comes first and nothing
+   * is written until a name is kept.
+   */
+  const keepEdit = (document: VariantDocument, from: 'packs' | 'stages'): void => {
+    const chosen = chosenEntry();
+    if (chosen.document !== undefined) {
+      const id = chosen.document.id;
+      writeSettings({ variations: withVariation(id, { ...document, id }) });
+      recompose();
+      closeEditors();
+      return;
+    }
+    const start = typeof document.name === 'string' ? document.name : chosen.name;
+    naming = {
+      entry: createNameEntry({ start, check: (name) => nameRefusal(name, namesBut(undefined)) }),
+      purpose: 'create',
+      from: chosen.name,
+      was: '',
+      document,
+      back: from,
+    };
+    enter('name');
+  };
+
+  /**
+   * Close every card the settings screen opened, and go back to it — with the
+   * cursor on the row that opened the card. By id, not by place: keeping a new
+   * game adds its `NAME` and `DELETE` rows above that row.
+   */
+  const closeEditors = (): void => {
+    packEditor = undefined;
+    stageEditor = undefined;
+    editing = undefined;
+    naming = undefined;
+    deleting = undefined;
+    enter('settings');
+    if (openedFrom !== undefined) settingsMenu?.focus(openedFrom);
+  };
+
+  /** Open the naming card to rename the chosen variation. */
+  const openRename = (): void => {
+    const chosen = chosenEntry();
+    if (chosen.document === undefined) return;
+    naming = {
+      entry: createNameEntry({
+        start: chosen.name,
+        check: (name) => nameRefusal(name, namesBut(chosen.id)),
+      }),
+      purpose: 'rename',
+      from:
+        variants.find((shipped) => shipped.id === chosen.derivedFrom)?.name ??
+        chosen.derivedFrom ??
+        '',
+      was: chosen.name,
+      document: chosen.document,
+      back: 'settings',
+    };
+    enter('name');
+  };
+
+  /** A name was kept: write the document under it, and choose it if it is new. */
+  const keepName = (name: string): void => {
+    const pending = naming;
+    if (pending === undefined) return;
+    const id = typeof pending.document.id === 'string' ? pending.document.id : chosenId;
+    writeSettings({ variations: withVariation(id, { ...pending.document, id, name }) });
+    if (pending.purpose === 'create') {
+      // The game just made is the one chosen: the shipped game it came from is
+      // still on the list, unchanged, one row up.
+      chosenId = id;
+      writeSettings({ variant: id });
+    }
+    recompose();
+    closeEditors();
+  };
+
+  /** Delete the chosen variation, and choose the game it was made from. */
+  const deleteChosen = (): void => {
+    const chosen = chosenEntry();
+    if (chosen.document === undefined) return;
+    const next = referenceOf(chosen);
+    chosenId = next.id;
+    writeSettings({
+      variations: withVariation(chosen.document.id, undefined),
+      variant: next.id,
+    });
+    recompose();
   };
 
   /** Start a game. Its opening events are this step's events. */
@@ -770,29 +1050,50 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     settingsMenu = createSettingsMenu({
       read: settingsValue,
       write: (patch) => {
-        // A `GAME` row change is a variant change, and has to go through the one
+        // A `GAME` row change is a game change, and has to go through the one
         // function that rebuilds everything hanging off it.
-        const chosen =
-          patch.variant === undefined
-            ? undefined
-            : variants.find((candidate) => candidate.id === patch.variant);
-        if (chosen !== undefined) selectVariant(chosen);
+        if (patch.variant !== undefined) selectGame(patch.variant);
         else writeSettings(patch);
       },
-      variants,
+      games: gamesNow,
+      chosen: chosenEntry,
       active: () => variant,
       ...(composer === undefined
         ? {}
         : {
-            open: openEditor,
+            open: (card: EditorCard) => {
+              openedFrom = card;
+              if (card === 'packs' || card === 'stages') openEditor(card);
+              else if (card === 'name') openRename();
+              else if (chosenEntry().variation) {
+                deleting = createDeleteConfirm();
+                enter('delete');
+              }
+            },
             setAside: () => setAside?.headline,
           }),
     });
     enter('settings');
   };
 
+  /**
+   * The line under the selector for the game under its cursor. A variation is
+   * judged here, when the cursor reaches it, so the list says which of the
+   * player's games will not load before one is chosen.
+   */
+  const selectNote = (entry: GameEntry): string => {
+    if (entry.document === undefined || composer === undefined) return entry.description ?? '';
+    return composer.compose(entry.document).verdict.ok
+      ? (entry.description ?? '')
+      : MENU_TEXT.setAside;
+  };
+
   const openVariantSelect = (): void => {
-    variantMenu = createVariantMenu({ variants, selected: variant.id });
+    variantMenu = createVariantMenu({
+      variants: gamesNow(),
+      selected: chosenId,
+      noteOf: selectNote,
+    });
     enter('variant-select');
   };
 
@@ -837,6 +1138,8 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     phase === 'settings' ||
     phase === 'packs' ||
     phase === 'stages' ||
+    phase === 'name' ||
+    phase === 'delete' ||
     phase === 'variant-select';
 
   if (phase === 'variant-select') openVariantSelect();
@@ -875,6 +1178,12 @@ export function createGameFlow(options: FlowOptions): GameFlow {
       return demo;
     },
     variants,
+    get games(): readonly GameEntry[] {
+      return gamesNow();
+    },
+    get game(): GameEntry {
+      return chosenEntry();
+    },
     get variant(): FlowVariant {
       return variant;
     },
@@ -893,7 +1202,7 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     get settings(): Settings {
       return settingsValue();
     },
-    get variantMenu(): VariantMenu<FlowVariant> | undefined {
+    get variantMenu(): VariantMenu<GameEntry> | undefined {
       return phase === 'variant-select' ? variantMenu : undefined;
     },
     get settingsMenu(): SettingsMenu | undefined {
@@ -904,6 +1213,12 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     },
     get stageEditor(): StageEditor | undefined {
       return phase === 'stages' ? stageEditor : undefined;
+    },
+    get naming(): Naming | undefined {
+      return phase === 'name' ? naming : undefined;
+    },
+    get deleteConfirm(): DeleteConfirm | undefined {
+      return phase === 'delete' ? deleting : undefined;
     },
     get exitConfirm(): ExitConfirm | undefined {
       return phase === 'exit-confirm' ? confirm : undefined;
@@ -954,7 +1269,7 @@ export function createGameFlow(options: FlowOptions): GameFlow {
           // every other card; and attract is where the chosen game's own demo,
           // high scores and keys are — the settings among them.
           if (press.accept) {
-            selectVariant(menu.chosen);
+            selectGame(menu.chosen.id);
             variantMenu = undefined;
             enter('attract');
           } else {
@@ -994,8 +1309,9 @@ export function createGameFlow(options: FlowOptions): GameFlow {
 
         case 'packs': {
           const editor = packEditor;
-          if (editor === undefined) {
-            enter('settings');
+          const edit = editing;
+          if (editor === undefined || edit === undefined) {
+            closeEditors();
             break;
           }
           const press = cardPress(previous, frame);
@@ -1004,22 +1320,20 @@ export function createGameFlow(options: FlowOptions): GameFlow {
           if (press.left || press.right) editor.toggle();
           if (press.back) {
             // Cancelled: the draft goes, and nothing was written.
-            packEditor = undefined;
-            enter('settings');
+            closeEditors();
             break;
           }
           if (press.accept) {
             const kept = editor.keep();
             // Refused: the card stays up and its verdict says why.
             if (kept.kept) {
-              const settings = settingsValue();
-              writeSettings({
-                packs: withList(settings.packs, kept.packs),
-                ...(kept.clearsStages ? { stages: withList(settings.stages, undefined) } : {}),
-              });
-              recompose();
-              packEditor = undefined;
-              enter('settings');
+              // The document's own list: nothing changed, so nothing is made.
+              if (kept.packs === undefined) {
+                closeEditors();
+                break;
+              }
+              const changed = withPacks(edit.document, kept.packs);
+              keepEdit(kept.clearsStages ? withStages(changed, undefined) : changed, 'packs');
               break;
             }
           }
@@ -1029,8 +1343,9 @@ export function createGameFlow(options: FlowOptions): GameFlow {
 
         case 'stages': {
           const editor = stageEditor;
-          if (editor === undefined) {
-            enter('settings');
+          const edit = editing;
+          if (editor === undefined || edit === undefined) {
+            closeEditors();
             break;
           }
           const press = cardPress(previous, frame);
@@ -1039,19 +1354,73 @@ export function createGameFlow(options: FlowOptions): GameFlow {
           if (press.left) editor.adjust(-1);
           else if (press.right) editor.adjust(1);
           if (press.back) {
-            stageEditor = undefined;
-            enter('settings');
+            closeEditors();
             break;
           }
           if (press.accept) {
             const kept = editor.keep();
             if (kept.kept) {
-              writeSettings({ stages: withList(settingsValue().stages, kept.stages) });
-              recompose();
-              stageEditor = undefined;
-              enter('settings');
+              if (sameOrder(kept.stages, listsOf(edit.document).stages)) {
+                closeEditors();
+                break;
+              }
+              keepEdit(withStages(edit.document, kept.stages), 'stages');
               break;
             }
+          }
+          events = demo.advance();
+          break;
+        }
+
+        case 'name': {
+          const card = naming;
+          if (card === undefined) {
+            closeEditors();
+            break;
+          }
+          // One letter at a time, so every direction spins it, as on initials
+          // entry; `ESC` steps back a letter, and leaves when there is none.
+          const press = cardPress(previous, frame);
+          if (press.backward) card.entry.previous();
+          if (press.forward) card.entry.next();
+          if (press.back && !card.entry.back()) {
+            // Cancelled: back to the card the edit was made on, its draft intact.
+            naming = undefined;
+            if (card.back === 'settings') closeEditors();
+            else enter(card.back);
+            break;
+          }
+          if (press.accept && card.entry.commit() === 'kept') {
+            keepName(card.entry.name);
+            break;
+          }
+          events = demo.advance();
+          break;
+        }
+
+        case 'delete': {
+          const card = deleting;
+          if (card === undefined) {
+            closeEditors();
+            break;
+          }
+          // One row of two words, so every direction walks it, as on the exit card.
+          const press = cardPress(previous, frame);
+          if (press.backward) card.previous();
+          if (press.forward) card.next();
+          if (press.back) {
+            closeEditors();
+            break;
+          }
+          if (press.accept) {
+            if (card.choice === 'delete') {
+              deleteChosen();
+              closeEditors();
+              settingsMenu?.focus('game');
+            } else {
+              closeEditors();
+            }
+            break;
           }
           events = demo.advance();
           break;

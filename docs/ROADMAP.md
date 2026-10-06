@@ -55,7 +55,14 @@ Also in this milestone, because they are the same kind of work:
 
 The pack manager and the stage-sequence editor have landed, and moved to
 [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#the-pack-manager-and-the-stage-sequence-editor)
-with what they check and what they cost.
+with what they check and what they cost — and so has the answer to what an edit
+made with them is: a named variation beside the shipped game rather than a change
+to it ([`docs/ARCHITECTURE.md`](ARCHITECTURE.md#a-players-variations)).
+
+- **Ship: a variation as text.** A variation will be exportable as the variant
+  document it already is, and importable from one, so a game a player made can
+  leave the browser it was made in — and be refused on the way in for exactly the
+  reasons any variant is.
 
 _Exit check:_ a player can change the rules from inside the game, a forged pack
 fails validation for being unplayable rather than merely malformed, and a pack

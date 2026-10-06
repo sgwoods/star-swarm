@@ -248,16 +248,17 @@ exactly centred, the breathe taking over — and then the fighter opening up on 
 
 ![The game: entry waves, formation and the fighter shooting](media/arch-gameplay.gif)
 
-The front end around that is one state machine with twelve phases — the start-up
-variant selector, attract, the settings menu, the pack manager and the
-stage-sequence editor it opens, playing, paused, the exit confirmation, the
-between-stage challenge card, game over, results and high-score entry. The cabinet boots into the selector when there is more than one game to
-choose and into attract when there is not; behind the cards the demo is the _real_
+The front end around that is one state machine with fourteen phases — the start-up
+variant selector, attract, the settings menu, the pack manager, the
+stage-sequence editor and the naming and delete cards it opens, playing, paused,
+the exit confirmation, the between-stage challenge card, game over, results and
+high-score entry. The cabinet boots into the selector when there is more than one game to
+choose — the shipped games and the player's variations — and into attract when there is not; behind the cards the demo is the _real_
 simulation, flown in turn by the game's own autoplay personas (§7) — or, for a game
 that declares none, replaying a hand-written input log; start begins a game; three fighters
 lost ends it into the game-over banner, the hit-ratio results card, and then
 either the high-score table or straight back to attract.
-<!-- check:count flow.phases 12 -->
+<!-- check:count flow.phases 14 -->
 
 ![The front end: attract mode, a game, and out to the results card](media/arch-front-end.gif)
 
@@ -893,6 +894,16 @@ content: a stage naming Classic's aliens, or a stage sequence naming Classic's
 stages, fails its own load. Richer overlays would need the reference pass to run
 over the composed variant, and nothing does that today.
 
+**A variant may state a combat order, and where it came from.** Two optional
+fields exist for the player's variations
+([§6](#a-players-variations)), and a shipped document may use either: `stages`, an
+order for the combat stages stated after every pack — a selection among stage
+documents the packs already hold, checked against them, exactly as the
+stage-sequence editor's order is — and `derivedFrom`, the id of the game a
+document was made from. `derivedFrom` is provenance and nothing else: the loader
+does not resolve it, so a document plays the same whether the game it names is
+installed or not.
+
 **A variant does not override rules.** There is no mechanism in the schema for
 patching a rules field, deliberately: a variant that could nudge individual
 numbers would be a difficulty multiplier with a different name, and
@@ -1090,6 +1101,10 @@ describing as deliberately absent something that shipped two merges ago.
   — whether a persona can finish what loads and builds — is left to the gate,
   because it costs seconds per list where the card needs milliseconds
   ([§6](#the-pack-manager-and-the-stage-sequence-editor)).
+- **A variation cannot leave the browser it was made in.** It is a whole variant
+  document ([§6](#a-players-variations)), which is what would let one be written
+  out as text and read back in elsewhere, and nothing does either yet: there is no
+  export and no import, and a variation lives in one browser's settings document.
 - **An overlay pack cannot reference the base pack's documents**
   ([§4.5](#45-variants-the-games-this-build-offers)). It can replace a
   self-contained document and nothing more, because the loader's reference pass
@@ -1160,30 +1175,32 @@ configuration layers: engine rules, content packs, and the player's settings. Th
 third is in, as `src/ui/settings.ts` and the menu in `src/ui/menus.ts`, and the
 whole of what is interesting about it is the boundary with the first.
 
-**Nothing in the settings is a number the simulation steps.** The nine values are
-the chosen variant, the difficulty **preset id**, the autoplay **persona id**,
-volume, mute, the CRT option, the control scheme, and per variant a pack list and
-an order for its combat stages, both as ids. Where each one arrives:
+**Nothing in the settings is a number the simulation steps.** The eight values are
+the chosen game, the difficulty **preset id**, the autoplay **persona id**,
+volume, mute, the CRT option, the control scheme, and the games the player has
+made, each a whole variant document ([below](#a-players-variations)). Where each one
+arrives:
 
-| Setting      | Applied by                                                                  |
-| ------------ | --------------------------------------------------------------------------- |
-| `variant`    | which game `src/ui/flow.ts` builds every world from                         |
-| `difficulty` | a preset id → a rank → the rules layer's own tables                         |
-| `autoplay`   | a persona id → the pilot the flow hands the controls to ([§7](#7-autoplay)) |
-| `volume`     | `Synth.setVolume`                                                           |
-| `muted`      | `Synth.setMuted`                                                            |
-| `controls`   | the keyboard map handed to `createKeyboardInput`, one of three schemes      |
-| `crt`        | `Display.setFilter` with the scanline filter from `src/render/crt.ts`       |
-| `packs`      | a variant's pack list, composed by the flow, written by the pack manager    |
-| `stages`     | a variant's combat-stage order, the same way, by the stage-sequence editor  |
+| Setting      | Applied by                                                                   |
+| ------------ | ---------------------------------------------------------------------------- |
+| `variant`    | which game `src/ui/flow.ts` builds every world from, shipped or the player's |
+| `difficulty` | a preset id → a rank → the rules layer's own tables                          |
+| `autoplay`   | a persona id → the pilot the flow hands the controls to ([§7](#7-autoplay))  |
+| `volume`     | `Synth.setVolume`                                                            |
+| `muted`      | `Synth.setMuted`                                                             |
+| `controls`   | the keyboard map handed to `createKeyboardInput`, one of three schemes       |
+| `crt`        | `Display.setFilter` with the scanline filter from `src/render/crt.ts`        |
+| `variations` | the player's own games, listed after the shipped ones and played as written  |
 
 <!-- check:count ui.controlSchemes 3 -->
 
-The menu shows at most one row per setting, and three of them are shown only when
-there is something to choose: `GAME` needs more than one variant, `AUTOPLAY`
-needs a variant that declares personas, and `STAGES` needs something to compose
-with — which the browser always has, and a flow built in a test may not.
-<!-- check:count ui.settingsRows 9 -->
+The menu shows at most one row per setting, plus two that act on the chosen
+game, and five are shown only when there is something to choose: `GAME` needs
+more than one game, `AUTOPLAY` needs a game that declares personas, `STAGES` needs
+something to compose with — which the browser always has, and a flow built in a
+test may not — and `NAME` and `DELETE` need the chosen game to be the player's
+own variation, because a shipped game is neither renamed nor deleted.
+<!-- check:count ui.settingsRows 11 -->
 
 **The difficulty preset does exactly one thing: it chooses the rank.** It is not a
 multiplier and there is nowhere in the shape to make it one. A preset is an id, a
@@ -1273,13 +1290,16 @@ past its end. The challenge half and the rules' challenge cadence are not the
 player's to reorder: a challenge script's flyers leave the screen by design, so in
 a combat slot it would be a stage that ends itself, and the loader refuses one.
 
-**Both are kept in the settings document, per variant** — `packs` and `stages`,
-ids keyed by variant id, through the one `KeyedStorage` — and keeping a variant's
-own list stores no override at all. The flow composes the chosen variant from them
-through its `composer` (`src/ui/compose.ts`), and the variant in force is what every
-world, the attract demo and the sprite sheet in `src/main.ts` are built from: a
-mix of Classic and Deep Sea draws the reef stages in Deep Sea's art, which
-`tests/e2e/packs.spec.ts` reads off the canvas.
+**What keeping does depends on whose game it is**, and both cards say which under
+the list. Over a shipped game they read `KEEPING MAKES A NEW GAME`: **Enter** on a
+changed draft opens the naming card, and only a named draft is kept — as a new
+variation, chosen, with the shipped game left as it ships one row up the list.
+Over a variation they read `KEEPING CHANGES YOURS`, and **Enter** writes the draft
+into its document. Keeping the game's own list changes nothing and makes nothing.
+The variant in force is what every world, the attract demo and the sprite sheet
+in `src/main.ts` are built from: a mix of Classic and Deep Sea draws the reef
+stages in Deep Sea's art, which `tests/e2e/packs.spec.ts` reads off the canvas.
+[Below](#a-players-variations) is the whole account of a variation.
 
 **A card refuses at the point of choosing.** Every change is judged at once and the
 verdict is on the card under the list: a green `LOADS AND BUILDS`, or a red
@@ -1321,11 +1341,11 @@ Classic's forty — `BOMBS GO NONSTOP AT 6-14`, `LEFT OF 26, NOT OF 40` — on e
 list that plays them, the Deep Sea game's own included.
 <!-- check:count content.couplingKinds 4 -->
 
-**A stored choice that no longer composes is set aside, not repaired.** A settings
-document outlives the packs it named, so a stored list naming a pack this build
-does not install — or an order naming a stage the list no longer holds — plays the
-chosen variant as shipped, whole: the `PACKS` and `STAGES` rows read
-`YOURS WILL NOT LOAD`, the pack card shows the missing pack as a row reading
+**A stored variation that no longer loads is set aside, not repaired.** A settings
+document outlives the packs it named, so a variation naming a pack this build
+does not install — or an order naming a stage its packs no longer hold — plays the
+game it was made from, as shipped, whole: the `GAME`, `PACKS` and `STAGES` rows
+read `YOURS WILL NOT LOAD`, the pack card shows the missing pack as a row reading
 `MISSING` with the reason under it, and the document keeps the list for the day it
 loads again. Switching a pack off can strand a stored order; that list may still be
 kept, and its verdict says `CLEARS YOUR STAGE ORDER` before **Enter** does it.
@@ -1335,11 +1355,97 @@ the judge against the shipped packs and `tests/fixtures/unplayable/`,
 `tests/unit/couplings.test.ts` each coupling against a pack built to have it, and
 `tests/unit/pack-manager-flow.test.ts` the whole story through the state machine.
 
+### A player's variations
+
+The captain asked whether a player's changes persist, and whether they could break
+a reference game. They persist; they cannot. **A shipped game plays as it ships
+whatever is stored**, and it does so structurally rather than by the player knowing
+how to put it back: every edit a player keeps is a game of its own — a
+_variation_ — and nothing stored is ever composed over a shipped one.
+
+![The player's variations: a migrated override on the selector, the pack card over a shipped game, the naming card, the settings over a variation, the delete card, and a refused list](media/m3-variations.png)
+
+**Every game on the list is a variant document.** The shipped ones are
+`variants/*.json`, bundled into the page and never written. The player's are the
+same shape, kept in the settings document's `variations`. `src/ui/compose.ts` is
+handed documents, and a shipped game's own document — recognised by identity —
+comes back as the variant the build loaded without being judged; anything else is
+judged. So choosing CLASSIC after making three variations of it is the very
+`ResolvedVariant` the build loaded, which `tests/unit/variations-flow.test.ts`
+asserts by identity and `tests/e2e/variations.spec.ts` reads off the canvas.
+
+**A variation is a copy of a variant document, by choice.** `deriveVariant` in
+`src/content/variants.ts` copies the shipped game's document — presets and
+personas included — and gives the copy its own `id`, `name` and `derivedFrom`, the
+pack list and stage order the player chose, and nothing else: the shipped game's
+`description`, selector `order` and `demonstration` mark are claims about it and are
+not copied. A delta stored against its base would be smaller and would follow the
+base's later changes, but it would be a second kind of game with its own rules for
+loading it, and it could not be handed to anyone. As a whole document, a
+variation, a forged game and a shipped game are one concept: one schema, the same
+two loader passes, and a variation could be dropped into `variants/` as it is.
+
+**`derivedFrom` says where a game came from, and is never followed.** A variation
+keeps the presets and personas it was made with when the game it came from changes
+in a later build, and plays the same when that game is not installed at all. What
+does reach it is its packs, named by id, so a fix to the Classic pack is a fix to
+every variation that layers it. The front end reads `derivedFrom` to say where a
+game came from (`YOURS, FROM STAR SWARM`, under the selector and the `GAME` row),
+and to choose what plays in its place when it will not load.
+
+**A variation is validated exactly as any variant is, and refused the same way.**
+It passes the pack manager's judge: `resolveVariant` — the two passes of
+`loadVariants`, over the one document, with the duplicate-id rule held against
+the shipped games — then `checkStructure`. There is no second, weaker path: a
+draft that fails is refused on the card before it can be named, and a stored
+variation that stops loading is [set aside](#the-pack-manager-and-the-stage-sequence-editor),
+still listed and still deletable. Judging measured 10 to 65 milliseconds per
+shipped mix when variations landed, so a stored variation is judged when it is
+chosen or the selector's cursor reaches it, not when the list opens; the selector's
+line for a refused one reads `YOURS WILL NOT LOAD`.
+
+**Naming, finding and deleting one.** Two cards, in `src/ui/variations.ts`, worked
+like every other ([below](#working-a-card)):
+
+| Card   | Opened by                                                    | Worked with                                                                                                                                         |
+| ------ | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| naming | **Enter** on a changed draft over a shipped game; `NAME` row | every direction spins the letter under the cursor; **Enter** takes it, or on `END` keeps the name; **Esc** steps back a letter, or leaves with none |
+| delete | the `DELETE` row                                             | every direction walks `KEEP` and `DELETE`, opening on `KEEP`; **Enter** takes; **Esc** goes back                                                    |
+
+Naming is initials entry at a different length: up to fourteen characters, the
+settings card's value column, from `A`–`Z`, `0`–`9`, space, `-` and `.`. It opens
+on a name — `STAR SWARM 2` for a new game — with the cursor on `END`, so **Enter**
+keeps it, and cancelling a new game's name goes back to the card it was made on
+with the draft intact. An empty name is refused, and so is another game's:
+two `STAR SWARM` rows would leave the reference indistinguishable from a copy. The
+selector lists variations after the shipped games, each marked `+` and explained
+by a `+ YOURS` legend, in a window of eight rows that scrolls. Deleting chooses
+the game the variation was made from.
+
+**A settings document from the build before is migrated once.** Version 1 of the
+document kept one pack list and one stage order per shipped game and composed
+them over the game itself — which is what made CLASSIC play the player's Classic.
+Version 2 has no such slot. On the first run after the change,
+`createSettingsStore` reads a version 1 document, turns each override into a
+variation of the game it was stored against — copied from that game's document,
+named as a new one would be, and chosen if that game was the one playing — and
+writes version 2 straight back. Nothing reads or writes the old tables after that
+read, and an override that no longer loaded is migrated anyway and lands set
+aside, so nothing a player made is dropped. A tab of the earlier build left open is
+the one thing that can undo it: that build reads version 2 as no settings, and
+writes version 1 over it on its next change.
+
+`tests/unit/settings.test.ts` holds the stored shape and the migration,
+`tests/unit/variations.test.ts` the two cards, `tests/unit/variations-flow.test.ts`
+the whole story through the state machine, and `tests/e2e/variations.spec.ts`
+plays it in a browser: edit CLASSIC, name the result, play CLASSIC as shipped,
+keep two, reload and find both, delete one, and be refused one that cannot work.
+
 ### Working a card
 
-Seven cards wait on an answer — the selector, the settings, the pack manager and
-the stage-sequence editor, the pause card, the exit card and initials entry — and
-they are worked with one scheme, held in
+Nine cards wait on an answer — the selector, the settings, the pack manager and
+the stage-sequence editor, the naming and delete cards, the pause card, the exit
+card and initials entry — and they are worked with one scheme, held in
 `src/ui/keys.ts`:
 
 | Key     | On every card                                                |
@@ -1363,8 +1469,8 @@ Four decisions inside it:
   log written before the two existed as holding neither. Nothing in `src/sim/`
   reads them, and in a live game they are not a takeover of autoplay.
 - **A card with one line of choices answers every direction.** On the selector,
-  the exit card and initials entry up does what left does and down what right
-  does, so no direction is ever a press that does nothing.
+  the exit and delete cards, initials entry and the naming card up does what left
+  does and down what right does, so no direction is ever a press that does nothing.
 - **Enter and fire mean one thing everywhere: take.** On the selector that now
   lands on the chosen game's attract screen rather than in play — the selector
   used to play on Enter and go to attract on fire, which is the disagreement this

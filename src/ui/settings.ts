@@ -25,20 +25,70 @@
  * | `muted`      | `Synth.setMuted`                                              |
  * | `controls`   | the keyboard map handed to `createKeyboardInput`              |
  * | `crt`        | the scanline filter `src/render/crt.ts` draws over the screen |
- * | `packs`      | an override of a variant's own pack list, per variant          |
- * | `stages`     | an order for that variant's combat stages, per variant         |
+ * | `variations` | the games the player has made, each a whole variant document  |
+ *
+ * **A shipped game is a reference, and nothing here can change one.** There is
+ * no per-game override in this shape any more: an edit to a shipped game is a
+ * new variant document — a *variation* — kept here beside the others, and the
+ * shipped game plays as it ships because nothing stored is ever composed over
+ * it. A variation is the player's sandbox and is edited in place.
  *
  * Persistence is {@link KeyedStorage} from `./storage.ts` — the same interface
  * the high-score table uses, for the same reason: blocked or unavailable browser
  * storage must degrade to defaults rather than throw. A store that cannot write
  * reports `persistent: false` and the settings last as long as the tab.
+ *
+ * ## The stored shape
+ *
+ * One JSON document under {@link SETTINGS_STORAGE_KEY}:
+ *
+ * ```
+ * { "version": 2,
+ *   "settings": { "variant": "classic-2", "difficulty": "arcade", "autoplay": undefined,
+ *                 "volume": 0.7, "muted": false, "crt": false, "controls": "both",
+ *                 "variations": [ { "id": "classic-2", "name": "STAR SWARM 2",
+ *                                   "derivedFrom": "classic", "packs": [...], ... } ] } }
+ * ```
+ *
+ * Each entry of `variations` is a variant document exactly as `variants/<id>.json`
+ * would hold it (`src/content/variants.ts`), kept **as written**: it is validated
+ * when it is played, never coerced when it is read, so a variation this build
+ * cannot load — a pack it names is not installed, a field a later build added —
+ * is still listed, still deletable, and comes back the day it loads again.
+ *
+ * **Version 1 is read, once, and never written.** It kept a per-variant pack
+ * list and stage order (`packs` and `stages`, keyed by variant id) composed over
+ * the shipped game itself, so an edit to Classic was what CLASSIC played. Reading
+ * one turns every such override into a variation of the game it was stored
+ * against ({@link SettingsStoreOptions.upgrade}), selects the one that was
+ * playing, and writes version 2 straight back — so the override tables exist on
+ * the first run after the change and on no run after it. Nothing a player made is
+ * dropped by the migration, including an override that no longer loads.
  */
 
+import { deriveVariant, isVariantDocument, type VariantDocument } from '../content/variants.js';
 import { type Action, DEFAULT_BINDINGS } from '../engine/input.js';
 import { createMemoryStorage, type KeyedStorage } from './storage.js';
 
-/** Key the browser implementation stores under. */
+/**
+ * Key the browser implementation stores under. The `v1` is the key's, not the
+ * document's: the document carries its own `version`, and the key stays put so
+ * that the reader of a newer document is the one that finds an older one.
+ */
 export const SETTINGS_STORAGE_KEY = 'star-swarm/settings/v1';
+
+/**
+ * A variation as stored: a variant document with an `id` to address it by, and
+ * everything else exactly as written.
+ */
+export type VariationDocument = VariantDocument & { readonly id: string };
+
+/**
+ * The longest name a variation may have. The settings card's value column is
+ * fourteen cells of the fixed-advance font, and a name is what the `GAME` row
+ * shows.
+ */
+export const VARIATION_NAME_LENGTH = 14;
 
 /** The keyboard schemes the settings menu offers. */
 export const CONTROL_SCHEMES = ['both', 'arrows', 'wasd'] as const;
@@ -88,25 +138,19 @@ export interface Settings {
   readonly crt: boolean;
   readonly controls: ControlScheme;
   /**
-   * Per variant, an override of the pack list that variant declares.
+   * The games the player has made, in the order they were made: each one a
+   * variant document derived from a shipped game (`deriveVariant` in
+   * `src/content/variants.ts`), named, and the player's own to edit and delete.
    *
-   * Keyed by variant id because a pack list is inherently a property of one
-   * game. Empty by default, which means "the variant's own list". The pack
-   * manager (`./packs.ts`) writes it, and only with a list it has checked loads
-   * and builds; the flow composes the variant from it (`./flow.ts`).
-   *
-   * Ids rather than anything resolved, for the reason `variant` is one: a stored
-   * list naming a pack this build does not install is **kept**, not repaired —
-   * the game plays the variant's own list and the pack manager says why, so the
-   * list comes back the day the pack does.
+   * Documents rather than ids, because a variation exists nowhere else — and
+   * documents **as written** rather than resolved ones, for the reason `variant`
+   * is an id: a stored variation naming a pack this build does not install is
+   * **kept**, not repaired. The flow lists it, plays the game it was made from
+   * in its place and says why (`./flow.ts`), and the pack manager is where it is
+   * mended. `variant` names a variation by its `id` exactly as it names a
+   * shipped game.
    */
-  readonly packs: Readonly<Record<string, readonly string[]>>;
-  /**
-   * Per variant, the order its combat stages play in, as stage ids: the
-   * stage-sequence editor's (`./packs.ts`). Absent means the packs' own sequence
-   * at the rank in force. Kept the way `packs` is when it stops resolving.
-   */
-  readonly stages: Readonly<Record<string, readonly string[]>>;
+  readonly variations: readonly VariationDocument[];
 }
 
 export const DEFAULT_SETTINGS: Settings = Object.freeze({
@@ -117,8 +161,7 @@ export const DEFAULT_SETTINGS: Settings = Object.freeze({
   muted: false,
   crt: false,
   controls: 'both',
-  packs: Object.freeze({}),
-  stages: Object.freeze({}),
+  variations: Object.freeze([]),
 } satisfies Settings);
 
 /** Clamp a volume to 0…1 on the menu's own grid, so a stored float cannot drift. */
@@ -129,7 +172,10 @@ export function quantiseVolume(volume: number): number {
 }
 
 /** The document shape on disk. Bumped if the shape ever changes. */
-const DOCUMENT_VERSION = 1;
+const DOCUMENT_VERSION = 2;
+
+/** The one earlier shape this build still reads. */
+const LEGACY_VERSION = 1;
 
 interface StoredDocument {
   readonly version: number;
@@ -140,7 +186,7 @@ function stringOr(value: unknown, fallback: string | undefined): string | undefi
   return typeof value === 'string' && value.length > 0 ? value : fallback;
 }
 
-/** A per-variant table of id lists — `packs` and `stages` both — coerced from storage. */
+/** A per-variant table of id lists — version 1's `packs` and `stages` — coerced from storage. */
 function listsOf(value: unknown): Record<string, readonly string[]> {
   if (typeof value !== 'object' || value === null) return {};
   const out: Record<string, readonly string[]> = {};
@@ -153,27 +199,138 @@ function listsOf(value: unknown): Record<string, readonly string[]> {
 }
 
 /**
- * Read a stored settings document. Storage is untrusted input, so every field is
- * coerced or dropped and anything unreadable reads as "no settings at all".
+ * The stored variations: every entry that is an object with an `id`, as written.
  *
- * A *partial* document is honoured field by field rather than rejected whole: a
- * settings shape that grows a field must not throw away what a player had
- * already chosen.
+ * The one thing dropped is what cannot be addressed — an entry with no usable id,
+ * or a second entry under an id already read — because a variation the player
+ * cannot select or delete is not one they have. Nothing else is coerced: whether
+ * a document loads is the loader's question, asked when it is played.
  */
-export function parseSettings(text: string | undefined): Settings | undefined {
-  if (text === undefined) return undefined;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    return undefined;
+function variationsOf(value: unknown): VariationDocument[] {
+  if (!Array.isArray(value)) return [];
+  const out: VariationDocument[] = [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    if (!isVariantDocument(entry)) continue;
+    const id = entry.id;
+    if (typeof id !== 'string' || id.length === 0 || seen.has(id)) continue;
+    seen.add(id);
+    out.push(entry as VariationDocument);
   }
-  if (typeof parsed !== 'object' || parsed === null) return undefined;
-  const document = parsed as Partial<StoredDocument>;
-  if (document.version !== DOCUMENT_VERSION) return undefined;
-  if (typeof document.settings !== 'object' || document.settings === null) return undefined;
+  return out;
+}
 
-  const stored = document.settings as Partial<Record<keyof Settings, unknown>>;
+/**
+ * What a version 1 document kept per variant: the pack list and the stage order
+ * the pack manager composed over the shipped game itself. Read only to be turned
+ * into variations.
+ */
+export interface LegacyOverrides {
+  readonly packs: Readonly<Record<string, readonly string[]>>;
+  readonly stages: Readonly<Record<string, readonly string[]>>;
+}
+
+/**
+ * A shipped game, as a version 1 document's overrides are turned into variations
+ * of it: its id, its display name, and its document as JSON holds it.
+ */
+export interface LegacyBase {
+  readonly id: string;
+  readonly name: string;
+  readonly document: VariantDocument;
+}
+
+/**
+ * A fresh variation id: the base's id and the smallest number from 2 that no
+ * game has. `classic` → `classic-2`, then `classic-3`.
+ */
+export function freshVariationId(base: string, taken: Iterable<string>): string {
+  const used = new Set(taken);
+  for (let n = 2; ; n += 1) {
+    const id = `${base}-${String(n)}`;
+    if (!used.has(id)) return id;
+  }
+}
+
+/**
+ * A fresh variation name: the base's name and the smallest number from 2 that no
+ * game is called, cut to fit {@link VARIATION_NAME_LENGTH}. `STAR SWARM` →
+ * `STAR SWARM 2`. The player renames it on the card that follows.
+ */
+export function freshVariationName(base: string, taken: Iterable<string>): string {
+  const used = new Set([...taken].map((name) => name.trim().toUpperCase()));
+  for (let n = 2; ; n += 1) {
+    const suffix = ` ${String(n)}`;
+    const stem = base
+      .toUpperCase()
+      .slice(0, VARIATION_NAME_LENGTH - suffix.length)
+      .trimEnd();
+    const name = `${stem}${suffix}`;
+    if (!used.has(name)) return name;
+  }
+}
+
+/**
+ * Turn version 1's overrides into variations, one per variant that had either,
+ * and select the one that was playing.
+ *
+ * Each becomes {@link deriveVariant} of the game it was stored against, with that
+ * override's pack list (or the game's own, when only an order was stored) and
+ * stage order. "The one that was playing" is the variant version 1 would have
+ * composed: the remembered one if it is among `bases`, else the first of them, as
+ * the old flow fell back. An override for a game `bases` does not hold — or every
+ * override, when no bases are given — still becomes a variation, of the four
+ * fields it can state; it may not load, and is kept and listed like any other
+ * variation that does not.
+ *
+ * **One-way.** The overrides are not in what this returns, and version 2 has
+ * nowhere to put them.
+ */
+export function upgradeLegacy(
+  legacy: LegacyOverrides,
+  settings: Settings,
+  bases: readonly LegacyBase[] = [],
+): Settings {
+  const ids = [...new Set([...Object.keys(legacy.packs), ...Object.keys(legacy.stages)])];
+  if (ids.length === 0) return settings;
+  const playing =
+    (bases.find((base) => base.id === settings.variant) ?? bases[0])?.id ?? settings.variant;
+  const takenIds = new Set([
+    ...bases.map((base) => base.id),
+    ...settings.variations.map((v) => v.id),
+  ]);
+  const takenNames = new Set([
+    ...bases.map((base) => base.name),
+    ...settings.variations.map((v) => (typeof v.name === 'string' ? v.name : '')),
+  ]);
+  const made: VariationDocument[] = [];
+  let variant = settings.variant;
+  for (const from of ids) {
+    const base = bases.find((candidate) => candidate.id === from);
+    const id = freshVariationId(from, takenIds);
+    const name = freshVariationName(base?.name ?? from, takenNames);
+    takenIds.add(id);
+    takenNames.add(name);
+    const own = base === undefined ? [] : stringList(base.document.packs);
+    const document = deriveVariant(base?.document, {
+      id,
+      name,
+      from,
+      packs: legacy.packs[from] ?? own,
+      stages: legacy.stages[from],
+    });
+    made.push({ ...document, id });
+    if (from === playing) variant = id;
+  }
+  return { ...settings, variant, variations: [...settings.variations, ...made] };
+}
+
+function stringList(value: unknown): readonly string[] {
+  return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
+}
+
+/** The fields both document versions share, coerced. */
+function commonOf(stored: Partial<Record<string, unknown>>): Settings {
   const controls = stringOr(stored.controls, DEFAULT_SETTINGS.controls);
   return {
     variant: stringOr(stored.variant, undefined),
@@ -186,9 +343,60 @@ export function parseSettings(text: string | undefined): Settings | undefined {
     controls: (CONTROL_SCHEMES as readonly string[]).includes(controls ?? '')
       ? (controls as ControlScheme)
       : DEFAULT_SETTINGS.controls,
-    packs: listsOf(stored.packs),
-    stages: listsOf(stored.stages),
+    variations: variationsOf(stored.variations),
   };
+}
+
+/** What reading a stored document found, and whether it was the older shape. */
+export interface ParsedSettings {
+  readonly settings: Settings;
+  /** True when the document was version 1, so what is read differs from what is stored. */
+  readonly upgraded: boolean;
+}
+
+/**
+ * Read a stored settings document. Storage is untrusted input, so every field is
+ * coerced or dropped and anything unreadable reads as "no settings at all".
+ *
+ * A *partial* document is honoured field by field rather than rejected whole: a
+ * settings shape that grows a field must not throw away what a player had
+ * already chosen. A version 1 document is read the same way and its overrides
+ * handed to {@link upgradeLegacy} with `bases`.
+ */
+export function readSettings(
+  text: string | undefined,
+  bases: readonly LegacyBase[] = [],
+): ParsedSettings | undefined {
+  if (text === undefined) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+  if (typeof parsed !== 'object' || parsed === null) return undefined;
+  const document = parsed as Partial<StoredDocument>;
+  if (typeof document.settings !== 'object' || document.settings === null) return undefined;
+  const stored = document.settings as Partial<Record<string, unknown>>;
+
+  if (document.version === DOCUMENT_VERSION) {
+    return { settings: commonOf(stored), upgraded: false };
+  }
+  if (document.version === LEGACY_VERSION) {
+    // Version 1 had no variations, so anything under that name is not one.
+    const settings = commonOf({ ...stored, variations: undefined });
+    const legacy = { packs: listsOf(stored.packs), stages: listsOf(stored.stages) };
+    return { settings: upgradeLegacy(legacy, settings, bases), upgraded: true };
+  }
+  return undefined;
+}
+
+/** {@link readSettings}, for a caller that only wants the value. */
+export function parseSettings(
+  text: string | undefined,
+  bases: readonly LegacyBase[] = [],
+): Settings | undefined {
+  return readSettings(text, bases)?.settings;
 }
 
 /**
@@ -234,6 +442,14 @@ export interface SettingsStoreOptions {
   readonly storage?: KeyedStorage;
   /** Used when storage holds nothing. Defaults to {@link DEFAULT_SETTINGS}. */
   readonly defaults?: Settings;
+  /**
+   * The shipped games, in selector order, that a version 1 document's overrides
+   * become variations of ({@link upgradeLegacy}). `src/main.ts` hands in every
+   * variant the build loaded. Omitted, an override still becomes a variation —
+   * of the four fields it can state, without its game's presets or personas —
+   * which is what a store built with no games behind it can do.
+   */
+  readonly upgrade?: readonly LegacyBase[];
 }
 
 /**
@@ -241,15 +457,20 @@ export interface SettingsStoreOptions {
  *
  * Reads once at construction, like the high-score board: settings change only
  * through {@link SettingsStore.update}, so nothing re-reads storage per frame.
+ * A version 1 document is upgraded on that read and the result written straight
+ * back, so the upgrade happens once, on the first run, whatever the player does.
  */
 export function createSettingsStore(options: SettingsStoreOptions = {}): SettingsStore {
   const { storage = createMemoryStorage(), defaults = DEFAULT_SETTINGS } = options;
-  let value: Settings = parseSettings(storage.load()) ?? defaults;
+  const read = readSettings(storage.load(), options.upgrade);
+  let value: Settings = read?.settings ?? defaults;
 
   const persist = (): void => {
     const document: StoredDocument = { version: DOCUMENT_VERSION, settings: value };
     storage.save(JSON.stringify(document));
   };
+
+  if (read?.upgraded === true) persist();
 
   return {
     get value(): Settings {

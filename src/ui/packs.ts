@@ -30,9 +30,11 @@
  *   `./compose.ts`.
  */
 
-import type { VariantChoice } from '../content/variants.js';
+import type { VariantDocument } from '../content/variants.js';
 import { KEY, keyLine } from './keys.js';
-import { type CardRow, cycle, drawRowCard, type MenuLine } from './menus.js';
+import { type CardRow, cycle, drawRowCard, type MenuLine, windowOf } from './menus.js';
+
+export { windowOf } from './menus.js';
 
 /** One pack this build installs, as the pack manager lists it. */
 export interface InstalledPack {
@@ -77,37 +79,40 @@ export interface StageOption {
  *
  * Structural, and generic in the variant it hands back, so `./flow.ts` holds it
  * as its own `FlowVariant` and `./compose.ts` implements it over a resolved one —
- * this module never imports a loader, a registry or a validator. A variant is
- * named by **id**: the composer composes over the bases it was built with, and
- * never over an object it is handed and would have to trust.
+ * this module never imports a loader, a registry or a validator. A game is
+ * handed over as its **document**, as JSON holds it: a shipped game's own
+ * (`documentOf`), a variation as the settings store kept it, or a draft of
+ * either. The composer validates every document it is handed except a shipped
+ * game's own, which it recognises by identity and never judges.
  */
 export interface PackComposer<V> {
   /** Every pack this build installs, in a fixed order. */
   readonly installed: readonly InstalledPack[];
+  /** A shipped game's document, as `variants/<id>.json` holds it, or `undefined`. */
+  documentOf: (id: string) => VariantDocument | undefined;
   /**
-   * The variant as chosen and the verdict on it. `variant` is present exactly when
-   * the verdict is `ok`.
+   * The verdict on one document, and the variant it plays as. `variant` is
+   * present exactly when the verdict is `ok`.
    */
-  compose: (
-    variant: string,
-    choice: VariantChoice,
-  ) => { readonly verdict: Verdict; readonly variant: V | undefined };
+  compose: (document: VariantDocument) => {
+    readonly verdict: Verdict;
+    readonly variant: V | undefined;
+  };
   /**
-   * The verdict on a pack list, given the stage order already stored. When that
-   * order is all that stops the list loading, the list may still be kept and the
-   * verdict says the order will be cleared ({@link Verdict.clearsStages}).
+   * The verdict on a document with its pack list replaced, given the stage order
+   * it already states. When that order is all that stops the list loading, the
+   * list may still be kept and the verdict says the order will be cleared
+   * ({@link Verdict.clearsStages}).
    */
-  judgePacks: (
-    variant: string,
-    packs: readonly string[],
-    stages: readonly string[] | undefined,
-  ) => Verdict;
+  judgePacks: (document: VariantDocument, packs: readonly string[]) => Verdict;
+  /** The verdict on a document with its stage order replaced: `undefined` is the packs' own. */
+  judgeStages: (document: VariantDocument, stages: readonly string[] | undefined) => Verdict;
   /** The combat stages an order may name over a pack list, in menu order. */
-  stageOptions: (variant: string, packs: readonly string[] | undefined) => readonly StageOption[];
+  stageOptions: (document: VariantDocument, packs: readonly string[]) => readonly StageOption[];
   /** The packs' own combat order at a rank: what `OWN` plays. */
   ownStages: (
-    variant: string,
-    packs: readonly string[] | undefined,
+    document: VariantDocument,
+    packs: readonly string[],
     rank: string,
   ) => readonly string[];
 }
@@ -122,6 +127,12 @@ export const PACKS_TEXT = Object.freeze({
   stagesKeys: keyLine([KEY.rows, 'MOVE'], [KEY.values, 'CHANGE']),
   /** The same on both cards: keeping is the only way a draft reaches the game. */
   editorDone: keyLine([KEY.ok, 'KEEP'], [KEY.back, 'CANCEL']),
+  /**
+   * What keeping does, on both cards: over a shipped game it makes a new one —
+   * the game itself is never written — and over a variation it changes that.
+   */
+  keepsNew: 'KEEPING MAKES A NEW GAME',
+  keepsYours: 'KEEPING CHANGES YOURS',
   off: 'OFF',
   missing: 'MISSING',
   missingNote: 'NOT INSTALLED IN THIS BUILD',
@@ -180,10 +191,12 @@ export interface PackEditorOptions {
   readonly installed: readonly InstalledPack[];
   /** The list the card opens on: the player's stored list, else the variant's own. */
   readonly start: readonly string[];
-  /** The variant document's own list. Keeping exactly this stores no override. */
+  /** The game's own list. Keeping exactly this changes nothing. */
   readonly own: readonly string[];
   /** The verdict on a draft. Asked once per distinct draft. */
   readonly judge: (draft: readonly string[]) => Verdict;
+  /** True over a shipped game, where keeping makes a new one rather than changing it. */
+  readonly makesNew?: boolean;
 }
 
 /** What keeping a pack card hands the flow. */
@@ -198,6 +211,8 @@ export type PackKeep =
   | { readonly kept: false };
 
 export interface PackEditor {
+  /** True over a shipped game, where keeping makes a new one. */
+  readonly makesNew: boolean;
   readonly rows: readonly PackRow[];
   readonly index: number;
   readonly row: PackRow;
@@ -232,7 +247,7 @@ function packNote(pack: InstalledPack): string {
  * because there is nothing to switch on.
  */
 export function createPackEditor(options: PackEditorOptions): PackEditor {
-  const { installed, own, judge } = options;
+  const { installed, own, judge, makesNew = false } = options;
   let draft: readonly string[] = [...options.start];
   let index = 0;
   let refused = false;
@@ -275,6 +290,7 @@ export function createPackEditor(options: PackEditorOptions): PackEditor {
   const clamp = (rows: readonly PackRow[]): number => Math.min(index, Math.max(0, rows.length - 1));
 
   return {
+    makesNew,
     get rows(): readonly PackRow[] {
       return rowsOf();
     },
@@ -331,6 +347,7 @@ export function packEditorNotes(editor: PackEditor): readonly MenuLine[] {
   return [
     { text: editor.row.note, tone: 'note' },
     { text: PACKS_TEXT.laterWins, tone: 'legend' },
+    { text: editor.makesNew ? PACKS_TEXT.keepsNew : PACKS_TEXT.keepsYours, tone: 'legend' },
     ...verdictLines(editor.verdict, editor.refused),
     { text: PACKS_TEXT.packsKeys, tone: 'help' },
     { text: PACKS_TEXT.editorDone, tone: 'help' },
@@ -362,6 +379,8 @@ export interface StageEditorOptions {
   readonly numberOf: (position: number) => number;
   /** The verdict on a draft: `undefined` is the packs' own order. */
   readonly judge: (draft: readonly string[] | undefined) => Verdict;
+  /** True over a shipped game, where keeping makes a new one rather than changing it. */
+  readonly makesNew?: boolean;
 }
 
 /** What keeping a stage card hands the flow: the order to store, or none. */
@@ -370,6 +389,8 @@ export type StageKeep =
   | { readonly kept: false };
 
 export interface StageEditor {
+  /** True over a shipped game, where keeping makes a new one. */
+  readonly makesNew: boolean;
   /** Every row, the `ORDER` row first and the `+` row last. */
   readonly rows: readonly StageRow[];
   readonly index: number;
@@ -406,7 +427,7 @@ const EMPTY = '';
  * own numbers and row 3 is not stage 3 (`docs/content-guide.md` section 7.5).
  */
 export function createStageEditor(options: StageEditorOptions): StageEditor {
-  const { options: choices, own, numberOf, judge } = options;
+  const { options: choices, own, numberOf, judge, makesNew = false } = options;
   let mine = options.stored !== undefined;
   let order: string[] = [...(options.stored ?? own)];
   let index = 0;
@@ -512,6 +533,7 @@ export function createStageEditor(options: StageEditorOptions): StageEditor {
   };
 
   return {
+    makesNew,
     get rows(): readonly StageRow[] {
       return rowsOf();
     },
@@ -558,34 +580,11 @@ export function createStageEditor(options: StageEditorOptions): StageEditor {
 export function stageEditorNotes(editor: StageEditor): readonly MenuLine[] {
   return [
     { text: editor.row.note, tone: 'note' },
+    { text: editor.makesNew ? PACKS_TEXT.keepsNew : PACKS_TEXT.keepsYours, tone: 'legend' },
     ...verdictLines(editor.verdict, editor.refused),
     { text: PACKS_TEXT.stagesKeys, tone: 'help' },
     { text: PACKS_TEXT.editorDone, tone: 'help' },
   ];
-}
-
-/**
- * The rows of a long list that are on screen: a window of `size` that keeps the
- * cursor in view, and whether anything is hidden above or below it.
- */
-export function windowOf<T>(
-  rows: readonly T[],
-  index: number,
-  size: number,
-): {
-  readonly rows: readonly T[];
-  readonly index: number;
-  readonly above: boolean;
-  readonly below: boolean;
-} {
-  if (rows.length <= size) return { rows, index, above: false, below: false };
-  const top = Math.min(Math.max(0, index - Math.floor(size / 2)), rows.length - size);
-  return {
-    rows: rows.slice(top, top + size),
-    index: index - top,
-    above: top > 0,
-    below: top + size < rows.length,
-  };
 }
 
 /* -------------------------------------------------------------------------- */
