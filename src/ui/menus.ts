@@ -166,6 +166,7 @@ export const SETTINGS_ROW_IDS = [
   'game',
   'name',
   'delete',
+  'export',
   'difficulty',
   'autoplay',
   'volume',
@@ -174,6 +175,7 @@ export const SETTINGS_ROW_IDS = [
   'crt',
   'packs',
   'stages',
+  'import',
 ] as const;
 
 export type SettingsRowId = (typeof SETTINGS_ROW_IDS)[number];
@@ -225,13 +227,15 @@ export interface SettingsMenuOptions {
    */
   readonly active: () => MenuVariant;
   /**
-   * Open a card: the pack manager or the stage-sequence editor (`./packs.ts`), or
-   * the naming or delete card for a variation (`./variations.ts`).
+   * Open a card: the pack manager or the stage-sequence editor (`./packs.ts`),
+   * the naming or delete card for a variation (`./variations.ts`), or the export
+   * or import card (`./exchange.ts`).
    *
    * Left and right on the row call it, because those are the keys that change a
    * row and each of these is changed on its own card. Omitted means there is
    * nothing to compose with: the `PACKS` row reads as it always did, not
-   * editable, and the `STAGES`, `NAME` and `DELETE` rows are not shown.
+   * editable, and the `STAGES`, `NAME`, `DELETE`, `EXPORT` and `IMPORT` rows are
+   * not shown.
    */
   readonly open?: (card: EditorCard) => void;
   /**
@@ -243,7 +247,7 @@ export interface SettingsMenuOptions {
 }
 
 /** The cards a settings row opens. */
-export type EditorCard = 'packs' | 'stages' | 'name' | 'delete';
+export type EditorCard = 'packs' | 'stages' | 'name' | 'delete' | 'export' | 'import';
 
 /** Human labels for the control schemes. */
 const CONTROL_LABELS: Readonly<Record<ControlScheme, string>> = Object.freeze({
@@ -311,8 +315,9 @@ export function createSettingsMenu(options: SettingsMenuOptions): SettingsMenu {
       });
     }
 
-    // A variation is the player's: named and deleted here. A shipped game is
-    // neither, which is the point — it is the reference the variation came from.
+    // A variation is the player's: named, deleted and exported here. A shipped
+    // game is none of them, which is the point — it is the reference the
+    // variation came from, and every machine running this build already has it.
     if (game.variation && open !== undefined) {
       rows.push({
         id: 'name',
@@ -327,6 +332,13 @@ export function createSettingsMenu(options: SettingsMenuOptions): SettingsMenu {
         value: '',
         editable: true,
         note: MENU_TEXT.deleteNote,
+      });
+      rows.push({
+        id: 'export',
+        label: 'EXPORT',
+        value: '',
+        editable: true,
+        note: MENU_TEXT.exportNote,
       });
     }
 
@@ -410,6 +422,14 @@ export function createSettingsMenu(options: SettingsMenuOptions): SettingsMenu {
               ? MENU_TEXT.stagesOwnNote
               : stages.join(' '),
       });
+      // Last, because it is not about the game on the `GAME` row: it adds one.
+      rows.push({
+        id: 'import',
+        label: 'IMPORT',
+        value: '',
+        editable: true,
+        note: MENU_TEXT.importNote,
+      });
     }
 
     return rows;
@@ -471,7 +491,9 @@ export function createSettingsMenu(options: SettingsMenuOptions): SettingsMenu {
       case 'packs':
       case 'stages':
       case 'name':
-      case 'delete': {
+      case 'delete':
+      case 'export':
+      case 'import': {
         // Either direction opens the card: a list or a name is not a value that steps.
         open?.(row.id);
         break;
@@ -554,6 +576,9 @@ export const MENU_TEXT = Object.freeze({
   /** Under the two rows a variation has and a shipped game does not. */
   nameNote: 'WHAT THE GAME LIST SAYS',
   deleteNote: 'ASKS FIRST',
+  /** Under the rows that take a game out of this machine as text, and bring one in. */
+  exportNote: 'AS TEXT, TO SHARE IT',
+  importNote: 'A GAME SOMEONE SHARED',
 });
 
 const HEADING_COLOUR = '#ff2b2b';
@@ -622,7 +647,7 @@ export function cardHeight(rows: number, lines: number): number {
  * formation; the settings card is taller, so it starts higher.
  */
 export const SELECT_CARD_TOP = CARD_TOP;
-export const SETTINGS_CARD_TOP = CARD_TOP - 24;
+export const SETTINGS_CARD_TOP = CARD_TOP - 40;
 
 /** What the selector marks a row with, and explains in its legend. */
 export interface SelectMarks {

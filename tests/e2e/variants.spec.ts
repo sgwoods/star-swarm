@@ -163,9 +163,11 @@ test('the settings menu opens, changes the difficulty and survives a reload', as
     'CRT',
     'PACKS',
     'STAGES',
+    'IMPORT',
   ]);
   // The pack row counts them; the list itself is the note under the card. Both it
-  // and `STAGES` open a card of their own (`tests/e2e/packs.spec.ts`).
+  // and `STAGES` open a card of their own (`tests/e2e/packs.spec.ts`), and so does
+  // `IMPORT` (`tests/e2e/exchange.spec.ts`).
   expect(await rows(page)).toContain('PACKS=1');
 
   // Down walks to the difficulty row; right changes it. The rank has to move with

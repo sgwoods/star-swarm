@@ -40,6 +40,8 @@ export const VARIATION_TEXT = Object.freeze({
   renameHeading: 'RENAME',
   /** Under the name on a new game: the reference it came from is untouched. */
   stays: 'WHICH STAYS AS IT SHIPS',
+  /** Under the name on an imported game: where it came from is somebody else's machine. */
+  imported: 'SHARED WITH YOU AS TEXT',
   emptyName: 'A NAME NEEDS A LETTER',
   takenName: 'A GAME HAS THAT NAME',
   deleteHeading: 'DELETE GAME?',
@@ -165,8 +167,11 @@ export function createNameEntry(options: NameEntryOptions): NameEntry {
   };
 }
 
-/** Why the naming card is open: a new game being kept, or one being renamed. */
-export type NamePurpose = 'create' | 'rename';
+/**
+ * Why the naming card is open: a new game being kept, one being renamed, or one
+ * being imported (`./exchange.ts`).
+ */
+export type NamePurpose = 'create' | 'rename' | 'import';
 
 /**
  * Every line under the name, in the order {@link drawNameEntry} draws them: where
@@ -184,7 +189,15 @@ export function nameEntryNotes(
   return [
     // A variation that names no game it came from says only whose it is.
     { text: from.length > 0 ? `FROM ${from}` : 'YOURS', tone: 'note' },
-    { text: purpose === 'create' ? VARIATION_TEXT.stays : `WAS ${was}`, tone: 'legend' },
+    {
+      text:
+        purpose === 'create'
+          ? VARIATION_TEXT.stays
+          : purpose === 'import'
+            ? VARIATION_TEXT.imported
+            : `WAS ${was}`,
+      tone: 'legend',
+    },
     { text: entry.refusal ?? '', tone: 'refuse' },
     {
       text: keyLine([KEY.values, 'CHANGE'], [KEY.ok, entry.under === NAME_END ? 'KEEP' : 'NEXT']),
@@ -294,7 +307,7 @@ export function drawNameEntry(ctx: CanvasRenderingContext2D, options: NameEntryC
   drawCentredPanel(ctx, x, y - 6, VARIATION_CARD_WIDTH, cardHeight(1, lines.length));
   drawText(
     ctx,
-    purpose === 'create' ? VARIATION_TEXT.nameHeading : VARIATION_TEXT.renameHeading,
+    purpose === 'rename' ? VARIATION_TEXT.renameHeading : VARIATION_TEXT.nameHeading,
     x,
     y + 4,
     { colour: HEADING_COLOUR, align: 'center' },

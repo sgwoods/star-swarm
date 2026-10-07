@@ -1,7 +1,7 @@
 /**
  * The game-state machine (docs/DESIGN.md section 4, "Game flow").
  *
- * One explicit machine rather than flags spread through the loop. There are fourteen
+ * One explicit machine rather than flags spread through the loop. There are sixteen
  * phases and every transition is named here:
  *
  * ```
@@ -21,6 +21,10 @@
  *                                                      └────────────┘
  *   settings ──L/R on NAME───▶ name ───kept or cancelled──▶ settings
  *   settings ──L/R on DELETE─▶ delete ─either answer──────▶ settings
+ *   settings ──L/R on EXPORT─▶ export ─back───────────────▶ settings
+ *   settings ──L/R on IMPORT─▶ import ─a game that loads─▶ name ──kept──▶ settings
+ *                                 ▲                                │ cancelled
+ *                                 └────────────────────────────────┘
  *
  *   playing ──pause──▶ paused ──pause──▶ playing
  *      │                  │  ▲
@@ -55,6 +59,10 @@
  *   removed with (`./variations.ts`). Keeping an edit to a *shipped* game goes
  *   through `name` first, because what is kept is a new game and a new game has a
  *   name; cancelling it goes back to the card the edit was made on, draft intact.
+ * - **`export`** and **`import`** carry a variation out of this machine and into
+ *   another as text (`./exchange.ts`). The text itself sits in a box `src/main.ts`
+ *   puts on the page; the flow holds the card and never touches the box. An import
+ *   is judged as every variation is, and kept through `name` like a new game.
  *
  * The two after them are the pause and the way out, and they are phases for the
  * third time for the same reason — a boolean `paused` beside `phase` is "playing,
@@ -171,6 +179,14 @@ import {
   type VariationDocument,
 } from './settings.js';
 import {
+  createExportCard,
+  createImportCard,
+  type ExportCard,
+  type ImportCard,
+  EXCHANGE_TEXT,
+  type ImportJudgement,
+} from './exchange.js';
+import {
   createDeleteConfirm,
   createNameEntry,
   type DeleteConfirm,
@@ -187,6 +203,8 @@ export type GamePhase =
   | 'stages'
   | 'name'
   | 'delete'
+  | 'export'
+  | 'import'
   | 'playing'
   | 'paused'
   | 'exit-confirm'
@@ -410,6 +428,10 @@ export interface GameFlow {
   readonly naming: Naming | undefined;
   /** The delete card's cursor, present only during `delete`. */
   readonly deleteConfirm: DeleteConfirm | undefined;
+  /** The export card, present only during `export`. */
+  readonly exportCard: ExportCard | undefined;
+  /** The import card, present only during `import`. */
+  readonly importCard: ImportCard | undefined;
   /** The exit confirmation's cursor, present only during `exit-confirm`. */
   readonly exitConfirm: ExitConfirm | undefined;
   /** Rows the results screen shows for the run just played. */
@@ -672,6 +694,8 @@ export function createGameFlow(options: FlowOptions): GameFlow {
       })
     | undefined;
   let deleting: DeleteConfirm | undefined;
+  let exporting: ExportCard | undefined;
+  let importing: ImportCard | undefined;
   /** The settings row the open card came from, which the cursor goes back to. */
   let openedFrom: EditorCard | undefined;
   /** Where the settings screen returns to. */
@@ -866,6 +890,8 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     editing = undefined;
     naming = undefined;
     deleting = undefined;
+    exporting = undefined;
+    importing = undefined;
     enter('settings');
     if (openedFrom !== undefined) settingsMenu?.focus(openedFrom);
   };
@@ -897,14 +923,75 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     if (pending === undefined) return;
     const id = typeof pending.document.id === 'string' ? pending.document.id : chosenId;
     writeSettings({ variations: withVariation(id, { ...pending.document, id, name }) });
-    if (pending.purpose === 'create') {
-      // The game just made is the one chosen: the shipped game it came from is
-      // still on the list, unchanged, one row up.
+    if (pending.purpose !== 'rename') {
+      // The game just made — or just imported — is the one chosen: the shipped
+      // game it came from is still on the list, unchanged.
       chosenId = id;
       writeSettings({ variant: id });
     }
     recompose();
     closeEditors();
+    if (pending.purpose === 'import') settingsMenu?.focus('game');
+  };
+
+  /** Open the export card over the chosen variation's document, as it is stored. */
+  const openExport = (): void => {
+    const chosen = chosenEntry();
+    if (chosen.document === undefined) return;
+    exporting = createExportCard(chosen.name, chosen.document);
+    enter('export');
+  };
+
+  /**
+   * What an imported document would be kept as, and whether it may be.
+   *
+   * Its id is the store's business before it is the loader's: one a stored
+   * variation already has is replaced by a fresh one, so an import never writes
+   * over a game the player has. One a **shipped** game has is left as it is, for
+   * the loader's duplicate-id rule to refuse — an import is never a way to stand
+   * in for a reference game. Then the composer judges it exactly as it judges
+   * every variation (`./compose.ts`).
+   */
+  const judgeImport = (document: VariantDocument): ImportJudgement => {
+    const stored = settingsValue().variations.map((variation) => variation.id);
+    let kept = document;
+    if (typeof document.id === 'string' && stored.includes(document.id)) {
+      const base = typeof document.derivedFrom === 'string' ? document.derivedFrom : document.id;
+      kept = { ...document, id: freshVariationId(base, [...shippedIds, ...stored]) };
+    }
+    const name =
+      typeof kept.name === 'string' ? kept.name : typeof kept.id === 'string' ? kept.id : '';
+    // The card is only opened with a composer; without one nothing can judge it.
+    const verdict = composer?.compose(kept).verdict ?? {
+      ok: false,
+      headline: EXCHANGE_TEXT.wontImport,
+      details: [],
+    };
+    return { verdict, document: verdict.ok ? kept : undefined, name };
+  };
+
+  /**
+   * An imported game that loads is kept the way a new game is: through the naming
+   * card, which refuses a name another game already has. So an import never
+   * silently takes the place of a game of the same name, and cancelling the name
+   * goes back to the import card with the text still in it.
+   */
+  const keepImport = (judgement: ImportJudgement): void => {
+    const document = judgement.document;
+    if (document === undefined) return;
+    const derivedFrom = typeof document.derivedFrom === 'string' ? document.derivedFrom : '';
+    naming = {
+      entry: createNameEntry({
+        start: judgement.name,
+        check: (name) => nameRefusal(name, namesBut(undefined)),
+      }),
+      purpose: 'import',
+      from: variants.find((shipped) => shipped.id === derivedFrom)?.name ?? derivedFrom,
+      was: '',
+      document,
+      back: 'import',
+    };
+    enter('name');
   };
 
   /** Delete the chosen variation, and choose the game it was made from. */
@@ -1065,7 +1152,11 @@ export function createGameFlow(options: FlowOptions): GameFlow {
               openedFrom = card;
               if (card === 'packs' || card === 'stages') openEditor(card);
               else if (card === 'name') openRename();
-              else if (chosenEntry().variation) {
+              else if (card === 'export') openExport();
+              else if (card === 'import') {
+                importing = createImportCard(judgeImport);
+                enter('import');
+              } else if (chosenEntry().variation) {
                 deleting = createDeleteConfirm();
                 enter('delete');
               }
@@ -1140,6 +1231,8 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     phase === 'stages' ||
     phase === 'name' ||
     phase === 'delete' ||
+    phase === 'export' ||
+    phase === 'import' ||
     phase === 'variant-select';
 
   if (phase === 'variant-select') openVariantSelect();
@@ -1219,6 +1312,12 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     },
     get deleteConfirm(): DeleteConfirm | undefined {
       return phase === 'delete' ? deleting : undefined;
+    },
+    get exportCard(): ExportCard | undefined {
+      return phase === 'export' ? exporting : undefined;
+    },
+    get importCard(): ImportCard | undefined {
+      return phase === 'import' ? importing : undefined;
     },
     get exitConfirm(): ExitConfirm | undefined {
       return phase === 'exit-confirm' ? confirm : undefined;
@@ -1420,6 +1519,47 @@ export function createGameFlow(options: FlowOptions): GameFlow {
             } else {
               closeEditors();
             }
+            break;
+          }
+          events = demo.advance();
+          break;
+        }
+
+        case 'export': {
+          const card = exporting;
+          if (card === undefined) {
+            closeEditors();
+            break;
+          }
+          // Nothing to choose: the text is in the box. `ENTER` asks for it to be
+          // copied, and whoever owns the clipboard answers (`src/main.ts`).
+          const press = cardPress(previous, frame);
+          if (press.back) {
+            closeEditors();
+            break;
+          }
+          if (press.accept) card.ask();
+          events = demo.advance();
+          break;
+        }
+
+        case 'import': {
+          const card = importing;
+          if (card === undefined) {
+            closeEditors();
+            break;
+          }
+          // The text arrives through the box, not the keys; `ENTER` keeps a game
+          // that loads and does nothing to one that does not — the card already
+          // says why.
+          const press = cardPress(previous, frame);
+          if (press.back) {
+            closeEditors();
+            break;
+          }
+          const judgement = card.judgement;
+          if (press.accept && judgement?.document !== undefined) {
+            keepImport(judgement);
             break;
           }
           events = demo.advance();
