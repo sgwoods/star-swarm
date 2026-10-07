@@ -179,9 +179,17 @@ than the copy.
 It is validated as a document here is — the same schema and reference passes, with
 its `id` held to be no shipped game's — plus the structural half of the
 playability pass, and one that fails is refused with the reason on screen. It
-lives in the player's settings (`src/ui/settings.ts`), not in this directory, and
-nothing yet exports one to a file or imports one from text; the shape is what
-would let both happen. `docs/ARCHITECTURE.md` §6 has the whole account.
+lives in the player's settings (`src/ui/settings.ts`), not in this directory.
+
+**It leaves the browser as this document, and comes back in as one.** The
+settings card's `EXPORT` row writes a variation out as text — the document above,
+as JSON, indented the way the files here are — and its `IMPORT` row reads one
+back in on another machine (`src/ui/exchange.ts`). There is no container around
+it, so a file from this directory pasted into the import card is read exactly as
+an exported variation is, and refused if its `id` is a shipped game's. An import
+passes what a document here passes, and is refused the same way with the reason on
+the card — a pack this build does not install among them. `docs/ARCHITECTURE.md`
+§6 has the whole account.
 
 ## Adding one
 

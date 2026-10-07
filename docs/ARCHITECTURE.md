@@ -250,9 +250,9 @@ exactly centred, the breathe taking over — and then the fighter opening up on 
 
 ![The game: entry waves, formation and the fighter shooting](media/arch-gameplay.gif)
 
-The front end around that is one state machine with fourteen phases — the start-up
+The front end around that is one state machine with sixteen phases — the start-up
 variant selector, attract, the settings menu, the pack manager, the
-stage-sequence editor and the naming and delete cards it opens, playing, paused,
+stage-sequence editor and the naming, delete, export and import cards it opens, playing, paused,
 the exit confirmation, the between-stage challenge card, game over, results and
 high-score entry. The cabinet boots into the selector when there is more than one game to
 choose — the shipped games and the player's variations — and into attract when there is not; behind the cards the demo is the _real_
@@ -260,7 +260,7 @@ simulation, flown in turn by the game's own autoplay personas (§7) — or, for 
 that declares none, replaying a hand-written input log; start begins a game; three fighters
 lost ends it into the game-over banner, the hit-ratio results card, and then
 either the high-score table or straight back to attract.
-<!-- check:count flow.phases 14 -->
+<!-- check:count flow.phases 16 -->
 
 ![The front end: attract mode, a game, and out to the results card](media/arch-front-end.gif)
 
@@ -1150,10 +1150,10 @@ describing as deliberately absent something that shipped two merges ago.
   — whether a persona can finish what loads and builds — is left to the gate,
   because it costs seconds per list where the card needs milliseconds
   ([§6](#the-pack-manager-and-the-stage-sequence-editor)).
-- **A variation cannot leave the browser it was made in.** It is a whole variant
-  document ([§6](#a-players-variations)), which is what would let one be written
-  out as text and read back in elsewhere, and nothing does either yet: there is no
-  export and no import, and a variation lives in one browser's settings document.
+- **A variation travels between machines by hand.** It is exported and imported
+  as text ([§6](#carrying-a-variation-to-another-machine)), and the player moves
+  that text however they move text. There is no shared store, no link that carries
+  a game, and no list of other players' games: the page has no server to keep one.
 - **An overlay pack cannot reference the base pack's documents**
   ([§4.5](#45-variants-the-games-this-build-offers)). It can replace a
   self-contained document and nothing more, because the loader's reference pass
@@ -1243,13 +1243,15 @@ arrives:
 
 <!-- check:count ui.controlSchemes 3 -->
 
-The menu shows at most one row per setting, plus two that act on the chosen
-game, and five are shown only when there is something to choose: `GAME` needs
-more than one game, `AUTOPLAY` needs a game that declares personas, `STAGES` needs
+The menu shows at most one row per setting, plus the rows that act on games —
+`PACKS`, `STAGES`, `NAME`, `DELETE`, `EXPORT` and `IMPORT` — and seven are shown
+only when there is something to choose: `GAME` needs more than one game,
+`AUTOPLAY` needs a game that declares personas, `STAGES` and `IMPORT` need
 something to compose with — which the browser always has, and a flow built in a
-test may not — and `NAME` and `DELETE` need the chosen game to be the player's
-own variation, because a shipped game is neither renamed nor deleted.
-<!-- check:count ui.settingsRows 11 -->
+test may not — and `NAME`, `DELETE` and `EXPORT` need the chosen game to be the
+player's own variation, because a shipped game is neither renamed, deleted nor
+exported: every machine running this build already has it.
+<!-- check:count ui.settingsRows 13 -->
 
 **The difficulty preset does exactly one thing: it chooses the rank.** It is not a
 multiplier and there is nowhere in the shape to make it one. A preset is an id, a
@@ -1490,11 +1492,64 @@ the whole story through the state machine, and `tests/e2e/variations.spec.ts`
 plays it in a browser: edit CLASSIC, name the result, play CLASSIC as shipped,
 keep two, reload and find both, delete one, and be refused one that cannot work.
 
+### Carrying a variation to another machine
+
+**The text is the document.** The `EXPORT` row, on a variation, opens a card that
+puts the variation's stored document in a text box as JSON, two-space indented
+with a closing newline — the way `variants/<id>.json` is written. There is no
+envelope, version field or checksum: an exported variation and a shipped variant
+are the same kind of thing, and the `IMPORT` row reads a file from `variants/`
+exactly as it reads an export. `src/ui/exchange.ts` holds the text and both cards.
+
+**The text travels through a text box, because that is what every browser has.**
+The page has no server, and a canvas cannot hold text a player can select. So while
+either card is open, `src/ui/text-port.ts` puts a real `<textarea>` over the bottom
+of the screen: read-only and already selected on the export card, so one `CTRL+C`
+copies it, and empty and focused on the import card, so one `CTRL+V` pastes into
+it. **Enter** on the export card also writes the clipboard, where the browser
+allows a page to, and the card says `COPIED TO THE CLIPBOARD` or, where it does
+not, `SELECT IT AND COPY IT`. Reading the clipboard is not used — some browsers
+never grant it to a page — and a file would need a picker the keyboard cards cannot
+drive. Between machines the text goes by email, chat or a note: no tool the player
+does not already have. The box has no keys of its own: the keyboard listens on the
+window with its bindings, so **Enter** and **Esc** work the card, and a bound key
+typed in the box is not typed into it. Pasting is a chord no binding claims.
+
+| Card   | Opened by        | Worked with                                                                                                                       |
+| ------ | ---------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| export | the `EXPORT` row | **Enter** copies the text to the clipboard; **Esc** goes back                                                                     |
+| import | the `IMPORT` row | paste into the box, and the card judges it at once; **Enter** keeps a game that loads, through the naming card; **Esc** goes back |
+
+**An import is untrusted, and passes exactly what any variant passes.** The card
+reads the text only as far as being a document — within 65,536 characters, JSON, an
+object — and hands it to the composer: the loader's two passes with the
+duplicate-id rule held against the shipped games, then the structural half of the
+playability pass. A document naming a pack this build does not install is refused
+there with `PACK <id>` and `IS NOT INSTALLED HERE`; one carrying a shipped game's
+id with `A SHIPPED GAME HAS ITS ID`; one with a field no variant document has as
+the schema refuses it. The verdict is on the card before **Enter**, and **Enter**
+on a refused one does nothing. Unlike a stored variation, which is kept and set
+aside when it stops loading, an import that does not load is never written.
+
+**An import never takes the place of a game the player has.** An imported id that a
+stored variation already has is replaced by a fresh one before it is judged, so
+nothing is written over. And every import is kept through the naming card — opening
+on the name the document carries, with `SHARED WITH YOU AS TEXT` under it — which
+refuses a name another game already has, shipped or the player's. Cancelling the
+name goes back to the import card with the text still in the box. A kept import is
+chosen, and the settings cursor lands on `GAME`.
+
+`tests/unit/exchange.test.ts` carries a variation between two cabinets through the
+state machine and holds every refusal above, and `tests/e2e/exchange.spec.ts` does
+it in a browser through the real box: make a variation, export it and read it back
+off the real clipboard, clear `localStorage`, paste it with `CTRL+V`, keep it, and
+play it; and be refused one naming a pack this build does not install.
+
 ### Working a card
 
-Nine cards wait on an answer — the selector, the settings, the pack manager and
-the stage-sequence editor, the naming and delete cards, the pause card, the exit
-card and initials entry — and they are worked with one scheme, held in
+Eleven cards wait on an answer — the selector, the settings, the pack manager and
+the stage-sequence editor, the naming, delete, export and import cards, the pause
+card, the exit card and initials entry — and they are worked with one scheme, held in
 `src/ui/keys.ts`:
 
 | Key     | On every card                                                |

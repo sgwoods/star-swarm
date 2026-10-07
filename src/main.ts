@@ -69,6 +69,8 @@ import {
 } from './ui/settings.js';
 import { createWebStorage } from './ui/storage.js';
 import { drawDeleteConfirm, drawNameEntry } from './ui/variations.js';
+import { drawExportCard, drawImportCard } from './ui/exchange.js';
+import { createTextPort } from './ui/text-port.js';
 
 const app = document.getElementById('app');
 if (app === null) throw new Error('Missing #app container');
@@ -320,6 +322,39 @@ function applyEvents(events: readonly SimEvent[]): void {
  * Neither is a decision the simulation hears about — the music is in wall time
  * and only ever reads the events.
  */
+/**
+ * The text box under the export and import cards (`src/ui/text-port.ts`): on the
+ * page exactly while one of them is open, holding the export's document or taking
+ * the import's paste. The flow holds the cards and never the box; this is the one
+ * place the two meet, as `applySettings` is for the settings.
+ */
+const textPort = createTextPort({
+  parent: document.body,
+  onInput: (text) => {
+    flow.importCard?.offer(text);
+  },
+});
+
+function exchangeText(): void {
+  const exporting = flow.exportCard;
+  if (exporting !== undefined) {
+    textPort.show('export', exporting.text);
+    // `ENTER` on the card asked for a copy. Answered here because the clipboard is
+    // the browser's, and the card says which way it went.
+    if (exporting.take()) {
+      void textPort.copy(exporting.text).then((copied) => {
+        exporting.settle(copied);
+      });
+    }
+    return;
+  }
+  if (flow.importCard !== undefined) {
+    textPort.show('import', '');
+    return;
+  }
+  textPort.hide();
+}
+
 function playMusic(step: FlowStep): void {
   if (step.demo || step.phase === 'paused' || step.phase === 'exit-confirm') {
     music?.stop();
@@ -338,6 +373,7 @@ const loop = createLoop({
     // in simulation frames, so it must not depend on the display's rate.
     effects.advance();
     const step = flow.step(frame);
+    exchangeText();
     applyEvents(step.events);
     playMusic(step);
     // The menu writes settings; this is where they reach the things outside the
@@ -391,6 +427,8 @@ const loop = createLoop({
       flow.phase === 'stages' ||
       flow.phase === 'name' ||
       flow.phase === 'delete' ||
+      flow.phase === 'export' ||
+      flow.phase === 'import' ||
       flow.phase === 'variant-select';
     if (persona !== undefined && !onMenu) {
       drawPersonaTag(ctx, persona.label, hud);
@@ -504,6 +542,28 @@ const loop = createLoop({
           drawDeleteConfirm(ctx, {
             confirm,
             name: flow.game.name,
+            steps: flow.phaseSteps,
+            x: LOGICAL_WIDTH / 2,
+            y: SETTINGS_CARD_TOP,
+          });
+        }
+        break;
+      }
+      case 'export': {
+        const card = flow.exportCard;
+        if (card !== undefined) {
+          drawExportCard(ctx, card, {
+            steps: flow.phaseSteps,
+            x: LOGICAL_WIDTH / 2,
+            y: SETTINGS_CARD_TOP,
+          });
+        }
+        break;
+      }
+      case 'import': {
+        const card = flow.importCard;
+        if (card !== undefined) {
+          drawImportCard(ctx, card, {
             steps: flow.phaseSteps,
             x: LOGICAL_WIDTH / 2,
             y: SETTINGS_CARD_TOP,
@@ -638,6 +698,15 @@ declare global {
       readonly settingsRows: readonly string[];
       /** The id of the settings row under the cursor. Empty off that phase. */
       readonly settingsMenuRow: string;
+      /**
+       * The export card's text and whether `ENTER` copied it, and the import
+       * card's verdict on what is pasted and the name it carries. Empty off those
+       * phases. `tests/e2e/exchange.spec.ts` carries a game across with them.
+       */
+      readonly exportText: string;
+      readonly exportCopy: string;
+      readonly importVerdict: readonly string[];
+      readonly importName: string;
       /** The note drawn under the list — the live row's. Empty off that phase. */
       readonly settingsMenuNote: string;
       /** The variant under the selector's cursor. Empty off that phase. */
@@ -795,6 +864,19 @@ window.starSwarm = {
   },
   get deleteChoice(): string {
     return flow.deleteConfirm?.choice ?? '';
+  },
+  get exportText(): string {
+    return flow.exportCard?.text ?? '';
+  },
+  get exportCopy(): string {
+    return flow.exportCard?.copy ?? '';
+  },
+  get importVerdict(): readonly string[] {
+    const verdict = flow.importCard?.judgement?.verdict;
+    return verdict === undefined ? [] : [verdict.headline, ...verdict.details];
+  },
+  get importName(): string {
+    return flow.importCard?.judgement?.name ?? '';
   },
   get rank(): string {
     return flow.rank;

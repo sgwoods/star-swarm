@@ -583,9 +583,9 @@ Three consequences when working here:
 - The game boots into the **start-up selector** when more than one game is on
   offer — the shipped variants and the player's variations — and into **attract
   mode** otherwise, never into play: `src/ui/flow.ts` is the one state machine —
-  variant-select, attract, settings, the pack and stage cards and the naming and
-  delete cards it opens, playing, paused, the exit confirmation, the between-stage
-  challenge card, game over, results and high-score entry <!-- check:count flow.phases 14 -->
+  variant-select, attract, settings, the pack and stage cards and the naming,
+  delete, export and import cards it opens, playing, paused, the exit confirmation,
+  the between-stage challenge card, game over, results and high-score entry <!-- check:count flow.phases 16 -->
   — and `src/main.ts` only calls `flow.step(frame)` and draws the phase. Anything driving the browser has
   to get past the selector and push start — that is what `startGame()` in
   `tests/e2e/smoke.spec.ts` is for — and every phase timer counts **simulation

@@ -357,9 +357,9 @@ describe('the PACKS and STAGES rows, with something to compose with', () => {
     expect(settings()).toEqual(before);
   });
 
-  it('adds a STAGES row last, reading the packs’ own order or the player’s', () => {
+  it('adds a STAGES row after PACKS, reading the packs’ own order or the player’s', () => {
     const own = composable(variantOf('classic'));
-    expect(own.menu.rows.at(-1)?.id).toBe('stages');
+    expect(own.menu.rows.map((row) => row.id).slice(-3)).toEqual(['packs', 'stages', 'import']);
     to(own.menu, 'stages');
     expect(own.menu.row.value).toBe(MENU_TEXT.stagesOwn);
     expect(own.menu.row.note).toBe(MENU_TEXT.stagesOwnNote);

@@ -4,6 +4,8 @@
 `highscores.ts`, `menus.ts` (the start-up variant selector and the settings menu),
 `packs.ts` (the pack manager and the stage-sequence editor the settings menu opens),
 `variations.ts` (the naming and delete cards for the player's own games),
+`exchange.ts` (the export and import cards that carry one between machines as
+text) and `text-port.ts` (the text box on the page those two cards use),
 `compose.ts` (the judge behind them: what a player's document composes to, and
 whether it may be kept),
 `pause.ts` (the pause card and the one that asks before a run is thrown away),
@@ -19,9 +21,9 @@ and events and draws; it never writes back, and `src/sim/` never imports it.
 `hud.ts` landed with Milestone 1: score, reserve fighters and the stage badges.
 The front-end shell around it landed with Milestone 2:
 
-- **`flow.ts` is the one state machine.** Fourteen phases — the start-up variant
-  selector, attract, the settings menu and the pack, stage, naming and delete
-  cards it opens, playing, paused, the exit confirmation, the between-stage
+- **`flow.ts` is the one state machine.** Sixteen phases — the start-up variant
+  selector, attract, the settings menu and the pack, stage, naming, delete,
+  export and import cards it opens, playing, paused, the exit confirmation, the between-stage
   challenge card, game over, results, high-score entry — and every
   transition is in that file. `challenge-results` is one of the two that go _back_
   to playing: the stage is over and the next is already on the field, so the world
@@ -188,6 +190,17 @@ manager and the stage-sequence editor, Milestone 3's exit check:
   letter, `ENTER` takes it or keeps the name on `END`, `ESC` steps back — and an
   empty name, or another game's, is refused on the card. The delete card opens on
   `KEEP`, as the exit card opens on `RESUME`.
+- **`exchange.ts` carries one between machines, as its document.** The export
+  card holds the variation's stored document as JSON, formatted as
+  `variants/<id>.json` is, and **Enter** asks for it to be copied; the import card
+  reads a pasted text as far as being a document and hands it to the composer, so
+  it is refused for exactly what a variant is refused for. A kept import goes
+  through the naming card, which refuses a name another game has, and an id a
+  stored variation has is replaced rather than written over. Neither card touches
+  the page: **`text-port.ts`** is the one DOM element this layer makes — a
+  `<textarea>` over the bottom of the screen, selected for export and focused for
+  import — and `src/main.ts` is what shows it, reports the clipboard's answer and
+  feeds a paste back to the card.
 - **`settings.ts` reads the shape before this one, once.** A version 1 document's
   per-game overrides become variations of those games on the first read, and
   version 2 is written straight back; its own header documents the stored shape.
