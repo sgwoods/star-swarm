@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Star Swarm — capture</title>
+    <!--
+      The capture page that `npm run capture` drives (scripts/capture.ts).
+
+      Dev build only, on the `/lab` pattern: Vite builds the entry points it is
+      given, and it is given `index.html` alone, so nothing under `src/ui/lab/`
+      reaches a production bundle and nothing here is on the game's code path.
+    -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #000;
+      }
+      #capture {
+        width: 224px;
+        height: 288px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="capture"></div>
+    <script type="module" src="/src/ui/lab/capture.ts"></script>
+  </body>
+</html>

@@ -77,9 +77,10 @@ The skill, the guide it reads and the first forged pack have landed, so they hav
 moved to [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#46-the-forge), which is where a
 thing that exists is described. What the milestone still owes:
 
-- **Ship: `/lab` for aliens, stages and sounds**, plus GIF capture for pull
-  requests. `/lab` previews movement paths today and nothing else; what the
-  capture half would be is set out in
+- **Ship: `/lab` for aliens, stages and sounds**, plus the rest of GIF capture
+  for pull requests. `/lab` previews movement paths today and nothing else; the
+  first half of capture has landed, and the half still to come — recording a live
+  run so it can be rendered the same way — is set out in
   [Capturing gameplay video](#capturing-gameplay-video) below.
 
 One thing the forge **found** rather than built: the rules layer couples a pack to
@@ -150,29 +151,11 @@ a new command would have to earn its place by fixing:
 
 #### What would be built, in two phases
 
-**Phase 1 — render a replay, offline.** A committed command will take a replay —
-one of the goldens in `tests/sim/golden/`, or a log from phase 2 — and render it
-to frames through the real simulation and the real renderer, in a headless
-browser page driven by Playwright. The page will be a dev-only entry document on
-the `/lab` pattern, and the command will step the loop by exactly one simulation
-step per emitted frame rather than by elapsed time, grab the logical 224x288
-backbuffer, and hand the numbered frames to `ffmpeg` with the recipe above
-expressed as flags instead of prose. <!-- check:absent scripts/capture.ts -->
-
-Roughly, to render the capture from the committed golden that already contains
-one, starting where the beam opens:
-
-```
-npm run capture -- --replay dual-fighter --from 2600 --to 5400 --fps 10
-```
-
-Three things fall out of stepping rather than waiting. Fast-forward becomes
-stepping without drawing, so a clip may start at the settle, or at stage 3, for
-the cost of the CPU rather than the cost of playing there. The output's frame
-rate becomes a choice of which steps to emit, not a measurement of the machine.
-And the clip becomes regenerable from a file of a few kilobytes, which is what
-makes "recapture this now that enemy fire has landed" a command rather than an
-afternoon.
+**Phase 1 — render a replay, offline — has landed** and moved to
+[`docs/ARCHITECTURE.md`](ARCHITECTURE.md#43-lab), which is where a thing that
+exists is described: `npm run capture` renders a golden or a log through the real
+simulation and the real renderer, a step at a time, and checks its GIF against the
+backbuffer pixel for pixel. What it left for later is below.
 
 **Phase 2 — record the inputs of a live run.** `recordInput` in
 [`src/engine/replay.ts`](../src/engine/replay.ts) already wraps an input source
@@ -190,23 +173,19 @@ alternatives below.
 
 #### What "off by default" will mean, concretely
 
-- **Nothing records unless something asks.** Phase 1 is a command; there is no
-  trigger inside the game at all. Phase 2's recorder will not be constructed
-  unless asked for, so an ordinary session will sample the same unwrapped input
-  source it samples today.
-- **No idle cost, because there is no idle path.** Phase 1 puts no code on the
-  game's hot path — none in the game at all. Phase 2 adds one wrapper around the
-  input source when it is on, which is the per-step cost the golden recorder
-  already pays headlessly, and zero when it is off.
+- **Nothing records unless something asks.** Phase 2's recorder will not be
+  constructed unless asked for, so an ordinary session will sample the same
+  unwrapped input source it samples today.
+- **No idle cost, because there is no idle path.** Phase 2 will add one wrapper
+  around the input source when it is on, which is the per-step cost the golden
+  recorder already pays headlessly, and zero when it is off.
 - **No files unless a command wrote one.** Frames will land in `/.scratch/`,
   which is git-, Prettier- and ESLint-ignored precisely for video frames. Only a
   finished clip is ever committed, and only when a document links it.
-- **Nothing in the shipped bundle.** The capture page will be kept out of the
-  build the three ways `/lab` already is — `vite build`'s only input stays
-  `index.html`, nothing on that graph imports it, and the route plugin declares
-  `apply: 'serve'` — and `tests/unit/lab-dev-only.test.ts` is the test that keeps
-  it that way, extended rather than re-invented. A player who never records will
-  download not one byte of this.
+- **Nothing in the shipped bundle.** Whatever phase 2 adds to a session will
+  stay out of the build the way the capture page and `/lab` are, held there by
+  `tests/unit/lab-dev-only.test.ts`. A player who never records will download not
+  one byte of it.
 
 #### The questions a reader will have
 
@@ -252,14 +231,9 @@ alternatives below.
    of a canvas, and whether two machines rasterise the same state to the same
    pixels is a separate question nobody has measured. Settled by: record one log,
    render it on arm64 and on x86-64, hash the frames and compare.
-2. **What a frame costs.** Settled by timing several hundred backbuffer grabs
-   through the devtools protocol against the same count taken in the page as
-   image data, which also decides which of the two the command should use.
-3. **Whether `OfflineAudioContext` satisfies the synth's context subset.**
+2. **Whether `OfflineAudioContext` satisfies the synth's context subset.**
    Settled by type-checking it against the interface and rendering one sound
-   through it.
-4. **Whether the dev-only test generalises.** Settled by extending it to a second
-   route and seeing whether it wants a parameter or a rewrite.
+   through it — the step that would put sound in a clip.
 
 #### Why this and not the alternatives
 

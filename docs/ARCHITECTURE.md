@@ -108,17 +108,18 @@ end on Node 25.9.0, where the whole check suite below passes.
 
 ### The commands
 
-| Command                  | What it does                                                       |
-| ------------------------ | ------------------------------------------------------------------ |
-| `npm run dev`            | Vite dev server, with the `/lab` route (see [§4.3](#43-lab))       |
-| `npm run build`          | Typecheck, then build to `dist/`                                   |
-| `npm run preview`        | Serve the built bundle                                             |
-| `npm run lint`           | ESLint and Prettier                                                |
-| `npm run typecheck`      | `tsc --noEmit`                                                     |
-| `npm test`               | Vitest: the `unit` and `sim` suites, both headless                 |
-| `npm run test:e2e`       | Playwright against the dev server                                  |
-| `npm run validate-packs` | Schema-, reference- and playability-check `packs/` and `variants/` |
-| `npm run sprite-sheet`   | Render a pack's art to `docs/media/classic-sprite-sheet.png`       |
+| Command                  | What it does                                                                |
+| ------------------------ | --------------------------------------------------------------------------- |
+| `npm run dev`            | Vite dev server, with the `/lab` route (see [§4.3](#43-lab))                |
+| `npm run build`          | Typecheck, then build to `dist/`                                            |
+| `npm run preview`        | Serve the built bundle                                                      |
+| `npm run lint`           | ESLint and Prettier                                                         |
+| `npm run typecheck`      | `tsc --noEmit`                                                              |
+| `npm test`               | Vitest: the `unit` and `sim` suites, both headless                          |
+| `npm run test:e2e`       | Playwright against the dev server                                           |
+| `npm run validate-packs` | Schema-, reference- and playability-check `packs/` and `variants/`          |
+| `npm run sprite-sheet`   | Render a pack's art to `docs/media/classic-sprite-sheet.png`                |
+| `npm run capture`        | Render a replay to a GIF or MP4 through the real game (see [§4.3](#43-lab)) |
 
 CI runs lint, typecheck, both test suites, pack validation, the build and the
 Playwright smoke test on every push and pull request.
@@ -709,6 +710,54 @@ Two details the clip shows that matter more than they look:
 `/lab` is dev-only, three ways at once: Vite's only build input is `index.html`,
 nothing on that graph imports the lab, and the URL is wired up by a plugin
 declaring `apply: 'serve'`. `tests/unit/lab-dev-only.test.ts` checks all three.
+
+#### Rendering a replay to a clip
+
+The lab directory holds a second page, `capture.html` with
+`src/ui/lab/capture.ts` behind it, and `npm run capture` (`scripts/capture.ts`)
+is the command that drives it:
+
+    npm run capture -- --replay dual-fighter --from 2600 --to 5400 --fps 10
+
+![The dual-fighter golden from step 2,600, rendered by that command](media/capture-dual-fighter.gif)
+
+The command starts its own dev server on a free port, opens the page in headless
+Chromium, and hands it one run: a golden's log with the seed, cabinet and starting
+stage `GOLDENS` in `scripts/record-replay.ts` records for it — or a `.replay.json`
+path, which plays on the shipped Classic rules from `--stage`. The page builds the
+world, the sprite sheet, the effects and the starfield the way `src/main.ts` does,
+and then **steps** rather than waits: each call is exactly one `createLoop`
+advance of one step's time, every step is taken, and only the steps that become
+frames are drawn — `--fps 10` is every sixth. A frame is the 224x288 backbuffer,
+saved as a numbered PNG under `.scratch/capture/`, and `ffmpeg` makes the clip.
+What is drawn is the game's own render pass less the front end: the starfield,
+`drawScene`, the pack's effects and the HUD, without the build stamp, the flow's
+cards or a stored high-score table, because a replay is a world rather than a
+session.
+
+Three properties follow, and the command checks the two it can:
+
+- **The run is the golden.** After the last frame the page steps on to the end of
+  the log and compares `fingerprintWorld` with the golden's recorded final state,
+  so a capture that played something else fails instead of rendering it.
+- **The clip is the backbuffer.** A GIF is decoded again and compared with the
+  frames, scaled the same way, byte for byte. `flags=neighbor` and `dither=none`
+  are what make that hold, and the comparison is what shows it: on the clip above,
+  `flags=bilinear` changes about five million of 120 million pixels at `--scale 2`,
+  `dither=bayer` about fifty million, and a 64-colour palette 9,100 — the beam and
+  the explosions are drawn with blending, so the clip holds 151 colours, which is
+  why the palette defaults to 256. An MP4 is not checked: H.264 subsamples colour.
+- **Time is a choice, not a measurement.** No clock is read, so a slow machine
+  renders the same clip more slowly. The 467 frames above, from a run of 5,400
+  steps, took about three seconds end to end on an arm64 Mac.
+
+`ffmpeg` is an external tool rather than a dependency; without it on the `PATH`
+the command stops and says so. The capture page is kept out of the bundle the way
+the lab is — it is not a build input and nothing on the game's graph imports it,
+which `tests/unit/lab-dev-only.test.ts` checks for both pages — and it needs no
+route of its own, because the dev server serves a root document by its own name.
+Nothing in the game records: there is no trigger for it anywhere under `src/`
+outside this page.
 
 ### 4.4 Where a second game plugs in
 
