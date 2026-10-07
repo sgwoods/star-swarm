@@ -7,7 +7,7 @@ import { labRoute } from '../../vite.config.js';
 
 /**
  * `/lab` is a **dev-build route** (`docs/DESIGN.md` section 8 step 3, and the
- * Milestone 1 task that adds it). Two claims are easy to make and easy to break
+ * Milestone 1 task that adds it), and so is the capture page beside it. Two claims are easy to make and easy to break
  * later, so they are checked rather than trusted:
  *
  *  1. It does not ship. `vite build` builds `index.html` and whatever that
@@ -47,14 +47,20 @@ describe('the lab never reaches the production bundle', () => {
   it('is not referenced from index.html', () => {
     const html = readFileSync(join(REPO_ROOT, 'index.html'), 'utf8');
     expect(html).not.toMatch(/lab/i);
+    expect(html).not.toMatch(/capture/i);
   });
 
-  it('has its own entry document, which the build is never given', () => {
-    // `lab.html` exists at the root so the dev server can serve it; Vite's only
-    // build input is `index.html`, so a root HTML file it is not told about is
-    // simply not built.
-    const lab = readFileSync(join(REPO_ROOT, 'lab.html'), 'utf8');
-    expect(lab).toMatch('/src/ui/lab/main.ts');
+  // Two pages live there: the previewer, and the page `npm run capture` drives
+  // (`scripts/capture.ts`). Each is its own root document for the same reason.
+  it.each([
+    ['lab.html', '/src/ui/lab/main.ts'],
+    ['capture.html', '/src/ui/lab/capture.ts'],
+  ])('%s is its own entry document, which the build is never given', (document, entry) => {
+    // It exists at the root so the dev server can serve it; Vite's only build
+    // input is `index.html`, so a root HTML file it is not told about is simply
+    // not built.
+    const html = readFileSync(join(REPO_ROOT, document), 'utf8');
+    expect(html).toMatch(entry);
     const viteConfig = readFileSync(join(REPO_ROOT, 'vite.config.ts'), 'utf8');
     expect(viteConfig).not.toMatch(/rollupOptions/);
   });

@@ -8,7 +8,9 @@ rather than edit:
 
     npm run sprite-sheet     # classic-sprite-sheet.png
 
-The clips are screen recordings of the dev build.
+Most of the clips are screen recordings of the dev build;
+`capture-dual-fighter.gif` is rendered from a replay by a command, described at
+the end.
 
 - `m2-entry-waves.gif` — one unedited run of stage 1 with the controls untouched
   until the formation settles: the five entry waves, the sway, the hand-over to
@@ -194,6 +196,13 @@ The clips are screen recordings of the dev build.
   seconds at `fps=15` rather than the usual 10, because each ability's effect lasts
   under a third of a second and ten frames a second drops most of them; at
   `max_colors=48`, as for `m4-forge.gif`.
+- `capture-dual-fighter.gif` — the first clip `npm run capture` made, and the
+  only one in this directory that a command regenerates whole: the
+  `dual-fighter` golden from step 2,600, where a beam already holds the fighter,
+  to its last step at 5,400 — the captive parked, the rescue, the dual fighter
+  playing on into stage 21. Every sixth step at 10 fps, 467 frames, at the
+  logical 224x288 and a 256-colour palette, made by the command in the section
+  below and checked by it pixel for pixel against the backbuffer.
 - `arch-lab.gif` — the `/lab` previewer: an entry path playing, then scrubbed
   frame by frame with the readout following, then the same path mirrored, then a
   dive path flown from the slot marker.
@@ -228,9 +237,26 @@ playfield: they are recorded at the page size and kept there, with no `scale`
 filter (`path-lab.gif` at 760x572; `arch-lab.gif` at 900x660, a viewport big
 enough for the preview canvas to take a 2x scale). `arch-lab.gif` uses `fps=8`
 and `max_colors=32` to keep a frame that large down to roughly the size of a
-playfield clip. Milestone 4 owns turning all of this into a command, and what
-that command would be — and what it would deliberately not do — is planned in
-[`docs/ROADMAP.md`](../ROADMAP.md#capturing-gameplay-video).
+playfield clip.
+
+### From a replay, with one command
+
+A run that exists as a replay — a golden in `tests/sim/golden/`, or a
+`.replay.json` log — is rendered by a command rather than recorded:
+
+    npm run capture -- --replay dual-fighter --from 2600 --to 5400 --fps 10 \
+      --out docs/media/capture-dual-fighter.gif
+
+It plays the log through the real simulation and the real renderer in a headless
+page, stepping rather than waiting, and hands the numbered backbuffer frames to
+`ffmpeg` with the recipe above as flags: `--scale` is the `scale=…:flags=neighbor`
+step, `--colors` is `max_colors` (256 unless told otherwise), the dither is
+always `none`, and `--fps` chooses which steps become frames instead of
+resampling time. A `.gif` output is decoded again and compared with the frames
+pixel for pixel, and the command fails if anything was resampled or merged; a
+`.mp4` is not, because H.264 subsamples colour. `docs/ARCHITECTURE.md` §4.3 has
+the rest. The clips above were made before the command existed, from live play,
+and stay the record of how each was made.
 
 **Note for anyone running the dev server in two checkouts at once.** Vite's
 default port is shared, and `playwright.config.ts` reuses an existing server
