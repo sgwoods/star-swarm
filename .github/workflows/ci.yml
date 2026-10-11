@@ -113,7 +113,92 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
 
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  # Ask the portfolio hub (sgwoods/public) to re-read this build, now that it is
+  # live. The hub owns this project's record there and writes it itself: its
+  # `render-public-index.yml` fetches the published `build.json`, checks that it
+  # is a clean release build of a real commit, rewrites the record and re-renders
+  # the page. It only looks on a push to its own repository, by hand, or once a
+  # week on Monday — so without this, a merge can sit unreported for six days.
+  # Nothing here writes to the hub or exports anything; it says "look now".
+  #
+  # PUBLIC_HUB_DISPATCH_TOKEN is a fine-grained personal access token owned by
+  # sgwoods, scoped to the one repository sgwoods/public, with one repository
+  # permission: Actions, read and write. That is what
+  # `POST /repos/{owner}/{repo}/actions/workflows/{id}/dispatches` requires, and
+  # GitHub offers nothing narrower that can start a workflow; it reaches the
+  # hub's workflow runs, never its contents. (GitHub adds Metadata, read-only,
+  # to every fine-grained token by itself.)
+  #
+  # Without the secret — a fork, or before it has been added — the job says so
+  # and succeeds: the deployment above is already done and good, and an absent
+  # notification must not paint it red. With the secret, a refused request fails
+  # this job, because a token that has expired or lost its permission is exactly
+  # the silent staleness this job exists to end. Either way `deploy` stays green.
+  notify-hub:
+    name: Ask the portfolio hub to re-read the build
+    needs: deploy
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # The request is authenticated by the secret, not by GITHUB_TOKEN, so this
+    # job's own token is given nothing at all.
+    permissions: {}
+
+    steps:
+      - name: Wait for the build to be served, then dispatch the hub
+        env:
+          HUB_TOKEN: ${{ secrets.PUBLIC_HUB_DISPATCH_TOKEN }}
+          HUB_REPOSITORY: sgwoods/public
+          HUB_WORKFLOW: render-public-index.yml
+          PAGE_URL: ${{ needs.deploy.outputs.page_url }}
+        run: |
+          if [ -z "$HUB_TOKEN" ]; then
+            echo "::warning title=Portfolio hub not notified::Secret PUBLIC_HUB_DISPATCH_TOKEN is not set, so $HUB_REPOSITORY was not asked to re-read this build. The deployment itself succeeded; the hub will pick it up on its weekly schedule. See the comment above the notify-hub job for what the token needs."
+            exit 0
+          fi
+
+          # The hub reads the build.json the site is serving and records whatever
+          # commit it names. Asking before this commit is served would have it
+          # record the previous build, so wait until the site says it is this one.
+          # deploy-pages has already waited for the deployment, and publishing
+          # purges Pages' edge, so this normally passes on the first look.
+          identity_url="${PAGE_URL%/}/build.json"
+          served=""
+          for attempt in $(seq 1 30); do
+            served=$(curl --fail --silent --show-error --location --max-time 20 "$identity_url" \
+              | python3 -c 'import json, sys; print(json.load(sys.stdin).get("commit", ""))' 2>/dev/null || true)
+            if [ ${#served} -ge 7 ] && [ "${GITHUB_SHA#"$served"}" != "$GITHUB_SHA" ]; then
+              echo "$identity_url serves $served, which is this run's commit."
+              break
+            fi
+            echo "Attempt $attempt: $identity_url serves '${served:-nothing}', waiting for ${GITHUB_SHA::7}."
+            served=""
+            sleep 10
+          done
+          if [ -z "$served" ]; then
+            echo "::error title=Build not served::$identity_url never named ${GITHUB_SHA::7}, so the hub was not asked to look; it would have recorded another build."
+            exit 1
+          fi
+
+          status=$(curl --silent --show-error --output response.json --write-out '%{http_code}' \
+            --request POST \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer $HUB_TOKEN" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$HUB_REPOSITORY/actions/workflows/$HUB_WORKFLOW/dispatches" \
+            --data '{"ref":"main"}')
+          if [ "$status" != "204" ]; then
+            echo "::error title=Portfolio hub refused the request::HTTP $status from the dispatch to $HUB_REPOSITORY/$HUB_WORKFLOW. Check that PUBLIC_HUB_DISPATCH_TOKEN has not expired and still has Actions read and write on $HUB_REPOSITORY."
+            cat response.json
+            exit 1
+          fi
+          echo "Asked $HUB_REPOSITORY to run $HUB_WORKFLOW against ${GITHUB_SHA::7}: https://github.com/$HUB_REPOSITORY/actions/workflows/$HUB_WORKFLOW"
