@@ -243,6 +243,35 @@ document does not write the address down: the deploy job publishes its URL as th
 repository's **Environments**. A hand-copied address here is the same
 hand-maintained fact the build stamp exists to avoid.
 
+### The portfolio hub reads the build; this project only tells it when
+
+The captain's portfolio site, the repository `sgwoods/public`, carries a status
+page for this project, and **this project exports nothing to it**. The hub owns
+the record and writes it itself: its `render-public-index.yml` workflow fetches the
+`build.json` the site is serving, accepts it only if it is a clean `release` build
+of a commit that exists, and rewrites the record's commit, commit time, build time
+and build label from that. Some of the captain's projects run an exporter, because
+what they release is not simply their branch; what this project releases is the
+`dist/` of `main`, published with its identity beside it, so the hub can observe it
+directly and nothing here writes into the hub's contents.
+
+What the hub cannot do is know when to look. Its workflow runs on a push to its own
+repository, when started by hand, and once a week on a Monday — so a merge here
+could wait up to a week before its status page caught up. The third job in
+`.github/workflows/ci.yml`, `notify-hub`, closes that gap: after `deploy` succeeds
+it waits until the site's own `build.json` names this run's commit — asking any
+earlier would have the hub record the previous build — and then starts the hub's
+workflow, which observes, writes and republishes as it always does.
+
+It authenticates with the repository secret `PUBLIC_HUB_DISPATCH_TOKEN`: a
+fine-grained personal access token owned by the captain, limited to the one
+repository `sgwoods/public`, with one repository permission, **Actions: read and
+write** — the narrowest permission GitHub offers that can start a workflow, and
+one that cannot read or change the hub's files. Without the secret, as on a fork, the job leaves a warning
+naming it and succeeds, because the deployment it follows is already good. With
+the secret, a refused request fails `notify-hub` but never `deploy`: an expired
+token is how the status page would go stale again without anyone noticing.
+
 ### What it looks like
 
 Stage 1 from the first frame: five entry waves flying in on scripted paths, the
