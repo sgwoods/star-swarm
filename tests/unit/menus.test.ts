@@ -15,6 +15,7 @@ import {
   type MenuVariant,
   SELECT_CARD_TOP,
   SELECT_WINDOW,
+  selectRows,
   selectRowText,
   SETTINGS_CARD_TOP,
   SETTINGS_ROW_IDS,
@@ -93,28 +94,45 @@ describe('the variant selector', () => {
   const variants = [variantOf('classic'), variantOf('remix'), variantOf('other')];
 
   it('starts on the first variant when nothing is remembered', () => {
-    expect(createVariantMenu({ variants }).chosen.id).toBe('classic');
+    expect(createVariantMenu({ variants }).chosen?.id).toBe('classic');
   });
 
   it('starts on the remembered variant', () => {
-    expect(createVariantMenu({ variants, selected: 'other' }).chosen.id).toBe('other');
+    expect(createVariantMenu({ variants, selected: 'other' }).chosen?.id).toBe('other');
   });
 
   it('starts on the first when the remembered one is no longer installed', () => {
     // A settings document outlives the build it was written against.
-    expect(createVariantMenu({ variants, selected: 'deleted' }).chosen.id).toBe('classic');
+    expect(createVariantMenu({ variants, selected: 'deleted' }).chosen?.id).toBe('classic');
   });
 
-  it('wraps in both directions', () => {
+  it('wraps in both directions, through the SETTINGS row after the last game', () => {
     const menu = createVariantMenu({ variants });
     menu.previous();
-    expect(menu.chosen.id).toBe('other');
+    expect(menu.onSettings).toBe(true);
+    expect(menu.chosen).toBeUndefined();
+    expect(menu.note).toBe(MENU_TEXT.selectSettingsNote);
+    menu.previous();
+    expect(menu.chosen?.id).toBe('other');
     menu.next();
-    expect(menu.chosen.id).toBe('classic');
     menu.next();
+    expect(menu.chosen?.id).toBe('classic');
+    // Three games and SETTINGS: four places round.
+    for (let i = 0; i < variants.length + 1; i += 1) menu.next();
+    expect(menu.chosen?.id).toBe('classic');
+  });
+
+  it('starts on the SETTINGS row when asked to, which is where the settings return', () => {
+    const menu = createVariantMenu({ variants, selected: 'other', onSettings: true });
+    expect(menu.onSettings).toBe(true);
+    expect(menu.index).toBe(variants.length);
     menu.next();
-    menu.next();
-    expect(menu.chosen.id).toBe('classic');
+    expect(menu.chosen?.id).toBe('classic');
+  });
+
+  it('draws the games and then SETTINGS, as one list', () => {
+    const menu = createVariantMenu({ variants });
+    expect(selectRows(menu)).toEqual([...variants.map(selectRowText), 'SETTINGS']);
   });
 
   it('hands back the caller’s own variant, not a copy of it', () => {
@@ -747,12 +765,13 @@ describe('the selector says how to work it too', () => {
       .filter((line) => line.tone === 'help')
       .map((line) => line.text);
 
-  it('names the keys that walk the list, take a game and open the settings', () => {
+  it('names the keys that walk the list and take a row, and says ESC has nowhere to go', () => {
     for (const marks of ALL_MARKS) {
       expect(help(marks)).toEqual([MENU_TEXT.selectKeys, MENU_TEXT.selectBack]);
     }
     expect(MENU_TEXT.selectKeys).toBe('U/D MOVE   ENTER CHOOSES');
-    expect(MENU_TEXT.selectBack).toBe('ESC SETTINGS');
+    // The top of the front end: back from every screen climbs to here.
+    expect(MENU_TEXT.selectBack).toBe('ESC NOTHING ABOVE THIS');
   });
 
   it('leads with the chosen game’s note, then the legend, then the keys', () => {
@@ -803,6 +822,10 @@ describe('the selector lists the player’s games beside the shipped ones', () =
         return `NOTE ${game.id}`;
       },
     });
+    expect(asked).toEqual([]);
+    menu.previous();
+    // The SETTINGS row is no game, and asks for nothing.
+    expect(menu.note).toBe(MENU_TEXT.selectSettingsNote);
     expect(asked).toEqual([]);
     menu.previous();
     expect(menu.note).toBe('NOTE classic-2');

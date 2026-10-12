@@ -57,3 +57,71 @@ export async function startGame(page: Page): Promise<void> {
   await booted(page);
   await pressStart(page);
 }
+
+/**
+ * What `selecting` reads on the game list's `SETTINGS` row (`src/main.ts`).
+ * Parentheses, because no game id may contain one.
+ */
+export const SETTINGS_ROW = '(settings)';
+
+/** How long a key is held, and then left up: a few fixed steps each way. */
+const KEY_FRAMES = 60;
+
+/**
+ * Press a key as a person does: down for a few frames, then up for a few. The
+ * front end reads edges once a step, so a press shorter than a step can be missed.
+ */
+async function tapKey(page: Page, key: string): Promise<void> {
+  await page.keyboard.down(key);
+  await page.waitForTimeout(KEY_FRAMES);
+  await page.keyboard.up(key);
+  await page.waitForTimeout(KEY_FRAMES);
+}
+
+/** Walk the game list's cursor up until it is on one row, by its `selecting` id. */
+export async function walkListTo(page: Page, id: string): Promise<void> {
+  for (let i = 0; i < 24; i += 1) {
+    if ((await page.evaluate(() => window.starSwarm?.selecting)) === id) return;
+    await tapKey(page, 'ArrowUp');
+  }
+  throw new Error(`the game list never reached ${id}`);
+}
+
+/**
+ * Open the settings from attract, the way a player does: `Escape` climbs to the
+ * game list, whose last row is `SETTINGS` — or, in a build with one game and so
+ * no list, opens the settings directly (`src/ui/keys.ts`).
+ */
+export async function openSettings(page: Page): Promise<void> {
+  await tapKey(page, 'Escape');
+  await page.waitForFunction(
+    () => window.starSwarm?.phase === 'variant-select' || window.starSwarm?.phase === 'settings',
+  );
+  if ((await page.evaluate(() => window.starSwarm?.phase)) === 'variant-select') {
+    await walkListTo(page, SETTINGS_ROW);
+    await tapKey(page, 'Enter');
+  }
+  await page.waitForFunction(() => window.starSwarm?.phase === 'settings');
+}
+
+/**
+ * Leave the settings for the chosen game's attract screen: `Escape` goes back to
+ * the list they were opened from, and `Enter` on the chosen game takes it.
+ *
+ * It waits only for the page to be off both menus, not for attract itself: with
+ * autoplay armed, attract presses start on its own and may be gone before a poll
+ * sees it. A test that needs attract waits for it.
+ */
+export async function leaveSettings(page: Page): Promise<void> {
+  await tapKey(page, 'Escape');
+  await page.waitForFunction(
+    () => window.starSwarm?.phase === 'variant-select' || window.starSwarm?.phase === 'attract',
+  );
+  if ((await page.evaluate(() => window.starSwarm?.phase)) === 'variant-select') {
+    await walkListTo(page, (await page.evaluate(() => window.starSwarm?.game)) ?? '');
+    await tapKey(page, 'Enter');
+  }
+  await page.waitForFunction(
+    () => window.starSwarm?.phase !== 'settings' && window.starSwarm?.phase !== 'variant-select',
+  );
+}

@@ -571,7 +571,7 @@ describe('the start-up selector', () => {
   it('opens at boot when there is a choice, on the first variant', () => {
     const flow = twoVariantFlow();
     expect(flow.phase).toBe('variant-select');
-    expect(flow.variantMenu?.chosen.id).toBe('first');
+    expect(flow.variantMenu?.chosen?.id).toBe('first');
     expect(flow.variants.map((variant) => variant.id)).toEqual(['first', 'second']);
   });
 
@@ -590,20 +590,23 @@ describe('the start-up selector', () => {
   it('walks the list with up and down', () => {
     const flow = twoVariantFlow();
     press(flow, DOWN);
-    expect(flow.variantMenu?.chosen.id).toBe('second');
+    expect(flow.variantMenu?.chosen?.id).toBe('second');
     press(flow, UP);
-    expect(flow.variantMenu?.chosen.id).toBe('first');
-    // Wrapping, so up from the top is the bottom rather than nothing.
+    expect(flow.variantMenu?.chosen?.id).toBe('first');
+    // Wrapping, so up from the top is the bottom rather than nothing — and the
+    // bottom is the SETTINGS row, under the last game.
     press(flow, UP);
-    expect(flow.variantMenu?.chosen.id).toBe('second');
+    expect(flow.variantMenu?.onSettings).toBe(true);
+    press(flow, UP);
+    expect(flow.variantMenu?.chosen?.id).toBe('second');
   });
 
   it('walks it with left and right as well, because it is one column', () => {
     const flow = twoVariantFlow();
     press(flow, RIGHT);
-    expect(flow.variantMenu?.chosen.id).toBe('second');
+    expect(flow.variantMenu?.chosen?.id).toBe('second');
     press(flow, LEFT);
-    expect(flow.variantMenu?.chosen.id).toBe('first');
+    expect(flow.variantMenu?.chosen?.id).toBe('first');
   });
 
   it.each([
@@ -652,7 +655,7 @@ describe('the start-up selector', () => {
     // A new flow over the same storage opens the list on the remembered entry.
     const next = twoVariantFlow({ settings: createSettingsStore({ storage }) });
     expect(next.phase).toBe('variant-select');
-    expect(next.variantMenu?.chosen.id).toBe('second');
+    expect(next.variantMenu?.chosen?.id).toBe('second');
     expect(next.variant.id).toBe('second');
   });
 
@@ -696,6 +699,77 @@ describe('the start-up selector', () => {
   });
 });
 
+describe('ESC is back on every screen, and the list is the top', () => {
+  it('climbs from attract to the list, which opens on the game being played', () => {
+    const flow = twoVariantFlow();
+    press(flow, RIGHT);
+    press(flow, START);
+    expect(flow.phase).toBe('attract');
+    expect(flow.hasGameList).toBe(true);
+    press(flow, MENU);
+    expect(flow.phase).toBe('variant-select');
+    expect(flow.variantMenu?.chosen?.id).toBe('second');
+  });
+
+  it('does nothing on the list, because nothing is above it', () => {
+    const flow = twoVariantFlow();
+    press(flow, DOWN);
+    for (let i = 0; i < 3; i += 1) press(flow, MENU);
+    expect(flow.phase).toBe('variant-select');
+    expect(flow.variantMenu?.chosen?.id).toBe('second');
+  });
+
+  it('leaves a finished run in its own game, and only ESC climbs out of it', () => {
+    const flow = twoVariantFlow();
+    press(flow, RIGHT);
+    press(flow, START);
+    press(flow, START);
+    expect(flow.phase).toBe('playing');
+    bombThePlayer(flow);
+    flow.step(EMPTY_FRAME);
+    for (let i = 0; i < 4 && flow.phase !== 'attract'; i += 1) {
+      if (flow.phase === 'high-score-entry') {
+        for (let letter = 0; letter < 4; letter += 1) press(flow, START);
+      } else {
+        runPhase(flow);
+      }
+    }
+    expect(flow.phase).toBe('attract');
+    expect(flow.variant.id).toBe('second');
+    press(flow, MENU);
+    expect(flow.phase).toBe('variant-select');
+    expect(flow.variantMenu?.chosen?.id).toBe('second');
+  });
+
+  it('opens the settings from attract when there is one game and so no list', () => {
+    // A list of one game and a SETTINGS row is a screen to dismiss; its one useful
+    // row is the settings, so back from attract goes there and back again.
+    const flow = createGameFlow({
+      variants: [flowVariant('only', quickRunRules())],
+      seed: 'one',
+      demo: createAttractDemo({ rules: classicRules(), seed: 'one:attract' }),
+    });
+    expect(flow.hasGameList).toBe(false);
+    press(flow, MENU);
+    expect(flow.phase).toBe('settings');
+    press(flow, MENU);
+    expect(flow.phase).toBe('attract');
+    expect(flow.variantMenu).toBeUndefined();
+  });
+
+  it('still cancels the exit card, and never commits it', () => {
+    const flow = twoVariantFlow();
+    press(flow, START);
+    press(flow, START);
+    press(flow, frameOf('exit'));
+    expect(flow.phase).toBe('exit-confirm');
+    press(flow, RIGHT);
+    expect(flow.exitConfirm?.choice).toBe('exit');
+    press(flow, MENU);
+    expect(flow.phase).toBe('paused');
+  });
+});
+
 describe('the settings phase', () => {
   it('opens from attract on the menu button, and the world stops being stepped', () => {
     const flow = testFlow();
@@ -719,13 +793,19 @@ describe('the settings phase', () => {
     expect(flow.settingsMenu).toBeUndefined();
   });
 
-  it('returns to the selector when it was opened from there', () => {
+  it('opens from the list’s SETTINGS row, and returns to the list on that row', () => {
     const flow = twoVariantFlow();
-    press(flow, MENU);
+    press(flow, UP);
+    expect(flow.variantMenu?.onSettings).toBe(true);
+    press(flow, START);
     expect(flow.phase).toBe('settings');
     press(flow, MENU);
     expect(flow.phase).toBe('variant-select');
-    expect(flow.variantMenu).toBeDefined();
+    expect(flow.variantMenu?.onSettings).toBe(true);
+    // Done is the same way back as back.
+    press(flow, START);
+    press(flow, FIRE);
+    expect(flow.phase).toBe('variant-select');
   });
 
   it('walks rows with up and down and changes values with left and right', () => {
@@ -790,9 +870,8 @@ describe('the settings phase', () => {
   it('changes the variant through its GAME row, through the one selection path', () => {
     const seen: string[] = [];
     const flow = twoVariantFlow({ onVariantChange: (variant) => seen.push(variant.id) });
-    press(flow, FIRE);
-    expect(flow.phase).toBe('attract');
-    press(flow, MENU);
+    press(flow, UP);
+    press(flow, START);
     expect(flow.settingsMenu?.row.id).toBe('game');
     press(flow, RIGHT);
     expect(flow.variant.id).toBe('second');

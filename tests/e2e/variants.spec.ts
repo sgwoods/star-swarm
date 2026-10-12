@@ -1,7 +1,7 @@
 import { expect, type Page, test } from '@playwright/test';
 
 import { PLACEHOLDER_COLOURS } from '../../src/render/scene.js';
-import { booted, reachAttract } from './harness.js';
+import { booted, leaveSettings, openSettings, reachAttract } from './harness.js';
 
 /**
  * The start-up selector and the settings menu in a real browser
@@ -144,10 +144,12 @@ test('fire chooses a variant and leaves the cabinet in attract', async ({ page }
 });
 
 test('the settings menu opens, changes the difficulty and survives a reload', async ({ page }) => {
-  // Out of the selector first, so the menu is reached the way a player reaches it.
+  // Out of the selector first, then back up to it: the menu is reached the way a
+  // player reaches it from a game.
   await reachAttract(page);
 
-  await press(page, 'Escape', () => window.starSwarm?.phase === 'settings');
+  // Up to the game list, and its SETTINGS row.
+  await openSettings(page);
 
   const labels = (await rows(page)).map((row) => row.split('=')[0]);
   // `AUTOPLAY` sits beside `DIFFICULTY` because it is the same kind of setting —
@@ -183,7 +185,9 @@ test('the settings menu opens, changes the difficulty and survives a reload', as
   expect(await page.evaluate(() => window.starSwarm?.variant)).toBe('classic');
 
   const difficulty = await page.evaluate(() => window.starSwarm?.difficulty);
-  await press(page, 'Escape', () => window.starSwarm?.phase === 'attract');
+  // Back to the list, and down into the chosen game.
+  await leaveSettings(page);
+  await page.waitForFunction(() => window.starSwarm?.phase === 'attract');
 
   // Persisted, if the browser let it be. Playwright's context has working
   // `localStorage`, so this is the real path rather than the fallback.
@@ -197,12 +201,15 @@ test('the settings menu opens, changes the difficulty and survives a reload', as
 test('the chosen difficulty reaches the game that starts', async ({ page }) => {
   await reachAttract(page);
 
-  await press(page, 'Escape', () => window.starSwarm?.phase === 'settings');
+  // Up to the game list, and its SETTINGS row.
+  await openSettings(page);
   await press(page, 'ArrowDown', () => window.starSwarm?.settingsMenuRow === 'difficulty');
   await press(page, 'ArrowRight', () => window.starSwarm?.rank !== 'A');
   const rank = await page.evaluate(() => window.starSwarm?.rank);
   const difficulty = await page.evaluate(() => window.starSwarm?.difficulty);
-  await press(page, 'Escape', () => window.starSwarm?.phase === 'attract');
+  // Back to the list, and down into the chosen game.
+  await leaveSettings(page);
+  await page.waitForFunction(() => window.starSwarm?.phase === 'attract');
 
   await press(page, 'Enter', () => window.starSwarm?.phase === 'playing');
   // The rank the preset chose is the rank the run is playing at — the preset
@@ -214,11 +221,14 @@ test('the chosen difficulty reaches the game that starts', async ({ page }) => {
 test('the GAME row changes the variant, and the change is remembered', async ({ page }) => {
   await reachAttract(page);
 
-  await press(page, 'Escape', () => window.starSwarm?.phase === 'settings');
+  // Up to the game list, and its SETTINGS row.
+  await openSettings(page);
   expect(await page.evaluate(() => window.starSwarm?.settingsMenuRow)).toBe('game');
   await press(page, 'ArrowRight', () => window.starSwarm?.variant !== 'classic');
   const chosen = await page.evaluate(() => window.starSwarm?.variant);
-  await press(page, 'Escape', () => window.starSwarm?.phase === 'attract');
+  // Back to the list, and down into the chosen game.
+  await leaveSettings(page);
+  await page.waitForFunction(() => window.starSwarm?.phase === 'attract');
 
   // A variant change rebuilds the sprite sheet and the effect map in `main.ts`; a
   // page that survived it and is still stepping is what says that worked.
@@ -265,7 +275,8 @@ test('the pack row shows the packs the chosen variant actually layers', async ({
   await booted(page);
   await selectVariant(page, 'swarm-remix');
   await press(page, 'Space', () => window.starSwarm?.phase === 'attract');
-  await press(page, 'Escape', () => window.starSwarm?.phase === 'settings');
+  // Up to the game list, and its SETTINGS row.
+  await openSettings(page);
 
   // Walk down to the pack row, naming each one on the way. The rows are the
   // chosen variant's: this one declares no autoplay personas, so there is no

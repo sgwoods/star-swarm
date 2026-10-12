@@ -72,6 +72,12 @@ import { drawDeleteConfirm, drawNameEntry } from './ui/variations.js';
 import { drawExportCard, drawImportCard } from './ui/exchange.js';
 import { createTextPort } from './ui/text-port.js';
 
+/**
+ * What `selecting` reads on the list's `SETTINGS` row. Parentheses, because no
+ * game id may contain one (`src/content/schema.ts`), so it is never a game's.
+ */
+const SETTINGS_ROW_ID = '(settings)';
+
 const app = document.getElementById('app');
 if (app === null) throw new Error('Missing #app container');
 const container: HTMLElement = app;
@@ -441,6 +447,7 @@ const loop = createLoop({
           highScores: flow.highScores.entries(),
           persistent: flow.highScores.persistent,
           controls: flow.settings.controls,
+          gameList: flow.hasGameList,
         });
         drawBuildLine(ctx, {
           build: BUILD,
@@ -709,7 +716,10 @@ declare global {
       readonly importName: string;
       /** The note drawn under the list — the live row's. Empty off that phase. */
       readonly settingsMenuNote: string;
-      /** The variant under the selector's cursor. Empty off that phase. */
+      /**
+       * The variant under the selector's cursor, or {@link SETTINGS_ROW_ID} on its
+       * `SETTINGS` row. Empty off that phase.
+       */
       readonly selecting: string;
       /**
        * The pack list and combat-stage order **in force** — what the next game
@@ -912,7 +922,9 @@ window.starSwarm = {
     return flow.settingsMenu?.row.note ?? '';
   },
   get selecting(): string {
-    return flow.variantMenu?.chosen.id ?? '';
+    const menu = flow.variantMenu;
+    if (menu === undefined) return '';
+    return menu.chosen?.id ?? SETTINGS_ROW_ID;
   },
   get packList(): readonly string[] {
     return flow.variant.packs;

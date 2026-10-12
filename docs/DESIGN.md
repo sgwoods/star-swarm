@@ -115,6 +115,7 @@ The table is the output of a rule, and the **rule** is what to build: a base val
 **Game flow**
 - Attract mode (demo play and scoring table), the demo played by the game's own autoplay personas in turn, each named out of the way of play; a 1-player start, "STAGE N" and "READY" interstitials, and a game-over results screen showing shots fired, hits and hit ratio.
 - High-score table with 3-letter initials, stored locally.
+- A game list at the top of the front end, with the settings as its last row. Esc always means back: from a game's attract screen it climbs to the list. A game that ends stays in its own attract screen; only Esc leaves it.
 
 ## 5. Look and sound
 

@@ -29,6 +29,7 @@ import { installedPacks, shippedVariants, shippedVariantSources } from '../helpe
 
 const START = frameOf('start');
 const MENU = frameOf('menu');
+const UP = frameOf('up');
 const DOWN = frameOf('down');
 const RIGHT = frameOf('right');
 
@@ -52,9 +53,25 @@ function cabinet(): { readonly flow: GameFlow; readonly settings: SettingsStore 
     composer,
   });
   if (flow.phase === 'variant-select') press(flow, START);
+  // Up to the game list, then its last row, SETTINGS.
   press(flow, MENU);
+  expect(flow.phase).toBe('variant-select');
+  for (let step = 0; step < 10 && flow.variantMenu?.onSettings !== true; step += 1) press(flow, UP);
+  expect(flow.variantMenu?.onSettings).toBe(true);
+  press(flow, START);
   expect(flow.phase).toBe('settings');
   return { flow, settings };
+}
+
+/** Back out of the settings to the game list, and from it into the chosen game's attract. */
+function leaveSettings(flow: GameFlow): void {
+  press(flow, START);
+  expect(flow.phase).toBe('variant-select');
+  for (let step = 0; step < 10 && flow.variantMenu?.chosen?.id !== flow.game.id; step += 1) {
+    press(flow, UP);
+  }
+  press(flow, START);
+  expect(flow.phase).toBe('attract');
 }
 
 function toRow(flow: GameFlow, id: string): void {
@@ -185,8 +202,7 @@ describe('a variation, out of one cabinet and into another', () => {
     expect(two.flow.variant.packs).toEqual(packs);
     expect(two.settings.value.variations).toEqual(one.settings.value.variations);
 
-    press(two.flow, START);
-    expect(two.flow.phase).toBe('attract');
+    leaveSettings(two.flow);
     press(two.flow, START);
     expect(two.flow.phase).toBe('playing');
     expect(two.flow.variant.packs).toEqual(packs);

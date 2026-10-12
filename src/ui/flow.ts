@@ -5,14 +5,22 @@
  * phases and every transition is named here:
  *
  * ```
- *   variant-select ──chosen──▶ attract ──start──▶ playing ──sim: game-over──▶ game-over
- *   (only with a choice)          │  ▲              │  ▲                          │ timer or button
- *                                 │  │              │  │ timer or button          ▼
- *                        menu ──▶ settings          └──┴── challenge-results   results
- *                                    ▲                     sim: challenge-ended   │
- *                                    └── start/menu ──▶ attract ◀── no ◀── qualifies?
- *                                                          ▲                │ yes
- *                                                          └─ submitted ◀── high-score-entry
+ *   With more than one game:                     With exactly one:
+ *
+ *   variant-select ──a game──▶ attract           attract
+ *     │       ▲    ◀───back───┘                    │  ▲
+ *     │ ENTER │ ENTER                         back │  │ ENTER
+ *     │ on    │ or back                            ▼  │ or back
+ *     │ SETTINGS                                 settings
+ *     ▼       │
+ *   settings ─┘
+ *
+ *   attract ──start──▶ playing ──sim: game-over──▶ game-over ──timer or button──▶ results
+ *                       │  ▲                                                        │
+ *    sim: challenge-ended  │ timer or button                                        ▼
+ *                       ▼  │                    attract ◀── no ◀──────────── qualifies?
+ *                challenge-results                 ▲                              │ yes
+ *                                                  └── submitted ◀── high-score-entry
  *
  *   settings ──L/R on PACKS──▶ packs ──keep or cancel──▶ settings
  *   settings ──L/R on STAGES─▶ stages ─keep or cancel──▶ settings
@@ -41,12 +49,16 @@
  * The two phases the variant work added are here for the same reason and no other:
  *
  * - **`variant-select`** lists the games this build offers and lands on the
- *   chosen one's attract screen. It is entered at boot **only when there is more than one**; with exactly
- *   one variant the flow starts in `attract` and this phase is never entered at
- *   all, so a single-game cabinet has no screen to dismiss. Every later game in
- *   the session begins from attract, as a cabinet does; the way back to the list
- *   is the settings screen's `GAME` row.
- * - **`settings`** is the player-settings menu of section 6 layer 3. A flag
+ *   chosen one's attract screen. It is the top of the front end: `ESC` climbs
+ *   towards it from every screen (`./keys.ts`) and on it does nothing, because
+ *   nothing is above it. It exists **only when there is more than one game**;
+ *   with exactly one the flow starts in `attract`, this phase is never entered at
+ *   all, and `ESC` from attract opens the settings instead — a list of one game
+ *   and a `SETTINGS` row is a screen to dismiss, and its one useful row is the
+ *   settings. A finished run stays in its game: game over lands on that game's
+ *   attract screen, never on the list, and only `ESC` climbs.
+ * - **`settings`** is the player-settings menu of section 6 layer 3, opened by
+ *   the list's `SETTINGS` row and closed back onto it. A flag
  *   saying "attract, but not responding to start" is exactly the shape this file
  *   refuses, so it is a phase: it takes input exclusively and the world behind it
  *   is not stepped.
@@ -416,6 +428,12 @@ export interface GameFlow {
   readonly flying: Persona | undefined;
   /** The player's settings, as they stand. */
   readonly settings: Settings;
+  /**
+   * Whether this build has a game list right now: more than one game on it.
+   * What `ESC` does from attract follows from it — the list when there is one,
+   * the settings when there is not — so the attract card reads it to say which.
+   */
+  readonly hasGameList: boolean;
   /** The start-up list, present only during `variant-select`. */
   readonly variantMenu: VariantMenu<GameEntry> | undefined;
   /** The settings rows, present only during `settings`. */
@@ -700,6 +718,8 @@ export function createGameFlow(options: FlowOptions): GameFlow {
   let openedFrom: EditorCard | undefined;
   /** Where the settings screen returns to. */
   let settingsFrom: GamePhase = 'attract';
+  /** More than one game on the list: whether the list is a screen at all. */
+  const hasGameList = (): boolean => gamesNow().length > 1;
 
   /* -- autoplay ----------------------------------------------------------- */
 
@@ -1179,10 +1199,12 @@ export function createGameFlow(options: FlowOptions): GameFlow {
       : MENU_TEXT.setAside;
   };
 
-  const openVariantSelect = (): void => {
+  /** Open the list, the cursor on the chosen game or, coming back from them, the settings. */
+  const openVariantSelect = (onSettings = false): void => {
     variantMenu = createVariantMenu({
       variants: gamesNow(),
       selected: chosenId,
+      onSettings,
       noteOf: selectNote,
     });
     enter('variant-select');
@@ -1204,11 +1226,10 @@ export function createGameFlow(options: FlowOptions): GameFlow {
   /**
    * Throw the run away and go home.
    *
-   * **Home is attract**, in both cabinets. The selector is a boot-time screen —
-   * with one variant installed it is never entered at all — so "the screen the
-   * game came from" is not a thing that exists for every build; attract is, and it
-   * is already where a finished game ends up. A player who wants the list takes
-   * the settings screen's `GAME` row, exactly as they do between games.
+   * **Home is attract**, in both cabinets: the game being left is the game the
+   * player stays in, exactly as when a run ends. With one game installed the list
+   * is never entered at all, so attract is the one home every build has, and a
+   * player who wants the list climbs to it from there with `ESC`.
    *
    * The run is **discarded**: the score does not reach the high-score table, and
    * the stats go back to empty so nothing downstream can show a run nobody
@@ -1295,6 +1316,9 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     get settings(): Settings {
       return settingsValue();
     },
+    get hasGameList(): boolean {
+      return hasGameList();
+    },
     get variantMenu(): VariantMenu<GameEntry> | undefined {
       return phase === 'variant-select' ? variantMenu : undefined;
     },
@@ -1353,22 +1377,21 @@ export function createGameFlow(options: FlowOptions): GameFlow {
             enter('attract');
             break;
           }
-          // One column, so every direction walks it (`./keys.ts`).
+          // One column, so every direction walks it (`./keys.ts`). `ESC` is read
+          // and does nothing: this is the top, and there is nothing to go back to.
           const press = cardPress(previous, frame);
           if (press.backward) menu.previous();
           if (press.forward) menu.next();
-          // There is no card behind this one to go back to, so the menu button
-          // does what it does on the attract screen: opens the settings.
-          if (press.back) {
-            openSettings('variant-select');
-            break;
-          }
           // Taking a game lands on *its* attract screen rather than in play. Start
           // and fire must mean one thing here, because they mean one thing on
-          // every other card; and attract is where the chosen game's own demo,
-          // high scores and keys are — the settings among them.
-          if (press.accept) {
-            selectGame(menu.chosen.id);
+          // every other card; and attract is where the chosen game's own demo and
+          // high scores are. Taking `SETTINGS` opens them, over the chosen game.
+          const chosen = menu.chosen;
+          if (press.accept && chosen === undefined) {
+            variantMenu = undefined;
+            openSettings('variant-select');
+          } else if (press.accept && chosen !== undefined) {
+            selectGame(chosen.id);
             variantMenu = undefined;
             enter('attract');
           } else {
@@ -1395,10 +1418,12 @@ export function createGameFlow(options: FlowOptions): GameFlow {
             break;
           }
           // Every row applies as it changes, so done and back are the same exit.
+          // Back to the list they were opened from, on their own row — unless the
+          // list has gone in the meantime, which deleting a variation can do.
           if (press.accept || press.back) {
             settingsMenu = undefined;
             refreshDemo();
-            if (settingsFrom === 'variant-select') openVariantSelect();
+            if (settingsFrom === 'variant-select' && hasGameList()) openVariantSelect(true);
             else enter('attract');
             break;
           }
@@ -1569,11 +1594,13 @@ export function createGameFlow(options: FlowOptions): GameFlow {
         case 'attract': {
           // The demo world takes its input from its own pilot or the script, never
           // from the player; the only things the player's frame can do here are
-          // start a game and open the settings screen.
+          // start a game and go back. Back is up to the game list — or, with one
+          // game and so no list, straight to the settings, its one useful row.
           if (wasPressed(previous, frame, 'start')) {
             events = startGame();
           } else if (wasPressed(previous, frame, 'menu')) {
-            openSettings('attract');
+            if (hasGameList()) openVariantSelect();
+            else openSettings('attract');
           } else {
             events = demo.advance();
           }

@@ -1,7 +1,7 @@
 import { expect, type Page, test } from '@playwright/test';
 
 import { PLACEHOLDER_COLOURS } from '../../src/render/scene.js';
-import { reachAttract } from './harness.js';
+import { leaveSettings, openSettings as openFromAttract, reachAttract } from './harness.js';
 
 /**
  * A player's variations, played in a real browser with the real keyboard — the
@@ -30,10 +30,9 @@ async function phase(page: Page, want: string): Promise<void> {
   await page.waitForFunction((value) => window.starSwarm?.phase === value, want);
 }
 
-/** From attract, open the settings. */
+/** From attract, open the settings: up to the game list, and its SETTINGS row. */
 async function openSettings(page: Page): Promise<void> {
-  await tap(page, 'Escape');
-  await phase(page, 'settings');
+  await openFromAttract(page);
 }
 
 /** Move the settings cursor to a row. */
@@ -103,7 +102,7 @@ async function makeFromClassic(page: Page, pack: string, name: string): Promise<
 
 /** Close the settings and start a game on what is in force. */
 async function play(page: Page): Promise<void> {
-  await tap(page, 'Enter');
+  await leaveSettings(page);
   await phase(page, 'attract');
   await tap(page, 'Enter');
   await phase(page, 'playing');

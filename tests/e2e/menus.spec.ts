@@ -1,13 +1,19 @@
 import { expect, type Page, test } from '@playwright/test';
 
-import { reachAttract, startGame } from './harness.js';
+import {
+  openSettings as openFromAttract,
+  reachAttract,
+  SETTINGS_ROW,
+  startGame,
+  walkListTo,
+} from './harness.js';
 
 /**
  * The one scheme every card is worked with (`src/ui/keys.ts`), proved by key
  * press in a real browser: up and down move between rows, left and right change
- * the row under the cursor, Enter takes, Escape goes back — and the exit card
- * still commits on Enter and still refuses the double-tap of the key that opened
- * it.
+ * the row under the cursor, Enter takes, Escape goes back — up a screen, to the
+ * game list at the top — and the exit card still commits on Enter and still
+ * refuses the double-tap of the key that opened it.
  *
  * `tests/unit/flow.test.ts` proves the same against the state machine. What only
  * a browser shows is that the **keys** reach it: that ArrowUp and ArrowDown are
@@ -30,9 +36,45 @@ const row = (page: Page): Promise<string | undefined> =>
 
 async function openSettings(page: Page): Promise<void> {
   await reachAttract(page);
-  await tap(page, 'Escape');
-  await page.waitForFunction(() => window.starSwarm?.phase === 'settings');
+  await openFromAttract(page);
 }
+
+const phase = (page: Page): Promise<string | undefined> =>
+  page.evaluate(() => window.starSwarm?.phase);
+const selecting = (page: Page): Promise<string | undefined> =>
+  page.evaluate(() => window.starSwarm?.selecting);
+
+test('Escape climbs every screen to the game list, and the list is the top', async ({ page }) => {
+  await reachAttract(page);
+  const game = await page.evaluate(() => window.starSwarm?.game);
+
+  // Attract: back is up to the list, opened on the game being played.
+  await tap(page, 'Escape');
+  await page.waitForFunction(() => window.starSwarm?.phase === 'variant-select');
+  expect(await selecting(page)).toBe(game);
+
+  // The list: nothing above it, so Escape does nothing, however often.
+  await tap(page, 'Escape');
+  await tap(page, 'Escape');
+  expect(await phase(page)).toBe('variant-select');
+  expect(await selecting(page)).toBe(game);
+
+  // The settings are the list's last row.
+  await walkListTo(page, SETTINGS_ROW);
+  await tap(page, 'Enter');
+  await page.waitForFunction(() => window.starSwarm?.phase === 'settings');
+
+  // And back from them is back to the list, on the row they were opened from.
+  await tap(page, 'Escape');
+  await page.waitForFunction(() => window.starSwarm?.phase === 'variant-select');
+  expect(await selecting(page)).toBe(SETTINGS_ROW);
+
+  // Enter on the game goes down into it again, unchanged.
+  await walkListTo(page, game ?? '');
+  await tap(page, 'Enter');
+  await page.waitForFunction(() => window.starSwarm?.phase === 'attract');
+  expect(await page.evaluate(() => window.starSwarm?.game)).toBe(game);
+});
 
 test('up and down move between rows, both ways, and wrap', async ({ page }) => {
   await openSettings(page);
@@ -67,10 +109,12 @@ test('left and right change the row under the cursor, and only that row', async 
   expect(await page.evaluate(() => window.starSwarm?.settings.volume)).toBe(before);
   expect(await page.evaluate(() => window.starSwarm?.settings.difficulty)).toBe(difficulty);
 
-  // Enter is done, as it is on every card, and the change stays.
+  // Enter is done, as it is on every card — back to the list on its SETTINGS
+  // row — and the change stays.
   await tap(page, 'ArrowLeft');
   await tap(page, 'Enter');
-  await page.waitForFunction(() => window.starSwarm?.phase === 'attract');
+  await page.waitForFunction(() => window.starSwarm?.phase === 'variant-select');
+  expect(await selecting(page)).toBe(SETTINGS_ROW);
   expect(await page.evaluate(() => window.starSwarm?.settings.volume)).toBe(lower);
 });
 
@@ -112,6 +156,16 @@ test.describe('the exit card', () => {
 
     // On EXIT, the key that opened the card cancels: the run survives.
     await tap(page, 'x');
+    await page.waitForFunction(() => window.starSwarm?.phase === 'paused');
+  });
+
+  test('cancels on Escape with EXIT chosen, and never commits on it', async ({ page }) => {
+    await startGame(page);
+    await tap(page, 'x');
+    await page.waitForFunction(() => window.starSwarm?.phase === 'exit-confirm');
+    await tap(page, 'ArrowRight');
+    expect(await page.evaluate(() => window.starSwarm?.exitChoice)).toBe('exit');
+    await tap(page, 'Escape');
     await page.waitForFunction(() => window.starSwarm?.phase === 'paused');
   });
 

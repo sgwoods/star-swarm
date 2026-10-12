@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { type Action, EMPTY_FRAME, frameOf } from '../../src/engine/input.js';
 import { GLYPH_CHARS } from '../../src/render/text.js';
-import { ATTRACT_PROMPT, attractKeys } from '../../src/ui/attract.js';
+import { ATTRACT_BACK, ATTRACT_PROMPT, attractKeys } from '../../src/ui/attract.js';
 import { createInitialsEntry, initialsEntryKeys } from '../../src/ui/highscores.js';
 import { cardPress, fireKeyFor, KEY, KEY_PAIR_GAP, keyLine } from '../../src/ui/keys.js';
 import { MENU_TEXT, settingsNotes, variantSelectNotes } from '../../src/ui/menus.js';
@@ -181,7 +181,8 @@ describe('the attract screen speaks the same voice', () => {
   it('writes every line as key-and-verb pairs, naming fire only as the scheme binds it', () => {
     for (const scheme of CONTROL_SCHEMES) {
       const allowed = [...keys, fireKeyFor(scheme)];
-      for (const text of [...attractKeys(scheme), ATTRACT_PROMPT]) {
+      const lines = [...attractKeys(scheme, true), ...attractKeys(scheme, false)];
+      for (const text of [...lines, ATTRACT_PROMPT]) {
         for (const pair of text.split(KEY_PAIR_GAP)) {
           expect(allowed, `${scheme}: "${text}"`).toContain(pair.slice(0, pair.indexOf(' ')));
         }
@@ -193,18 +194,25 @@ describe('the attract screen speaks the same voice', () => {
   });
 
   it('names the fire key the scheme in force binds', () => {
-    expect(attractKeys('both').join(' ')).toContain('SPACE FIRE');
-    expect(attractKeys('arrows').join(' ')).toContain('SPACE FIRE');
-    expect(attractKeys('wasd').join(' ')).toContain('Z FIRE');
-    expect(attractKeys('wasd').join(' ')).not.toContain('SPACE');
+    expect(attractKeys('both', true).join(' ')).toContain('SPACE FIRE');
+    expect(attractKeys('arrows', true).join(' ')).toContain('SPACE FIRE');
+    expect(attractKeys('wasd', true).join(' ')).toContain('Z FIRE');
+    expect(attractKeys('wasd', true).join(' ')).not.toContain('SPACE');
   });
 
-  it('says how to start once, in the prompt, and how to reach the settings on the card', () => {
+  it('says how to start once, in the prompt, and where back goes on the card', () => {
     expect(ATTRACT_PROMPT).toBe('ENTER START');
+    // Up to the list, where the settings are a row — or, with one game and so no
+    // list, to the settings themselves. Never the old borrowed "ESC opens settings"
+    // on a screen where it no longer does.
+    expect(ATTRACT_BACK.list).toBe('ESC GAMES, SETTINGS');
+    expect(ATTRACT_BACK.settings).toBe('ESC SETTINGS');
     for (const scheme of CONTROL_SCHEMES) {
-      const card = attractKeys(scheme);
-      expect(card.some((line) => line.includes(KEY.ok))).toBe(false);
-      expect(card).toContain(MENU_TEXT.selectBack);
+      for (const gameList of [true, false]) {
+        const card = attractKeys(scheme, gameList);
+        expect(card.some((line) => line.includes(KEY.ok))).toBe(false);
+        expect(card.at(-1)).toBe(gameList ? ATTRACT_BACK.list : ATTRACT_BACK.settings);
+      }
     }
   });
 });

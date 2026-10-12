@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
 
-import { reachAttract } from './harness.js';
+import { leaveSettings, openSettings, reachAttract } from './harness.js';
 
 /**
  * The CRT filter, read off the real canvas (`src/render/crt.ts`).
@@ -36,8 +36,7 @@ async function tap(page: Page, key: string): Promise<void> {
 
 /** Open the settings and walk the cursor to the `CRT` row, as a player does. */
 async function openCrtRow(page: Page): Promise<void> {
-  await tap(page, 'Escape');
-  await page.waitForFunction(() => window.starSwarm?.phase === 'settings');
+  await openSettings(page);
   for (let i = 0; i < 12; i += 1) {
     if ((await page.evaluate(() => window.starSwarm?.settingsMenuRow)) === 'crt') return;
     await tap(page, 'ArrowDown');
@@ -197,7 +196,7 @@ for (const { width, height, scale } of [
       expect(on.bottomDarker).toBe(on.middle);
 
       // It survives a reload: the stored setting reaches the display at boot.
-      await tap(page, 'Escape');
+      await leaveSettings(page);
       await page.waitForFunction(() => window.starSwarm?.phase === 'attract');
       await page.reload();
       await page.waitForFunction(() => (window.starSwarm?.step ?? 0) > 0);
