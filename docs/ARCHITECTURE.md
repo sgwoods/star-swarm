@@ -257,8 +257,9 @@ what they release is not simply their branch; what this project releases is the
 directly and nothing here writes into the hub's contents.
 
 What the hub cannot do is know when to look. Its workflow runs on a push to its own
-repository, when started by hand, and once a week on a Monday — so a merge here
-could wait up to a week before its status page caught up. The third job in
+repository, when started by hand, and once a day — the hub's
+`PROJECT-STATUS-CONTRACT.md` in `sgwoods/public` is the authority on when — so a
+merge here could wait up to a day before its status page caught up. The third job in
 `.github/workflows/ci.yml`, `notify-hub`, closes that gap: after `deploy` succeeds
 it waits until the site's own `build.json` names this run's commit — asking any
 earlier would have the hub record the previous build — and then starts the hub's
