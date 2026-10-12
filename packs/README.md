@@ -41,8 +41,10 @@ and gets no exemption from anything on this page.
 **An ability is switched on, never written.** [`spore-storm/`](spore-storm/) is the
 game that uses four of the new abilities: each alien in its formation names one of
 them in its own document, two of its dive paths say where in a flight one fires,
-and its `pack.json` binds every event they raise to a sound and an effect. The
-behaviour itself is the engine's (`src/sim/abilities/`), so the whole game is
+and its `pack.json` binds every event they raise to a sound and an effect.
+[`mirage/`](mirage/) does the same for the other two: a shell that changes type at
+a `trigger` on its dive, and two aliens that copy the fighter's movement, one each
+way. The behaviour itself is the engine's (`src/sim/abilities/`), so each game is
 documents like every other pack here.
 
 `npm run validate-packs` schema-checks then reference-checks every pack, then every

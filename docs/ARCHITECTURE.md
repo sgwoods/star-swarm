@@ -46,10 +46,11 @@ one game on the platform, declared as a document under
 [`variants/`](../variants/): a display name, the packs it layers, and the
 difficulty presets a player may pick from. Star Swarm is `variants/classic.json`
 and is the first entry in that list rather than a case the others work around.
-Four variants ship: the arcade game, a demonstration overlay, the forged Deep Sea
-game ([§4.6](#46-the-forge)), and Spore Storm, the game that switches on four of
-the new abilities ([§4.4](#44-where-a-second-game-plugs-in)).
-<!-- check:count variants.count 4 variants.demonstrations 1 -->
+Five variants ship: the arcade game, a demonstration overlay, the forged Deep Sea
+game ([§4.6](#46-the-forge)), Spore Storm, the game that switches on four of the
+new abilities, and Mirage, which switches on the other two
+([§4.4](#44-where-a-second-game-plugs-in)).
+<!-- check:count variants.count 5 variants.demonstrations 1 -->
 
 That split is the whole architecture, and it is enforced rather than trusted —
 see [§3](#3-the-layers).
@@ -66,8 +67,8 @@ doing it. Milestone 3 has begun: the variant concept, the start-up selector and
 the player-settings menu are in ([§4.5](#45-variants-the-games-this-build-offers)
 and [§6](#6-settings-and-the-difficulty-preset)), the validator flies every
 stage it passes ([§4.7](#47-the-playability-pass)), and the ability registry is
-in, with six abilities a pack's aliens switch on beside the capture beam and a
-shipped game that switches on four of them
+in, with six abilities a pack's aliens switch on beside the capture beam and two
+shipped games that switch on all six between them
 ([§4.4](#44-where-a-second-game-plugs-in)).
 [§5](#5-what-is-not-here-yet) is what is left.
 <!-- check:count classic.stages.normal 13 classic.sequence.normal 17 classic.stages.challenge 8 -->
@@ -889,8 +890,22 @@ one ability per alien, every event bound and centred, and all four happening on
 stage 1 of every seed under the persona the attract demo flies first. The pack's
 README carries what playing it measured, and the one rules-layer coupling it found
 that `docs/content-guide.md` does not list ([§5](#5-what-is-not-here-yet)). It
-predates `transform` and `mirrorPlayer` and uses neither, so those two are still in
-no shipped game.
+predates `transform` and `mirrorPlayer` and uses neither.
+
+**And a second game uses the other two.** [`packs/mirage/`](../packs/mirage/),
+named by `variants/mirage.json`, is an overlay of the same kind: a `shell` that
+changes into a `stinger` mid-dive at a `trigger` on its own path, an `echo` that
+slides wherever the fighter slid a beat later (`track`), and a `glass` that slides
+the other way (`opposite`). It is a game of its own rather than more of Spore
+Storm, so that each game's formation is about its own abilities; the pack's README
+gives the reasoning, the tuning that keeps a mirror from reading as drift, and how
+its change of type is kept apart from Classic's transform attack, which these rules
+run too. `enemy-morphed` is bound to a sound and an effect in its manifest, and on
+the sound channel only. `tests/sim/mirage.test.ts` holds it to that, and to both
+abilities happening on stage 1 of every seed under the persona the attract demo
+flies first.
+
+![Mirage, chosen from the start-up selector and played by an autoplay persona: shells hatching into stingers mid-dive, echoes and glasses diving](media/m3-mirage.gif)
 
 ![Spore Storm, chosen from the start-up selector and played by an autoplay persona: cysts splitting, a husk's shield lighting up, a flicker teleporting and a brood spawning](media/m3-spore-storm.gif)
 
@@ -1166,9 +1181,13 @@ variants against 37, with Classic's later scripts first flown on harder difficul
 rows. Spore Storm added eleven more — its own three stages and Classic's eight
 challenge scripts as it plays them, 64 flights across four variants — and about
 six seconds: timed in one process, its flights take 6.1 s against Deep Sea's
-6.0 s for the same eleven and Classic's 15.1 s for twenty-one. The shipped tree is
+6.0 s for the same eleven and Classic's 15.1 s for twenty-one. Mirage added eleven
+more on the same pattern — 75 flights across five variants — and timed in one
+process on a busier machine took 6.0 s and 8.5 s over two rounds, against Spore
+Storm's 6.9 s and 7.0 s and Deep Sea's 6.3 s and 6.7 s. The shipped tree is
 flown twice per CI run — by its own step and by the test that wraps it, under a
-180-second timeout — so a game of this size costs CI about twelve seconds.
+180-second timeout — so a game of this size costs CI about twelve to fifteen
+seconds.
 `tests/unit/playability.test.ts` pins its thresholds from both edges, and
 `tests/sim/validate-packs-playability.test.ts` runs the script over the shipped
 tree, which passes, and over `tests/fixtures/unplayable/` layered on Classic,
@@ -1186,19 +1205,14 @@ stale absence list is the failure mode this section is most prone to — a docum
 describing as deliberately absent something that shipped two merges ago.
 [`docs/ROADMAP.md`](ROADMAP.md) is where each of these is scheduled.
 
-- **Two of the six new abilities are in no shipped game.** `transform` and
-  `mirrorPlayer` are reached only by a pack that switches them on, and no
-  installed pack does yet; the pack that plays them is the test's
-  (`tests/sim/morph-mirror-pack.test.ts`). The event `transform` raises —
-  `enemy-morphed` — is one a pack may bind a sound or an effect to, and none does.
-  `mirrorPlayer` raises no event: what it does is the diver's motion. The other
-  four are switched on by Spore Storm, which binds every event they raise
-  ([§4.4](#44-where-a-second-game-plugs-in)).
 - **A game layered over Classic's rules cannot switch off Classic's transform
   attack, or choose what it turns into.** `rules.transform` is the arcade's
   one-into-a-trio attack — not the `transform` ability — and its `types` name three
-  of Classic's aliens, so from stage 4, once a stage, Deep Sea and Spore Storm each
-  turn one of their own drones or wings into three of Classic's scourges. An
+  of Classic's aliens, so from stage 4, once a stage, Deep Sea, Spore Storm and
+  Mirage each turn one of their own drones or wings into three of Classic's
+  scourges. In Mirage, whose `transform` ability is a change of type of its own,
+  that is the hardest to miss; `packs/mirage/README.md` says how the two are kept
+  apart. An
   overlay cannot change a rules field ([§4.5](#45-variants-the-games-this-build-offers)),
   and `docs/content-guide.md` section 7 does not list this among the couplings a
   pack meets; `packs/spore-storm/README.md` has the measurement.
@@ -1690,10 +1704,10 @@ cards' captions, `AUTO NORMAL` beside `SCORE 2860`.
 
 The cabinet can play itself, as one of several named **personas**, so that the game
 can be watched rather than played. `beginner`, `normal`, `expert` and `astronaut`
-ship with the Classic game, and the forged Deep Sea game and Spore Storm declare
-two each — eight across the build, because a persona belongs to the variant it
-plays and there is no way for one document to reference another's.
-<!-- check:count autoplay.classicPersonas 4 autoplay.forgedPersonas 2 autoplay.sporeStormPersonas 2 autoplay.personas 8 -->
+ship with the Classic game, and the forged Deep Sea game, Spore Storm and Mirage
+declare two each — ten across the build, because a persona belongs to the variant
+it plays and there is no way for one document to reference another's.
+<!-- check:count autoplay.classicPersonas 4 autoplay.forgedPersonas 2 autoplay.sporeStormPersonas 2 autoplay.miragePersonas 2 autoplay.personas 10 -->
 
 **An input log was the wrong shape for this, which is why autoplay was not built on
 the attract demo — and why the attract demo is now built on autoplay.** A log

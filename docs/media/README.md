@@ -196,6 +196,14 @@ the end.
   seconds at `fps=15` rather than the usual 10, because each ability's effect lasts
   under a third of a second and ten frames a second drops most of them; at
   `max_colors=48`, as for `m4-forge.gif`.
+- `m3-mirage.gif` — the game that uses the other two, played the same way: one
+  unedited take from live play at the dev build, the selector moved onto `MIRAGE`,
+  the settings card's `AUTOPLAY` row taken across to `NORMAL` — the persona the
+  attract demo flies first — and from then on the controls untouched. The three
+  entry waves arrive, then shells turn out of the formation, hover, and come apart
+  into stingers mid-dive, and stingers sit in the shells' slots for the rest of the
+  stage, while echoes and glasses dive. Thirty seconds at `fps=15` and
+  `max_colors=48`, as for `m3-spore-storm.gif`.
 - `capture-dual-fighter.gif` — the first clip `npm run capture` made, and the
   only one in this directory that a command regenerates whole: the
   `dual-fighter` golden from step 2,600, where a beam already holds the fighter,

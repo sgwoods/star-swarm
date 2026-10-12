@@ -1,0 +1,10 @@
+{
+  "id": "entry-drop",
+  "mirror": true,
+  "start": [72, -16],
+  "segments": [
+    { "type": "bezier", "to": [160, 128], "c1": [72, 96], "c2": [176, 56], "speed": 1.8 },
+    { "type": "arc", "radius": 24, "degrees": 180, "dir": "cw", "speed": 1.8 },
+    { "type": "toSlot", "speed": 1.8 }
+  ]
+}
