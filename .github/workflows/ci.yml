@@ -125,8 +125,9 @@ jobs:
   # live. The hub owns this project's record there and writes it itself: its
   # `render-public-index.yml` fetches the published `build.json`, checks that it
   # is a clean release build of a real commit, rewrites the record and re-renders
-  # the page. It only looks on a push to its own repository, by hand, or once a
-  # week on Monday — so without this, a merge can sit unreported for six days.
+  # the page. It only looks on a push to its own repository, by hand, or on a
+  # daily schedule (PROJECT-STATUS-CONTRACT.md in sgwoods/public is the authority
+  # on when) — so without this, a merge can sit unreported for up to a day.
   # Nothing here writes to the hub or exports anything; it says "look now".
   #
   # PUBLIC_HUB_DISPATCH_TOKEN is a fine-grained personal access token owned by
@@ -162,7 +163,7 @@ jobs:
           PAGE_URL: ${{ needs.deploy.outputs.page_url }}
         run: |
           if [ -z "$HUB_TOKEN" ]; then
-            echo "::warning title=Portfolio hub not notified::Secret PUBLIC_HUB_DISPATCH_TOKEN is not set, so $HUB_REPOSITORY was not asked to re-read this build. The deployment itself succeeded; the hub will pick it up on its weekly schedule. See the comment above the notify-hub job for what the token needs."
+            echo "::warning title=Portfolio hub not notified::Secret PUBLIC_HUB_DISPATCH_TOKEN is not set, so $HUB_REPOSITORY was not asked to re-read this build. The deployment itself succeeded; the hub will pick it up on its daily schedule (see PROJECT-STATUS-CONTRACT.md in $HUB_REPOSITORY). See the comment above the notify-hub job for what the token needs."
             exit 0
           fi
 
