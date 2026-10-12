@@ -1,0 +1,18 @@
+{
+  "id": "molt-crack",
+  "wave": "square",
+  "duty": 0.25,
+  "envelope": [0.002, 0.12, 0.06],
+  "volume": 0.3,
+  "sequence": [
+    {
+      "wave": "noise",
+      "freq": [6000, 1800],
+      "duration": 0.04
+    },
+    {
+      "freq": [330, 1320],
+      "duration": 0.14
+    }
+  ]
+}

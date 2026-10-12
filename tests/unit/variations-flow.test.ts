@@ -160,6 +160,7 @@ describe('an edit to a shipped game makes a named game beside it', () => {
     expect(flow.games.map((game) => game.id)).toEqual([
       'classic',
       'spore-storm',
+      'mirage',
       'deep-sea',
       'swarm-remix',
       'classic-2',
@@ -377,6 +378,7 @@ describe('a variation a later build has shipped a game under the id of', () => {
     expect(flow.games.map((game) => game.id)).toEqual([
       'classic',
       'spore-storm',
+      'mirage',
       'deep-sea',
       'swarm-remix',
       '+deep-sea',

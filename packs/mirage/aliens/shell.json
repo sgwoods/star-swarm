@@ -1,0 +1,8 @@
+{
+  "id": "shell",
+  "role": "warden",
+  "sprite": "shell",
+  "score": { "base": 100 },
+  "dive": { "paths": ["dive-molt"] },
+  "abilities": [{ "type": "transform", "into": "stinger" }]
+}

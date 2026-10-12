@@ -1,0 +1,24 @@
+{
+  "id": "glass",
+  "role": "wing",
+  "sprite": "glass",
+  "score": {
+    "base": 80
+  },
+  "fire": {
+    "pattern": "straight",
+    "shotsPerDive": 1,
+    "cooldownFrames": 60
+  },
+  "dive": {
+    "paths": ["dive-reflect"]
+  },
+  "abilities": [
+    {
+      "type": "mirrorPlayer",
+      "mode": "opposite",
+      "delayFrames": 6,
+      "strength": 0.4
+    }
+  ]
+}

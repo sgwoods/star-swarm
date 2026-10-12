@@ -1,0 +1,10 @@
+{
+  "id": "dive-sting",
+  "mirror": true,
+  "segments": [
+    { "type": "arc", "radius": 16, "degrees": 120, "dir": "cw", "speed": 2.2 },
+    { "type": "aimAtPlayer", "speed": 2.6, "duration": 36 },
+    { "type": "arc", "radius": 40, "degrees": 50, "dir": "ccw", "speed": 2.6 },
+    { "type": "exitBottom", "speed": 2.6 }
+  ]
+}

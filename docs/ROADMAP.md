@@ -34,19 +34,15 @@ was never a deployment question:
 
 ## Next: Milestone 3 — configurable
 
-- **Ship: a game that uses the new six abilities.** The ability registry and all
-  six of its new abilities have landed — `transform` and `mirrorPlayer` last, once
-  what each means had been decided — and so have the playability checks in the
-  validator and a game that switches four of them on, `splitOnHit`, `shield`,
-  `teleport` and `spawnMinions`, with the sounds and effects their events want;
-  all of it moved to
-  [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#44-where-a-second-game-plugs-in)
-  ([§4.4](ARCHITECTURE.md#44-where-a-second-game-plugs-in) and
-  [§4.7](ARCHITECTURE.md#47-the-playability-pass)), which is where a thing that
-  exists is described. No installed pack will switch `transform` or `mirrorPlayer`
-  on until a variant does, along with the sound and effect `enemy-morphed` wants.
-
-Also in this milestone, because they are the same kind of work:
+The ability registry and all six of its new abilities have landed, and so have
+the playability checks in the validator and two games that switch all six on
+between them — Spore Storm with `splitOnHit`, `shield`, `teleport` and
+`spawnMinions`, Mirage with `transform` and `mirrorPlayer` — with the sounds and
+effects their events want. All of it has moved to
+[`docs/ARCHITECTURE.md`](ARCHITECTURE.md#44-where-a-second-game-plugs-in)
+([§4.4](ARCHITECTURE.md#44-where-a-second-game-plugs-in) and
+[§4.7](ARCHITECTURE.md#47-the-playability-pass)), which is where a thing that
+exists is described. What the milestone still owes is the same kind of work:
 
 - **Ship: a second game**, rather than a variant of this one — the Galaxian-lineage
   mode the captain's standing direction asks for. It will be another pack plus
@@ -73,7 +69,7 @@ fails validation for being unplayable rather than merely malformed, and a pack
 with a new ability plays without an engine change — the first met by the pack
 manager and the stage-sequence editor, the second by the validator's playability
 pass, and the third by `tests/sim/ability-pack.test.ts`. What the milestone still
-owes is the second game and a game that uses the new abilities.
+owes is the second game.
 
 ## Now: Milestone 4 — prompt forge
 

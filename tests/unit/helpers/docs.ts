@@ -640,6 +640,28 @@ function sporeAbility<T extends AlienAbility['type']>(type: T): Extract<AlienAbi
   throw new Error(`no packs/spore-storm alien declares ${type}`);
 }
 
+/** The game that uses the other two new abilities: its own formation, which it declares one of. */
+function mirageFormation(): Formation {
+  const formations = [...installedPack('mirage').formations.values()];
+  const formation = formations[0];
+  if (formation === undefined || formations.length !== 1) {
+    throw new Error(`packs/mirage declares ${String(formations.length)} formations, expected one`);
+  }
+  return formation;
+}
+
+/** One Mirage alien's parameters for an ability, off that alien's own document. */
+function mirageAbility<T extends AlienAbility['type']>(
+  alienId: string,
+  type: T,
+): Extract<AlienAbility, { type: T }> {
+  const found = installedPack('mirage')
+    .aliens.get(alienId)
+    ?.abilities.find((ability) => ability.type === type);
+  if (found === undefined) throw new Error(`packs/mirage/aliens/${alienId} declares no ${type}`);
+  return found as Extract<AlienAbility, { type: T }>;
+}
+
 /**
  * The forged pack's own stage sequence.
  *
@@ -760,6 +782,7 @@ export function counters(root = REPO_ROOT): ReadonlyMap<string, () => number> {
     ['autoplay.classicPersonas', () => personasOf('classic').length],
     ['autoplay.forgedPersonas', () => personasOf('deep-sea').length],
     ['autoplay.sporeStormPersonas', () => personasOf('spore-storm').length],
+    ['autoplay.miragePersonas', () => personasOf('mirage').length],
     [
       'autoplay.axes',
       () => Object.keys(personaSchema.shape).filter((key) => !PERSONA_LABELLING.has(key)).length,
@@ -935,6 +958,48 @@ export function counters(root = REPO_ROOT): ReadonlyMap<string, () => number> {
     ['sporeStorm.shieldHits', () => sporeAbility('shield').hits],
     ['sporeStorm.shieldRechargeFrames', () => sporeAbility('shield').rechargeFrames ?? 0],
     ['sporeStorm.spawnEveryFrames', () => sporeAbility('spawnMinions').everyFrames ?? 0],
+
+    /**
+     * The game that switches on the other two, read the same way — plus the
+     * tuning its README argues from, so a sentence saying how far behind a mirror
+     * runs cannot outlive the number it describes.
+     */
+    ['mirage.aliens', () => installedPack('mirage').aliens.size],
+    ['mirage.paths', () => installedPack('mirage').paths.size],
+    ['mirage.stages', () => installedPack('mirage').stages.size],
+    ['mirage.sprites', () => installedPack('mirage').sprites.size],
+    ['mirage.sounds', () => installedPack('mirage').sounds.size],
+    ['mirage.palette', () => installedPack('mirage').manifest.palette.length],
+    [
+      'mirage.sequenceNormal',
+      () => installedPack('mirage').manifest.stageSequence.normal.rows.length,
+    ],
+    [
+      'mirage.sequenceChallenge',
+      () => installedPack('mirage').manifest.stageSequence.challenge.rows.length,
+    ],
+    ['mirage.formationSlots', () => mirageFormation().slots.length],
+    ['mirage.formationCaptiveSlots', () => mirageFormation().captiveSlots.length],
+    ['mirage.formationColumns', () => formationAxes(mirageFormation()).columns.length],
+    ['mirage.formationRows', () => formationAxes(mirageFormation()).rows.length],
+    [
+      'mirage.abilityAliens',
+      () =>
+        [...installedPack('mirage').aliens.values()].filter((alien) => alien.abilities.length > 0)
+          .length,
+    ],
+    ['mirage.boundSounds', () => Object.keys(installedPack('mirage').manifest.sounds).length],
+    ['mirage.boundEffects', () => Object.keys(installedPack('mirage').manifest.effects).length],
+    ['mirage.echoDelayFrames', () => mirageAbility('echo', 'mirrorPlayer').delayFrames],
+    ['mirage.glassDelayFrames', () => mirageAbility('glass', 'mirrorPlayer').delayFrames],
+    [
+      'mirage.echoStrengthPercent',
+      () => Math.round(mirageAbility('echo', 'mirrorPlayer').strength * 100),
+    ],
+    [
+      'mirage.glassStrengthPercent',
+      () => Math.round(mirageAbility('glass', 'mirrorPlayer').strength * 100),
+    ],
 
     /* The rules layer. */
     ['rules.ranks', () => Object.keys(classicRules().difficulty.ranks).length],

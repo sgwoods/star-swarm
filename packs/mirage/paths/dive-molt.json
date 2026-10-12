@@ -1,0 +1,12 @@
+{
+  "id": "dive-molt",
+  "mirror": true,
+  "segments": [
+    { "type": "arc", "radius": 20, "degrees": 150, "dir": "cw", "speed": 1.4 },
+    { "type": "wait", "frames": 18 },
+    { "type": "trigger", "ability": "transform" },
+    { "type": "wait", "frames": 14 },
+    { "type": "aimAtPlayer", "speed": 2.4, "duration": 40 },
+    { "type": "exitBottom", "speed": 2.4 }
+  ]
+}

@@ -1,0 +1,166 @@
+{
+  "id": "mirage",
+  "name": "Mirage",
+  "version": "0.1.0",
+  "description": "A game that uses the other two new abilities: shells that change into stingers mid-dive, and aliens that copy the fighter's movement, one the way it went and one the other way. An overlay on Classic for the rules, the badges and the challenge half of the stage sequence.",
+  "roles": {
+    "drone": {
+      "label": "Echo"
+    },
+    "wing": {
+      "label": "Glass"
+    },
+    "warden": {
+      "label": "Shell and stinger"
+    }
+  },
+  "formations": {
+    "mirage24": {
+      "id": "mirage24",
+      "grid": {
+        "originX": 32,
+        "originY": 40,
+        "columnSpacing": 8,
+        "rowSpacing": 4
+      },
+      "slots": [
+        {
+          "row": 0,
+          "column": 6,
+          "role": "warden"
+        },
+        {
+          "row": 0,
+          "column": 12,
+          "role": "warden"
+        },
+        {
+          "row": 5,
+          "column": 2,
+          "role": "warden"
+        },
+        {
+          "row": 5,
+          "column": 8,
+          "role": "warden"
+        },
+        {
+          "row": 5,
+          "column": 10,
+          "role": "warden"
+        },
+        {
+          "row": 5,
+          "column": 16,
+          "role": "warden"
+        },
+        {
+          "row": 10,
+          "column": 2,
+          "role": "wing"
+        },
+        {
+          "row": 10,
+          "column": 4,
+          "role": "wing"
+        },
+        {
+          "row": 10,
+          "column": 6,
+          "role": "wing"
+        },
+        {
+          "row": 10,
+          "column": 8,
+          "role": "wing"
+        },
+        {
+          "row": 10,
+          "column": 10,
+          "role": "wing"
+        },
+        {
+          "row": 10,
+          "column": 12,
+          "role": "wing"
+        },
+        {
+          "row": 10,
+          "column": 14,
+          "role": "wing"
+        },
+        {
+          "row": 10,
+          "column": 16,
+          "role": "wing"
+        },
+        {
+          "row": 15,
+          "column": 0,
+          "role": "drone"
+        },
+        {
+          "row": 15,
+          "column": 2,
+          "role": "drone"
+        },
+        {
+          "row": 15,
+          "column": 4,
+          "role": "drone"
+        },
+        {
+          "row": 15,
+          "column": 6,
+          "role": "drone"
+        },
+        {
+          "row": 15,
+          "column": 8,
+          "role": "drone"
+        },
+        {
+          "row": 15,
+          "column": 10,
+          "role": "drone"
+        },
+        {
+          "row": 15,
+          "column": 12,
+          "role": "drone"
+        },
+        {
+          "row": 15,
+          "column": 14,
+          "role": "drone"
+        },
+        {
+          "row": 15,
+          "column": 16,
+          "role": "drone"
+        },
+        {
+          "row": 15,
+          "column": 18,
+          "role": "drone"
+        }
+      ]
+    }
+  },
+  "sounds": {
+    "enemy-morphed": "molt-crack"
+  },
+  "effects": {
+    "enemy-morphed": {
+      "sprite": "fx-molt",
+      "offsetX": -4,
+      "offsetY": -4
+    }
+  },
+  "stageSequence": {
+    "normal": {
+      "rows": ["mirage-1", "mirage-2", "mirage-3"],
+      "repeatLast": 2
+    }
+  }
+}

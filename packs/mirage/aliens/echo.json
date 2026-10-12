@@ -1,0 +1,9 @@
+{
+  "id": "echo",
+  "role": "drone",
+  "sprite": "echo",
+  "score": { "base": 50 },
+  "fire": { "pattern": "straight", "shotsPerDive": 1, "cooldownFrames": 60 },
+  "dive": { "paths": ["dive-shadow"] },
+  "abilities": [{ "type": "mirrorPlayer", "mode": "track", "delayFrames": 12, "strength": 0.4 }]
+}

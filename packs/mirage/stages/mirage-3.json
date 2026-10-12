@@ -1,0 +1,148 @@
+{
+  "id": "mirage-3",
+  "kind": "normal",
+  "formation": "mirage24",
+  "waves": [
+    {
+      "at": 0,
+      "entryPath": "entry-rise",
+      "spacing": 10,
+      "slots": [
+        {
+          "alien": "glass",
+          "home": 6,
+          "mirror": false
+        },
+        {
+          "alien": "glass",
+          "home": 13,
+          "mirror": true
+        },
+        {
+          "alien": "glass",
+          "home": 7,
+          "mirror": false
+        },
+        {
+          "alien": "glass",
+          "home": 12,
+          "mirror": true
+        },
+        {
+          "alien": "shell",
+          "home": 2,
+          "mirror": false
+        },
+        {
+          "alien": "shell",
+          "home": 5,
+          "mirror": true
+        },
+        {
+          "alien": "shell",
+          "home": 3,
+          "mirror": false
+        },
+        {
+          "alien": "shell",
+          "home": 4,
+          "mirror": true
+        }
+      ]
+    },
+    {
+      "at": 150,
+      "entryPath": "entry-seep",
+      "spacing": 10,
+      "slots": [
+        {
+          "alien": "echo",
+          "home": 14,
+          "mirror": false
+        },
+        {
+          "alien": "echo",
+          "home": 23,
+          "mirror": true
+        },
+        {
+          "alien": "echo",
+          "home": 15,
+          "mirror": false
+        },
+        {
+          "alien": "echo",
+          "home": 22,
+          "mirror": true
+        },
+        {
+          "alien": "echo",
+          "home": 16,
+          "mirror": false
+        },
+        {
+          "alien": "echo",
+          "home": 21,
+          "mirror": true
+        },
+        {
+          "alien": "echo",
+          "home": 17,
+          "mirror": false
+        },
+        {
+          "alien": "echo",
+          "home": 20,
+          "mirror": true
+        },
+        {
+          "alien": "echo",
+          "home": 18,
+          "mirror": false
+        },
+        {
+          "alien": "echo",
+          "home": 19,
+          "mirror": true
+        }
+      ]
+    },
+    {
+      "at": 300,
+      "entryPath": "entry-drop",
+      "spacing": 10,
+      "slots": [
+        {
+          "alien": "shell",
+          "home": 0,
+          "mirror": false
+        },
+        {
+          "alien": "shell",
+          "home": 1,
+          "mirror": true
+        },
+        {
+          "alien": "glass",
+          "home": 8,
+          "mirror": false
+        },
+        {
+          "alien": "glass",
+          "home": 11,
+          "mirror": true
+        },
+        {
+          "alien": "glass",
+          "home": 9,
+          "mirror": false
+        },
+        {
+          "alien": "glass",
+          "home": 10,
+          "mirror": true
+        }
+      ]
+    }
+  ]
+}

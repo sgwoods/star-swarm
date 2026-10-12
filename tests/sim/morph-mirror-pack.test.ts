@@ -7,7 +7,7 @@
  * real loader, layered over Classic by the real registry and handed to the real
  * world through the real stage source — and an autoplay persona, which sees only
  * what a player can, flies it. Nothing under `src/` names it, and no shipped
- * variant plays it: a game that switches the new abilities on is separate work.
+ * variant plays it: the game a player can start with both is `packs/mirage/`.
  *
  * What a run is asked is whether each ability happened, whether it did what its
  * definition says while somebody was playing — a changed enemy scores as what it

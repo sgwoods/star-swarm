@@ -1,0 +1,8 @@
+{
+  "id": "stinger",
+  "role": "warden",
+  "sprite": "stinger",
+  "score": { "base": 160 },
+  "fire": { "pattern": "aimed", "shotsPerDive": 2, "cooldownFrames": 40 },
+  "dive": { "paths": ["dive-sting"] }
+}
