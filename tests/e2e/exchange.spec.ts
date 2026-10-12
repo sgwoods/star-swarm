@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
 
-import { reachAttract } from './harness.js';
+import { leaveSettings, openSettings, reachAttract } from './harness.js';
 
 /**
  * A variation carried out of one browser and into another as text, played with
@@ -56,8 +56,7 @@ async function spell(page: Page, name: string): Promise<void> {
 
 /** From attract: make a variation of CLASSIC with Deep Sea switched on, named `name`. */
 async function makeVariation(page: Page, name: string): Promise<void> {
-  await tap(page, 'Escape');
-  await phase(page, 'settings');
+  await openSettings(page);
   for (
     let i = 0;
     i < 10 && (await page.evaluate(() => window.starSwarm?.game)) !== 'classic';
@@ -131,8 +130,7 @@ test.describe('a variation, as text', () => {
     expect(await page.evaluate(() => window.starSwarm?.settings.variations)).toEqual([]);
 
     // Import: the box appears empty and focused, and a paste reaches the card.
-    await tap(page, 'Escape');
-    await phase(page, 'settings');
+    await openSettings(page);
     await toRow(page, 'import');
     await tap(page, 'ArrowRight');
     await phase(page, 'import');
@@ -156,7 +154,7 @@ test.describe('a variation, as text', () => {
     expect(await page.evaluate(() => window.starSwarm?.setAside)).toBe('');
 
     // And it plays as it was made.
-    await tap(page, 'Enter');
+    await leaveSettings(page);
     await phase(page, 'attract');
     await tap(page, 'Enter');
     await phase(page, 'playing');

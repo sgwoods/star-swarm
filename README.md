@@ -17,9 +17,12 @@ Press **Enter** to start, **←/→** to move, **Space** to fire. **P** pauses, 
 start before the arrows do anything.
 
 Every menu is worked the same way: **↑/↓** move between rows, **←/→** change the
-row you are on, **Enter** takes it and **Esc** goes back. **Esc** from attract
-opens the settings, where the difficulty, autoplay, sound, controls and CRT
-filter live.
+row you are on, **Enter** takes it and **Esc** goes back — on every screen. From
+a game's attract screen **Esc** climbs to the game list, which is the top, so
+**Esc** there does nothing; the list's last row, **SETTINGS**, is where the
+difficulty, autoplay, sound, controls and CRT filter live. A game that ends leaves
+you on that game's attract screen, not on the list. A build with one game has no
+list, so there **Esc** from attract opens the settings directly.
 
 The top-right corner of the screen says which build you are looking at — the
 commit, whether the tree was modified, and the date — and a page that is open

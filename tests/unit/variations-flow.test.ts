@@ -25,6 +25,7 @@ import { installedPacks, shippedVariants, shippedVariantSources } from '../helpe
 
 const START = frameOf('start');
 const MENU = frameOf('menu');
+const UP = frameOf('up');
 const DOWN = frameOf('down');
 const LEFT = frameOf('left');
 const RIGHT = frameOf('right');
@@ -71,12 +72,22 @@ function cabinet(storage: KeyedStorage = createMemoryStorage()): {
 function toSettings(flow: GameFlow): void {
   if (flow.phase === 'variant-select') press(flow, START);
   expect(flow.phase).toBe('attract');
+  // Up to the game list, then its last row, SETTINGS.
   press(flow, MENU);
+  expect(flow.phase).toBe('variant-select');
+  for (let step = 0; step < 10 && flow.variantMenu?.onSettings !== true; step += 1) press(flow, UP);
+  expect(flow.variantMenu?.onSettings).toBe(true);
+  press(flow, START);
   expect(flow.phase).toBe('settings');
 }
 
-/** Back out of the settings to attract. */
+/** Back out of the settings to the game list, and from it into the chosen game's attract. */
 function leaveSettings(flow: GameFlow): void {
+  press(flow, START);
+  expect(flow.phase).toBe('variant-select');
+  for (let step = 0; step < 10 && flow.variantMenu?.chosen?.id !== flow.game.id; step += 1) {
+    press(flow, UP);
+  }
   press(flow, START);
   expect(flow.phase).toBe('attract');
 }
@@ -237,7 +248,7 @@ describe('two variations at once, kept across a fresh cabinet', () => {
     expect(flow.game.id).toBe('classic-3');
     expect(flow.variant.packs).toEqual(['classic', 'swarm-remix']);
     // The selector opens on it, and says whose it is.
-    expect(flow.variantMenu?.chosen.id).toBe('classic-3');
+    expect(flow.variantMenu?.chosen?.id).toBe('classic-3');
     expect(flow.variantMenu?.note).toBe('YOURS, FROM STAR SWARM');
   });
 });

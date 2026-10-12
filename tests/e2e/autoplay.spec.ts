@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
 
-import { reachAttract } from './harness.js';
+import { leaveSettings, openSettings, reachAttract } from './harness.js';
 
 /**
  * Autoplay in a real browser (`docs/ARCHITECTURE.md` §7).
@@ -49,13 +49,13 @@ async function toRow(page: Page, row: string): Promise<void> {
 /**
  * Open the settings menu and choose `persona` on the `AUTOPLAY` row.
  *
- * The whole way in, done the way a person does it: escape, cursor down to the row,
- * right until the persona shows, escape again.
+ * The whole way in, done the way a person does it: escape up to the game list,
+ * its `SETTINGS` row, cursor down to the row, right until the persona shows, and
+ * back out through the list into the game.
  */
 async function chooseAutoplay(page: Page, persona: string): Promise<void> {
   await reachAttract(page);
-  await tap(page, 'Escape');
-  await page.waitForFunction(() => window.starSwarm?.phase === 'settings');
+  await openSettings(page);
 
   await toRow(page, 'autoplay');
   for (let i = 0; i < 8; i += 1) {
@@ -64,7 +64,7 @@ async function chooseAutoplay(page: Page, persona: string): Promise<void> {
   }
   expect(await page.evaluate(() => window.starSwarm?.autoplay)).toBe(persona);
 
-  await tap(page, 'Escape');
+  await leaveSettings(page);
 }
 
 test('the shipped game offers the four personas', async ({ page }) => {
@@ -172,8 +172,7 @@ test('the AUTOPLAY row says who is flying and can turn it off again', async ({ p
   await tap(page, 'Space');
   await page.waitForFunction(() => window.starSwarm?.phase === 'attract');
 
-  await tap(page, 'Escape');
-  await page.waitForFunction(() => window.starSwarm?.phase === 'settings');
+  await openSettings(page);
   await toRow(page, 'autoplay');
   // The row remembers nothing a human turned off: it reads OFF, and the note says
   // what the row is for.

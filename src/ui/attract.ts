@@ -318,26 +318,37 @@ const PROMPT_Y = 226;
 export const ATTRACT_PROMPT = keyLine([KEY.ok, 'START']);
 
 /**
+ * What `ESC` does from attract, as the card's last line says it: up to the game
+ * list, where the settings are a row — or, in a build with one game and so no list,
+ * straight to the settings (`./keys.ts`).
+ */
+export const ATTRACT_BACK = Object.freeze({
+  list: keyLine([KEY.back, 'GAMES, SETTINGS']),
+  settings: keyLine([KEY.back, 'SETTINGS']),
+});
+
+/**
  * The title card's keys, in the order they are drawn: playing first, then holding
- * and leaving a game, then the settings — where difficulty and autoplay live, and
- * the line that answers "how do I watch it play itself" from the persona tag below.
+ * and leaving a game, then the way back — to the list of games and the settings,
+ * where difficulty and autoplay live, and the line that answers "how do I watch it
+ * play itself" from the persona tag below.
  *
  * Written with `keyLine` like every card's help, so this screen and the cards a
  * player meets next name a key the same way. It is the one screen that names the
  * fire key, because it is the one that teaches the game; it names the key the
  * player's own control scheme binds.
  */
-export function attractKeys(scheme: ControlScheme): readonly string[] {
+export function attractKeys(scheme: ControlScheme, gameList: boolean): readonly string[] {
   return [
     keyLine([KEY.values, 'MOVE'], [fireKeyFor(scheme), 'FIRE']),
     keyLine([KEY.pause, 'PAUSE'], [KEY.exit, 'EXIT']),
-    keyLine([KEY.back, 'SETTINGS']),
+    gameList ? ATTRACT_BACK.list : ATTRACT_BACK.settings,
   ];
 }
 
 /** The title card's height: the title, its keys, and air below them. */
-export function titleCardHeight(scheme: ControlScheme): number {
-  return KEYS_TOP + attractKeys(scheme).length * KEYS_PITCH + 4;
+export function titleCardHeight(scheme: ControlScheme, gameList: boolean): number {
+  return KEYS_TOP + attractKeys(scheme, gameList).length * KEYS_PITCH + 4;
 }
 
 export interface AttractOptions {
@@ -349,6 +360,8 @@ export interface AttractOptions {
   readonly cardSteps?: number;
   /** The control scheme in force, so the card names the fire key it binds. */
   readonly controls?: ControlScheme;
+  /** Whether `ESC` climbs to a game list, or — one game, no list — opens the settings. */
+  readonly gameList?: boolean;
 }
 
 /**
@@ -364,11 +377,12 @@ export function drawAttract(ctx: CanvasRenderingContext2D, options: AttractOptio
     persistent = true,
     cardSteps = CARD_STEPS,
     controls = DEFAULT_SETTINGS.controls,
+    gameList = false,
   } = options;
   const centre = LOGICAL_WIDTH / 2;
 
   if (attractCard(steps, cardSteps) === 'title') {
-    drawCentredPanel(ctx, centre, CARD_TOP, CARD_WIDTH, titleCardHeight(controls));
+    drawCentredPanel(ctx, centre, CARD_TOP, CARD_WIDTH, titleCardHeight(controls, gameList));
     // A one-pixel offset copy under the title: the cheapest arcade shadow, and
     // it keeps the letters legible whatever is behind them.
     drawText(ctx, 'STAR SWARM', centre + 1, CARD_TOP + 13, {
@@ -376,12 +390,12 @@ export function drawAttract(ctx: CanvasRenderingContext2D, options: AttractOptio
       align: 'center',
     });
     drawText(ctx, 'STAR SWARM', centre, CARD_TOP + 12, { colour: TITLE_COLOUR, align: 'center' });
-    // Pause and exit are the keys a cabinet has none of, and the settings are where
-    // autoplay, difficulty and the rest live: a control nobody can find is
-    // half-shipped, and the pause card can only name itself once you have already
-    // pressed the key that raises it. `M` opens the settings as well; one key is
-    // enough to name.
-    attractKeys(controls).forEach((line, index) => {
+    // Pause and exit are the keys a cabinet has none of, and the list is where the
+    // other games and the settings — autoplay, difficulty and the rest — are: a
+    // control nobody can find is half-shipped, and the pause card can only name
+    // itself once you have already pressed the key that raises it. `M` goes back
+    // as well; one key is enough to name.
+    attractKeys(controls, gameList).forEach((line, index) => {
       drawText(ctx, line, centre, CARD_TOP + KEYS_TOP + index * KEYS_PITCH, {
         colour: HINT_COLOUR,
         align: 'center',

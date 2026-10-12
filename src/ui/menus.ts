@@ -89,17 +89,25 @@ export interface MenuGame {
 /* -------------------------------------------------------------------------- */
 
 /**
- * A cursor over the games on offer.
+ * A cursor over the games on offer, and the `SETTINGS` row under them.
  *
  * Wrapping, because a list of two with a cursor that stops at the ends is a list
  * the player has to think about.
+ *
+ * **The list is the top of the front end**, and the settings hang from it as one
+ * more row rather than from a key of their own: `ESC` from attract climbs to here
+ * (`./keys.ts`), and from here `ENTER` on `SETTINGS` opens them. So the cursor
+ * walks one list of `variants.length + 1` places, the last of which is no game.
  */
 export interface VariantMenu<T extends MenuGame = MenuGame> {
   readonly variants: readonly T[];
+  /** Where the cursor is: an index into `variants`, or `variants.length` on `SETTINGS`. */
   readonly index: number;
-  /** The game under the cursor. */
-  readonly chosen: T;
-  /** The line under the list, for the game under the cursor. */
+  /** The game under the cursor, or `undefined` when the cursor is on `SETTINGS`. */
+  readonly chosen: T | undefined;
+  /** True when the cursor is on the `SETTINGS` row. */
+  readonly onSettings: boolean;
+  /** The line under the list, for the row under the cursor. */
   readonly note: string;
   previous: () => void;
   next: () => void;
@@ -109,6 +117,8 @@ export interface VariantMenuOptions<T extends MenuGame> {
   readonly variants: readonly T[];
   /** Which to start on — the remembered choice. Unknown ids start at the first. */
   readonly selected?: string | undefined;
+  /** Start on the `SETTINGS` row instead: the way back from the settings lands on it. */
+  readonly onSettings?: boolean;
   /**
    * The line under the list for one game. Asked only for the game under the
    * cursor, so a variation is judged when the player reaches it rather than every
@@ -127,14 +137,15 @@ export function createVariantMenu<T extends MenuGame>(
   options: VariantMenuOptions<T>,
 ): VariantMenu<T> {
   const { variants, noteOf = (game: T) => game.description ?? '' } = options;
-  const first = variants[0];
-  if (first === undefined) throw new Error('a variant menu needs at least one variant');
+  if (variants.length === 0) throw new Error('a variant menu needs at least one variant');
 
+  // Every game, then the settings row.
+  const places = variants.length + 1;
   const remembered = variants.findIndex((variant) => variant.id === options.selected);
-  let index = remembered >= 0 ? remembered : 0;
+  let index = options.onSettings === true ? variants.length : Math.max(0, remembered);
 
   const move = (delta: number): void => {
-    index = (index + delta + variants.length) % variants.length;
+    index = (index + delta + places) % places;
   };
 
   return {
@@ -142,11 +153,15 @@ export function createVariantMenu<T extends MenuGame>(
     get index(): number {
       return index;
     },
-    get chosen(): T {
-      return variants[index] ?? first;
+    get chosen(): T | undefined {
+      return variants[index];
+    },
+    get onSettings(): boolean {
+      return index === variants.length;
     },
     get note(): string {
-      return noteOf(variants[index] ?? first);
+      const game = variants[index];
+      return game === undefined ? MENU_TEXT.selectSettingsNote : noteOf(game);
     },
     previous: () => {
       move(-1);
@@ -555,9 +570,17 @@ export const MENU_TEXT = Object.freeze({
   /** The legend when the list holds the player's own games, and when it holds both. */
   selectYours: '+ YOURS',
   selectBoth: '* DEMONSTRATION  + YOURS',
+  /** The row under the games that opens the settings, and the line under it. */
+  selectSettings: 'SETTINGS',
+  selectSettingsNote: 'SOUND, CONTROLS AND MORE',
   /** The two lines of help on each card, in the one voice `./keys.ts` writes. */
   selectKeys: keyLine([KEY.rows, 'MOVE'], [KEY.ok, 'CHOOSES']),
-  selectBack: keyLine([KEY.back, 'SETTINGS']),
+  /**
+   * What `ESC` does on the one screen with nothing above it: nothing, said so.
+   * Every other screen climbs towards this one, so a press here is a player
+   * looking for a way up, and the line tells them they are already at the top.
+   */
+  selectBack: keyLine([KEY.back, 'NOTHING ABOVE THIS']),
   settingsHeading: 'SETTINGS',
   settingsKeys: keyLine([KEY.rows, 'MOVE'], [KEY.values, 'CHANGE']),
   settingsDone: keyLine([KEY.ok, 'DONE'], [KEY.back, 'BACK']),
@@ -722,6 +745,15 @@ export function selectRowText(game: MenuGame): string {
 }
 
 /**
+ * Every row of the selector, in order: each game's {@link selectRowText}, then
+ * `SETTINGS`. A demonstration and a player's own game are each marked on their own
+ * row, not only in a legend: neither may read like part of the shipped line-up.
+ */
+export function selectRows(menu: VariantMenu): readonly string[] {
+  return [...menu.variants.map(selectRowText), MENU_TEXT.selectSettings];
+}
+
+/**
  * How a line under the settings list is inked. See `./pause.ts` for why the
  * lines are a tone rather than a colour.
  */
@@ -789,26 +821,19 @@ export function drawVariantSelect(
   // The chosen game's note, the legend if any, and the two control lines.
   const lines = variantSelectLines(marks);
   const cells = cellsIn(SELECT_CARD_WIDTH);
-  const view = windowOf(menu.variants, menu.index, SELECT_WINDOW);
+  // The games, then the settings row: one list, one cursor, one window.
+  const view = windowOf(selectRows(menu), menu.index, SELECT_WINDOW);
 
   drawCentredPanel(ctx, x, y - 6, SELECT_CARD_WIDTH, cardHeight(view.rows.length, lines));
   drawText(ctx, MENU_TEXT.selectHeading, x, y + 4, { colour: HEADING_COLOUR, align: 'center' });
 
   const lit = Math.floor(steps / MENU_BLINK_STEPS) % 2 === 0;
-  view.rows.forEach((variant, index) => {
+  view.rows.forEach((text, index) => {
     const live = index === view.index;
-    // A demonstration and a player's own game are each marked on their own row,
-    // not only in a legend: neither may read like part of the shipped line-up.
-    drawText(
-      ctx,
-      fitText(selectRowText(variant), cells),
-      x,
-      y + HEADING_GAP + 4 + index * ROW_PITCH,
-      {
-        colour: live ? (lit ? CURSOR_COLOUR : VALUE_COLOUR) : DIM_COLOUR,
-        align: 'center',
-      },
-    );
+    drawText(ctx, fitText(text, cells), x, y + HEADING_GAP + 4 + index * ROW_PITCH, {
+      colour: live ? (lit ? CURSOR_COLOUR : VALUE_COLOUR) : DIM_COLOUR,
+      align: 'center',
+    });
   });
   const markX = Math.round(x + SELECT_CARD_WIDTH / 2) - PADDING + 1;
   if (view.above) drawText(ctx, MORE_ABOVE, markX, y + HEADING_GAP + 4, { colour: DIM_COLOUR });

@@ -101,8 +101,10 @@ Milestone 3's front-end half landed next:
   layer subscribes, and a flow that reached for a canvas would be the same mistake
   as a sim that did. The selector is entered **only when there is more than one
   variant** — a one-game cabinet boots straight into attract, with no screen to
-  dismiss — and later games in a session begin from attract, as a cabinet does. The
-  way back to the list is the settings screen's `GAME` row.
+  dismiss — and later games in a session begin from attract, as a cabinet does. It
+  is the top of the front end: **Esc** from attract climbs to it, Esc on it does
+  nothing, and its last row, `SETTINGS`, opens the settings, which close back onto
+  that row. With one game, Esc from attract opens the settings instead.
 - **`settings.ts` holds no number the simulation steps.** The difficulty value is a
   _preset id_; `rankFor` in `src/content/variants.ts` turns it into a rank and the
   rules layer resolves that rank into whole tables. There is nowhere in the shape
@@ -134,8 +136,8 @@ And then the pause, which is two more phases and no simulation change at all:
   fire; cancelling lands in `paused`, which is where an ordinary pause lands.
   Confirming discards the run — the score does not reach the high-score table —
   and the card says the score, and the place it would have taken, so nothing is
-  discarded silently. Home is attract in both cabinets, because the selector is a
-  boot-time screen that a one-variant build never enters.
+  discarded silently. Home is attract in both cabinets: the game being left is the
+  one the player stays in, and a one-variant build never enters the selector.
 
 And the autoplay pilot, which is a subscriber like everything else here:
 
@@ -209,7 +211,9 @@ And one scheme for working all of those cards:
 
 - **`keys.ts` is how every card is worked**: up and down move between rows, left
   and right change the row under the cursor, Enter (or fire) takes and Esc goes
-  back; a card with one line of choices answers every direction. `cardPress` is
+  back — on every screen, climbing from attract to the selector, which is the top
+  and where Esc does nothing; a card with one line of choices answers every
+  direction. `cardPress` is
   what `flow.ts` reads on every card and `keyLine` is the one way a card writes
   its help, so neither the behaviour nor the voice can drift card by card. The
   exit key is left out of both on purpose — it opens the exit card and cancels it,

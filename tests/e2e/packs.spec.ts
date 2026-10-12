@@ -1,7 +1,7 @@
 import { expect, type Page, test } from '@playwright/test';
 
 import { PLACEHOLDER_COLOURS } from '../../src/render/scene.js';
-import { reachAttract } from './harness.js';
+import { leaveSettings, openSettings as openFromAttract, reachAttract } from './harness.js';
 
 /**
  * The pack manager and the stage-sequence editor, played in a real browser with
@@ -32,8 +32,7 @@ async function tap(page: Page, key: string): Promise<void> {
 async function openSettings(page: Page): Promise<void> {
   await reachAttract(page);
   expect(await page.evaluate(() => window.starSwarm?.game)).toBe('classic');
-  await tap(page, 'Escape');
-  await page.waitForFunction(() => window.starSwarm?.phase === 'settings');
+  await openFromAttract(page);
 }
 
 /** Move the settings cursor to a row, then press right: the row opens its card. */
@@ -72,7 +71,7 @@ async function keepNamed(page: Page): Promise<void> {
 
 /** Close the settings and start a game on what is in force. */
 async function play(page: Page): Promise<void> {
-  await tap(page, 'Enter');
+  await leaveSettings(page);
   await page.waitForFunction(() => window.starSwarm?.phase === 'attract');
   await tap(page, 'Enter');
   await page.waitForFunction(() => window.starSwarm?.phase === 'playing');
@@ -230,8 +229,7 @@ test('an older build’s stored list naming a pack this build lacks is kept, set
 
   await tap(page, 'Enter');
   await page.waitForFunction(() => window.starSwarm?.phase === 'attract');
-  await tap(page, 'Escape');
-  await page.waitForFunction(() => window.starSwarm?.phase === 'settings');
+  await openFromAttract(page);
   await openCard(page, 'packs', 'packs');
   expect(await page.evaluate(() => window.starSwarm?.editorRows)).toContain('moon-base=MISSING');
 });

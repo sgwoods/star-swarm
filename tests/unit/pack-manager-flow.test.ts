@@ -68,8 +68,24 @@ function toSettings(flow: GameFlow): void {
   if (flow.phase === 'variant-select') press(flow, START);
   expect(flow.phase).toBe('attract');
   expect(flow.variant.id).toBe('classic');
+  // Up to the game list, then its last row, SETTINGS.
   press(flow, MENU);
+  expect(flow.phase).toBe('variant-select');
+  for (let step = 0; step < 10 && flow.variantMenu?.onSettings !== true; step += 1) press(flow, UP);
+  expect(flow.variantMenu?.onSettings).toBe(true);
+  press(flow, START);
   expect(flow.phase).toBe('settings');
+}
+
+/** Back out of the settings to the game list, and from it into the chosen game's attract. */
+function leaveSettings(flow: GameFlow): void {
+  press(flow, START);
+  expect(flow.phase).toBe('variant-select');
+  for (let step = 0; step < 10 && flow.variantMenu?.chosen?.id !== flow.game.id; step += 1) {
+    press(flow, UP);
+  }
+  press(flow, START);
+  expect(flow.phase).toBe('attract');
 }
 
 /** Move the settings cursor to a row and press right on it. */
@@ -143,8 +159,7 @@ describe('composing a list, keeping it, and playing it', () => {
     // The attract demo behind the card is already the mix.
     expect(flow.world.content?.stage.id).toBe('reef-1');
 
-    press(flow, START);
-    expect(flow.phase).toBe('attract');
+    leaveSettings(flow);
     press(flow, START);
     expect(flow.phase).toBe('playing');
     expect(flow.world.content?.stage.id).toBe('reef-1');
@@ -227,7 +242,12 @@ function holding(stored: VariationDocument): ReturnType<typeof cabinet> {
 function toSettingsOver(flow: GameFlow): void {
   if (flow.phase === 'variant-select') press(flow, START);
   expect(flow.phase).toBe('attract');
+  // Up to the game list, then its last row, SETTINGS.
   press(flow, MENU);
+  expect(flow.phase).toBe('variant-select');
+  for (let step = 0; step < 10 && flow.variantMenu?.onSettings !== true; step += 1) press(flow, UP);
+  expect(flow.variantMenu?.onSettings).toBe(true);
+  press(flow, START);
   expect(flow.phase).toBe('settings');
 }
 
@@ -307,7 +327,7 @@ describe('the STAGES row opens the stage-sequence editor', () => {
     expect(flow.variant.stages).toEqual(['reef-2', 'reef-2', 'reef-3']);
     expect(flow.settingsMenu?.row).toMatchObject({ id: 'stages', value: 'MINE: 3' });
 
-    press(flow, START);
+    leaveSettings(flow);
     press(flow, START);
     expect(flow.phase).toBe('playing');
     expect(flow.world.content?.stage.id).toBe('reef-2');

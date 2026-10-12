@@ -87,7 +87,8 @@ npm run dev            # http://localhost:5173
 Then press **Enter** (or **1**) to start a game, **←/→** or **A/D** to move, and
 **Space** or **Z** to fire. Fire is an auto-repeat button, as it is on the
 cabinet: hold it down, and a shot leaves whenever the two-shot cap frees a slot.
-**Esc** (or **M**) opens the settings menu from attract mode. **P** pauses a game
+**Esc** (or **M**) goes back from attract to the game list, whose last row,
+`SETTINGS`, opens the settings menu. **P** pauses a game
 and **X** leaves one, after asking. The game boots into the start-up selector —
 more than one game ships — and then into _attract mode_, so nothing responds to the
 arrows until you have pressed start.
@@ -98,7 +99,9 @@ under the cursor, **Enter** takes what is highlighted and **Esc** goes back. Fir
 takes, too. A card with one line of choices — the game list, the exit card's two
 words, an initial being entered — answers every direction. Taking a game on the
 selector lands on that game's attract screen, and **Enter** there plays it.
-[§6](#working-a-card) has the scheme and why.
+**Esc** is back on every screen, and the game list is the top: from attract it
+climbs to the list, and on the list it does nothing. [§6](#working-a-card) has the
+scheme and why.
 
 ### Supported Node versions
 
@@ -286,7 +289,7 @@ variant selector, attract, the settings menu, the pack manager, the
 stage-sequence editor and the naming, delete, export and import cards it opens, playing, paused,
 the exit confirmation, the between-stage challenge card, game over, results and
 high-score entry. The cabinet boots into the selector when there is more than one game to
-choose — the shipped games and the player's variations — and into attract when there is not; behind the cards the demo is the _real_
+choose — the shipped games and the player's variations — and into attract when there is not; **Esc** from attract climbs back to the selector, whose last row opens the settings, or opens the settings directly when there is no selector. Behind the cards the demo is the _real_
 simulation, flown in turn by the game's own autoplay personas (§7) — or, for a game
 that declares none, replaying a hand-written input log; start begins a game; three fighters
 lost ends it into the game-over banner, the hit-ratio results card, and then
@@ -353,10 +356,10 @@ screen saying nothing about which key changes a row or which one leaves.
 the table records games played out, and a run abandoned halfway is not one. The
 other half of that decision is that nothing is discarded _silently_ — the card
 names the score, and when the table would have taken it, the place it would have
-taken. **Home is attract** in both cabinets: the selector is a boot-time screen
-and is never entered at all when one variant is installed, so it cannot be what
-leaving a game means; attract is already where a finished game ends up, and the
-way back to the list is the settings screen's `GAME` row.
+taken. **Home is attract** in both cabinets: the game being left is the game the
+player stays in, exactly as when a run ends, and the selector is never entered at
+all when one variant is installed, so it cannot be what leaving a game means. The
+way up to the list is **Esc** from attract.
 
 ### Losing a fighter
 
@@ -1644,12 +1647,12 @@ the stage-sequence editor, the naming, delete, export and import cards, the paus
 card, the exit card and initials entry — and they are worked with one scheme, held in
 `src/ui/keys.ts`:
 
-| Key     | On every card                                                |
-| ------- | ------------------------------------------------------------ |
-| `U/D`   | move between rows, wrapping                                  |
-| `L/R`   | change the value of the row under the cursor                 |
-| `ENTER` | take what is highlighted; fire does the same, and is unnamed |
-| `ESC`   | back: close the card, or step back to the letter before      |
+| Key     | On every card                                                  |
+| ------- | -------------------------------------------------------------- |
+| `U/D`   | move between rows, wrapping                                    |
+| `L/R`   | change the value of the row under the cursor                   |
+| `ENTER` | take what is highlighted; fire does the same, and is unnamed   |
+| `ESC`   | back: close the card, step back a letter, or climb to the list |
 
 It replaced three that disagreed. Fire used to step to the next row on the
 settings screen and choose a game on the selector; Return closed the settings and
@@ -1676,6 +1679,15 @@ Four decisions inside it:
 - **The exit key takes nothing on any card.** It opens the exit card and cancels
   it, which is the double-tap rule [above](#pause-and-the-way-out); `cardPress`
   leaves it out of the scheme altogether so it cannot be folded into "take".
+- **Esc is back on every screen, and the selector is the top.** The attract screen
+  was the one exception — Esc there went _forward_ into the settings, its only way
+  in — and is not any more: it climbs to the selector, whose last row is
+  `SETTINGS`, and on the selector Esc does nothing, which its help line says
+  (`ESC NOTHING ABOVE THIS`). The settings close back onto that row. A build with
+  one game has no selector, so there Esc from attract opens the settings: a list of
+  one game and a `SETTINGS` row would be a screen to dismiss, and its one useful row
+  is the settings. A finished run stays in its game, on that game's attract screen;
+  only Esc climbs.
 
 **The control scheme narrows `up` and `down` with `left` and `right`**, so on the
 WASD scheme the card is worked with W, A, S and D and the arrows do nothing — one
@@ -1691,7 +1703,8 @@ on any of them, and fits each line to its card in characters the font has.
 a cursor — but it is where a player first reads the keys, and three changes had
 each written to it in their own words. Its title card is now three `keyLine`s
 (`attractKeys` in `src/ui/attract.ts`): moving and firing, pausing and leaving,
-and the settings. The blinking prompt under both attract cards is
+and the way back — `ESC GAMES, SETTINGS`, or `ESC SETTINGS` in a build with one
+game, where that is what it does. The blinking prompt under both attract cards is
 `ENTER START`, the only place the screen says how to start. It is also the one
 screen that names the fire key, because it teaches the game rather than a card,
 so it names the key the player's own control scheme binds: `SPACE`, or `Z` on

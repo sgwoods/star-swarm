@@ -15,6 +15,16 @@
  * | `ENTER`       | take what is highlighted                                       |
  * | `ESC`         | back: close the card, or step back a letter                    |
  *
+ * **`ESC` is back on every screen, with no exception, and the game list is the
+ * top.** The screens hang from one another: a card from the screen that opened
+ * it, a game's attract screen from the list of games, and the settings from the
+ * list's own `SETTINGS` row. So back from attract is up to that list, and on the
+ * list — with nothing above it — `ESC` does nothing, and its help line says so.
+ * A build with one game has no list (`./flow.ts`), so there back from attract
+ * opens the settings, the one row such a list would have had worth taking.
+ * Back never leaves a game in progress and never ends a run: a run that ends
+ * stays in its game, on that game's attract screen, and only `ESC` climbs.
+ *
  * **A card with only one line of choices answers every direction.** The selector
  * is one column, the exit card is one row of two words and initials entry spins
  * one letter, so on those up does what left does and down what right does. A
