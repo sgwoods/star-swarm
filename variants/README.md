@@ -17,6 +17,7 @@ inside it, and `npm run validate-packs` checks both.
 ```
 variants/
   classic.json       the arcade game — the first entry, not a special case
+  convoy.json        the second lineage's game, over its own pack alone
   deep-sea.json      the forged game: one sentence, through /forge
   spore-storm.json   the game that switches on four of the new abilities
   mirage.json        the game that switches on the other two

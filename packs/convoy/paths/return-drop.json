@@ -1,0 +1,9 @@
+{
+  "id": "return-drop",
+  "segments": [
+    {
+      "type": "toSlot",
+      "speed": 1.7
+    }
+  ]
+}

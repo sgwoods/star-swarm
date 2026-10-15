@@ -1,0 +1,38 @@
+{
+  "id": "convoy",
+  "name": "CONVOY",
+  "description": "ONE SHOT AT A TIME",
+  "packs": ["convoy"],
+  "order": 20,
+  "autoplay": {
+    "personas": [
+      {
+        "id": "normal",
+        "label": "NORMAL",
+        "description": "PLAYS IT SAFE",
+        "reactionSteps": 9,
+        "aimTolerance": 6,
+        "threatHorizon": 130,
+        "dodgeMargin": 12,
+        "shotDiscipline": 0.4,
+        "panic": 0.15,
+        "engage": 0.25,
+        "rescue": false
+      },
+      {
+        "id": "expert",
+        "label": "EXPERT",
+        "description": "DODGES AND PICKS ITS SHOT",
+        "reactionSteps": 4,
+        "aimTolerance": 3,
+        "threatHorizon": 200,
+        "dodgeMargin": 22,
+        "shotDiscipline": 0.8,
+        "panic": 0.02,
+        "engage": 0.6,
+        "rescue": false
+      }
+    ],
+    "defaultPersona": "normal"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "id": "spit",
+  "wave": "triangle",
+  "freq": [880, 330],
+  "envelope": [0.003, 0.03, 0.06],
+  "volume": 0.22
+}

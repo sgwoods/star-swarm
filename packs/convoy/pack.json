@@ -1,0 +1,313 @@
+{
+  "id": "convoy",
+  "name": "Convoy",
+  "version": "0.1.0",
+  "description": "A second game in the arcade lineage, not a variant of the first: a forty-six-alien convoy that sways as one, divers that sweep down and leave by the bottom and come back in at the top, one shot in flight at a time, no capture and no challenge stages. Its own rules, roles, formation, art and sound; layered over nothing.",
+  "palette": ["#0000", "#ffffff", "#3d7bff", "#8fe8ff", "#b05cff", "#ff3b3b", "#ffd400", "#ff8c00"],
+  "roles": {
+    "drone": {
+      "label": "Scout"
+    },
+    "wing": {
+      "label": "Raider"
+    },
+    "escort": {
+      "label": "Escort"
+    },
+    "flagship": {
+      "label": "Flagship"
+    }
+  },
+  "formations": {
+    "convoy46": {
+      "id": "convoy46",
+      "grid": {
+        "originX": 8,
+        "originY": 40,
+        "columnSpacing": 16,
+        "rowSpacing": 12
+      },
+      "slots": [
+        {
+          "row": 0,
+          "column": 3,
+          "role": "flagship"
+        },
+        {
+          "row": 0,
+          "column": 6,
+          "role": "flagship"
+        },
+        {
+          "row": 1,
+          "column": 2,
+          "role": "escort"
+        },
+        {
+          "row": 1,
+          "column": 3,
+          "role": "escort"
+        },
+        {
+          "row": 1,
+          "column": 4,
+          "role": "escort"
+        },
+        {
+          "row": 1,
+          "column": 5,
+          "role": "escort"
+        },
+        {
+          "row": 1,
+          "column": 6,
+          "role": "escort"
+        },
+        {
+          "row": 1,
+          "column": 7,
+          "role": "escort"
+        },
+        {
+          "row": 2,
+          "column": 1,
+          "role": "wing"
+        },
+        {
+          "row": 2,
+          "column": 2,
+          "role": "wing"
+        },
+        {
+          "row": 2,
+          "column": 3,
+          "role": "wing"
+        },
+        {
+          "row": 2,
+          "column": 4,
+          "role": "wing"
+        },
+        {
+          "row": 2,
+          "column": 5,
+          "role": "wing"
+        },
+        {
+          "row": 2,
+          "column": 6,
+          "role": "wing"
+        },
+        {
+          "row": 2,
+          "column": 7,
+          "role": "wing"
+        },
+        {
+          "row": 2,
+          "column": 8,
+          "role": "wing"
+        },
+        {
+          "row": 3,
+          "column": 0,
+          "role": "drone"
+        },
+        {
+          "row": 3,
+          "column": 1,
+          "role": "drone"
+        },
+        {
+          "row": 3,
+          "column": 2,
+          "role": "drone"
+        },
+        {
+          "row": 3,
+          "column": 3,
+          "role": "drone"
+        },
+        {
+          "row": 3,
+          "column": 4,
+          "role": "drone"
+        },
+        {
+          "row": 3,
+          "column": 5,
+          "role": "drone"
+        },
+        {
+          "row": 3,
+          "column": 6,
+          "role": "drone"
+        },
+        {
+          "row": 3,
+          "column": 7,
+          "role": "drone"
+        },
+        {
+          "row": 3,
+          "column": 8,
+          "role": "drone"
+        },
+        {
+          "row": 3,
+          "column": 9,
+          "role": "drone"
+        },
+        {
+          "row": 4,
+          "column": 0,
+          "role": "drone"
+        },
+        {
+          "row": 4,
+          "column": 1,
+          "role": "drone"
+        },
+        {
+          "row": 4,
+          "column": 2,
+          "role": "drone"
+        },
+        {
+          "row": 4,
+          "column": 3,
+          "role": "drone"
+        },
+        {
+          "row": 4,
+          "column": 4,
+          "role": "drone"
+        },
+        {
+          "row": 4,
+          "column": 5,
+          "role": "drone"
+        },
+        {
+          "row": 4,
+          "column": 6,
+          "role": "drone"
+        },
+        {
+          "row": 4,
+          "column": 7,
+          "role": "drone"
+        },
+        {
+          "row": 4,
+          "column": 8,
+          "role": "drone"
+        },
+        {
+          "row": 4,
+          "column": 9,
+          "role": "drone"
+        },
+        {
+          "row": 5,
+          "column": 0,
+          "role": "drone"
+        },
+        {
+          "row": 5,
+          "column": 1,
+          "role": "drone"
+        },
+        {
+          "row": 5,
+          "column": 2,
+          "role": "drone"
+        },
+        {
+          "row": 5,
+          "column": 3,
+          "role": "drone"
+        },
+        {
+          "row": 5,
+          "column": 4,
+          "role": "drone"
+        },
+        {
+          "row": 5,
+          "column": 5,
+          "role": "drone"
+        },
+        {
+          "row": 5,
+          "column": 6,
+          "role": "drone"
+        },
+        {
+          "row": 5,
+          "column": 7,
+          "role": "drone"
+        },
+        {
+          "row": 5,
+          "column": 8,
+          "role": "drone"
+        },
+        {
+          "row": 5,
+          "column": 9,
+          "role": "drone"
+        }
+      ]
+    }
+  },
+  "sounds": {
+    "shot-fired": "zap",
+    "enemy-fired": "spit",
+    "target-destroyed": "pop",
+    "player-hit": "wreck",
+    "extra-life": "bonus-ship",
+    "enemy-dived": "swoop"
+  },
+  "music": [
+    {
+      "event": "game-over",
+      "sound": "last-ship"
+    },
+    {
+      "event": "stage-started",
+      "when": {
+        "stage": 1
+      },
+      "sound": "launch"
+    },
+    {
+      "event": "stage-started",
+      "sound": "next-convoy"
+    }
+  ],
+  "effects": {
+    "player-hit": {
+      "sprite": "explosion-player"
+    },
+    "target-destroyed": {
+      "sprite": "explosion-alien"
+    }
+  },
+  "stageBadges": [
+    {
+      "value": 10,
+      "sprite": "flag-10"
+    },
+    {
+      "value": 1,
+      "sprite": "flag-1"
+    }
+  ],
+  "stageSequence": {
+    "normal": {
+      "rows": ["convoy"],
+      "repeatLast": 1
+    }
+  }
+}

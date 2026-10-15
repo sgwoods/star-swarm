@@ -1,0 +1,25 @@
+{
+  "id": "last-ship",
+  "wave": "square",
+  "duty": 0.45,
+  "envelope": [0.008, 0.58, 0.412],
+  "volume": 0.36,
+  "sequence": [
+    {
+      "freq": 587.33,
+      "duration": 0.18
+    },
+    {
+      "freq": 523.25,
+      "duration": 0.18
+    },
+    {
+      "freq": 440,
+      "duration": 0.18
+    },
+    {
+      "freq": [349.23, 174.61],
+      "duration": 0.6
+    }
+  ]
+}

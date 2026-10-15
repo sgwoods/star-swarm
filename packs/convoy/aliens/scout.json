@@ -1,0 +1,16 @@
+{
+  "id": "scout",
+  "role": "drone",
+  "sprite": "scout",
+  "score": {
+    "base": 30
+  },
+  "fire": {
+    "pattern": "aimed",
+    "shotsPerDive": 1,
+    "cooldownFrames": 40
+  },
+  "dive": {
+    "paths": ["dive-scout"]
+  }
+}

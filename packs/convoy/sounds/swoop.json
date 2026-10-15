@@ -1,0 +1,11 @@
+{
+  "id": "swoop",
+  "wave": "sine",
+  "freq": [520, 1900],
+  "vibrato": {
+    "rate": 18,
+    "depth": 0.12
+  },
+  "envelope": [0.02, 0.28, 0.12],
+  "volume": 0.24
+}

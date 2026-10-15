@@ -46,11 +46,12 @@ one game on the platform, declared as a document under
 [`variants/`](../variants/): a display name, the packs it layers, and the
 difficulty presets a player may pick from. Star Swarm is `variants/classic.json`
 and is the first entry in that list rather than a case the others work around.
-Five variants ship: the arcade game, a demonstration overlay, the forged Deep Sea
+Six variants ship: the arcade game, a demonstration overlay, the forged Deep Sea
 game ([§4.6](#46-the-forge)), Spore Storm, the game that switches on four of the
-new abilities, and Mirage, which switches on the other two
+new abilities, Mirage, which switches on the other two, and Convoy, a game from
+the second lineage that layers over nothing
 ([§4.4](#44-where-a-second-game-plugs-in)).
-<!-- check:count variants.count 5 variants.demonstrations 1 -->
+<!-- check:count variants.count 6 variants.demonstrations 1 -->
 
 That split is the whole architecture, and it is enforced rather than trusted —
 see [§3](#3-the-layers).
@@ -795,10 +796,11 @@ outside this page.
 
 ### 4.4 Where a second game plugs in
 
-The standing direction is that Star Swarm is the first game on a shared arcade
-platform, with a Galaxian-lineage mode and further variants to follow. A sibling
-game is **another pack and another `rules.json`**. Nothing under `src/` is
-expected to change.
+Star Swarm is the first game on a shared arcade platform, and the Galaxian-lineage
+game is the second. A sibling game is **another pack and another `rules.json`**,
+and nothing under `src/` changes — which [`packs/convoy/`](../packs/convoy/) now
+shows rather than expects, with the one capability it found missing set out below
+and in [§5](#5-what-is-not-here-yet).
 
 ```mermaid
 flowchart TB
@@ -912,6 +914,25 @@ flies first.
 ![Mirage, chosen from the start-up selector and played by an autoplay persona: shells hatching into stingers mid-dive, echoes and glasses diving](media/m3-mirage.gif)
 
 ![Spore Storm, chosen from the start-up selector and played by an autoplay persona: cysts splitting, a husk's shield lighting up, a flicker teleporting and a brood spawning](media/m3-spore-storm.gif)
+
+**And a game from the second lineage plays on the same console.**
+[`packs/convoy/`](../packs/convoy/), named by `variants/convoy.json`, is the first
+shipped game that is not an overlay on Classic: its own four roles, a forty-six-slot
+convoy, its own art and sound, and its own `rules.json` with no capture, no dual
+fighter, no transform attack, no challenge stages and one shot in flight. Its
+divers sweep down in curves and leave by the bottom, and come back in at the top
+through the same `returnPath` Classic's do. The controls are the same three, and
+the game needed no new input action. Nothing under `src/` names it, and
+`tests/sim/convoy.test.ts` holds that true by scanning the tree.
+
+It found one thing the platform cannot say: a **sortie group**, a leader and its
+members formed at launch and keeping one identity for the whole flight, which the
+lineage's escorted flagship needs and Classic's escorted captor needs too. So a
+flagship here dives alone, and is worth what the lineage pays a flagship with no
+escort. The pack's README sets out the gap, and the two smaller places the game
+departs from its lineage — a convoy that drops into place at the start of a stage,
+and a drift of fixed width, written as a breathe in which every column moves
+together.
 
 The split follows the classification in the rules-and-scoring scout report
 (section 9), not a fresh decision:
@@ -1188,7 +1209,9 @@ six seconds: timed in one process, its flights take 6.1 s against Deep Sea's
 6.0 s for the same eleven and Classic's 15.1 s for twenty-one. Mirage added eleven
 more on the same pattern — 75 flights across five variants — and timed in one
 process on a busier machine took 6.0 s and 8.5 s over two rounds, against Spore
-Storm's 6.9 s and 7.0 s and Deep Sea's 6.3 s and 6.7 s. The shipped tree is
+Storm's 6.9 s and 7.0 s and Deep Sea's 6.3 s and 6.7 s. Convoy added one flight
+rather than eleven — one stage document and no challenge scripts — for 76 across
+six variants. The shipped tree is
 flown twice per CI run — by its own step and by the test that wraps it, under a
 180-second timeout — so a game of this size costs CI about twelve to fifteen
 seconds.
@@ -1224,6 +1247,15 @@ describing as deliberately absent something that shipped two merges ago.
   admits, and no pack document uses it — what a boss stage would be has never
   been specified ([`docs/IDEAS.md`](IDEAS.md)).
   <!-- check:count classic.stages.boss 0 schema.stageKinds 3 -->
+- **There is no sortie group: no document can say that enemies fly together.** A
+  sortie group is a leader and its members, formed at launch and keeping one
+  identity for the whole flight, and scoring in both lineages reads one in three
+  ways — the members launched with the leader, the members still in flight when it
+  dies, and the whole group destroyed with none escaping. The attack director
+  launches one enemy of a role at a time and nothing names one alien as flying with
+  another, so none of the three can be stated. Convoy's flagship dives alone for
+  that reason ([`packs/convoy/README.md`](../packs/convoy/README.md)), and Classic's
+  captor does too, which is the item below.
 - **A captor never launches with escorts, so 800 and 1,600 are unreachable.** The
   escort bonus itself is paid: a captor carries the latched value its stage start
   installs and `enemyScore` in `src/sim/enemies.ts` adds it on the doubled branch,
@@ -1718,10 +1750,10 @@ cards' captions, `AUTO NORMAL` beside `SCORE 2860`.
 
 The cabinet can play itself, as one of several named **personas**, so that the game
 can be watched rather than played. `beginner`, `normal`, `expert` and `astronaut`
-ship with the Classic game, and the forged Deep Sea game, Spore Storm and Mirage
-declare two each — ten across the build, because a persona belongs to the variant
-it plays and there is no way for one document to reference another's.
-<!-- check:count autoplay.classicPersonas 4 autoplay.forgedPersonas 2 autoplay.sporeStormPersonas 2 autoplay.miragePersonas 2 autoplay.personas 10 -->
+ship with the Classic game, and the forged Deep Sea game, Spore Storm, Mirage and
+Convoy declare two each — twelve across the build, because a persona belongs to the
+variant it plays and there is no way for one document to reference another's.
+<!-- check:count autoplay.classicPersonas 4 autoplay.forgedPersonas 2 autoplay.sporeStormPersonas 2 autoplay.miragePersonas 2 autoplay.convoyPersonas 2 autoplay.personas 12 -->
 
 **An input log was the wrong shape for this, which is why autoplay was not built on
 the attract demo — and why the attract demo is now built on autoplay.** A log

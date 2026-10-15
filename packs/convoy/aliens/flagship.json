@@ -1,0 +1,17 @@
+{
+  "id": "flagship",
+  "role": "flagship",
+  "sprite": "flagship",
+  "score": {
+    "base": 60,
+    "movingMultiplier": 2.5
+  },
+  "fire": {
+    "pattern": "aimed",
+    "shotsPerDive": 2,
+    "cooldownFrames": 28
+  },
+  "dive": {
+    "paths": ["dive-flagship"]
+  }
+}
