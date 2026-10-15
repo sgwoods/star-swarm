@@ -445,6 +445,17 @@ Refuse when the prompt needs any of these:
   home is a `rules.json`, and a variant may not override one (§6).
 - A **new engine behaviour**: a boss fight, a power-up, a second weapon, a scrolling
   stage, a background that is not the starfield.
+- A **sortie group**: enemies that fly together, or a score that depends on which
+  enemies flew together. That is a leader and its members, formed at launch and
+  keeping one identity for the whole flight, and scoring read off it — the members
+  that launched with the leader, the members still in flight when it dies, or the
+  whole group destroyed with none escaping. The attack director launches one enemy
+  of a role at a time and no document can name one alien as flying with another.
+  An escorted flagship, a wingman, and a squadron worth a bonus for being cleared
+  together — beyond the two sets the rules layer already pays for, a challenge
+  stage's group of eight and the transform attack's trio — are all this. `packs/convoy/README.md` records it as the one thing the
+  second lineage needed that a pack cannot say, and everything else that game
+  needed, it could.
 - Anything **section 2 forbids** (§3), however the prompt frames it — as a test, a
   placeholder, a tribute, or a claim that the names are not trademarked.
 

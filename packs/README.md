@@ -47,6 +47,12 @@ a `trigger` on its dive, and two aliens that copy the fighter's movement, one ea
 way. The behaviour itself is the engine's (`src/sim/abilities/`), so each game is
 documents like every other pack here.
 
+**A second game is a pack that layers over nothing.** [`convoy/`](convoy/) is the
+game from the second lineage: its own roles, formation, art, sound and
+`rules.json`, named alone by its variant. Every other pack here is an overlay on
+Classic and runs Classic's rules; this one shows a game that does not. Its README
+names the one thing that game needed that no pack can say yet.
+
 `npm run validate-packs` schema-checks then reference-checks every pack, then every
 variant, and must pass in CI; a pack that fails validation never loads. It succeeds
 on an empty tree and on a pack whose content directories are still empty.

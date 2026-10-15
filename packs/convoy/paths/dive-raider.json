@@ -1,0 +1,36 @@
+{
+  "id": "dive-raider",
+  "mirror": true,
+  "segments": [
+    {
+      "type": "arc",
+      "radius": 12,
+      "degrees": 180,
+      "dir": "ccw",
+      "speed": 1.8
+    },
+    {
+      "type": "arc",
+      "radius": 20,
+      "degrees": 120,
+      "dir": "ccw",
+      "speed": 2
+    },
+    {
+      "type": "aimAtPlayer",
+      "speed": 2.1,
+      "duration": 30
+    },
+    {
+      "type": "arc",
+      "radius": 46,
+      "degrees": 40,
+      "dir": "ccw",
+      "speed": 2.1
+    },
+    {
+      "type": "exitBottom",
+      "speed": 2.1
+    }
+  ]
+}

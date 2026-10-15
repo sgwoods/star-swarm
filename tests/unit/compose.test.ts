@@ -252,6 +252,7 @@ describe('the pack manager lists what is installed, and offers what it holds', (
   it('lists every installed pack once, saying which carry rules', () => {
     expect(composer.installed).toEqual([
       { id: 'classic', name: 'Classic', rules: true, stages: 21 },
+      { id: 'convoy', name: 'Convoy', rules: true, stages: 1 },
       { id: 'deep-sea', name: 'Deep Sea', rules: false, stages: 3 },
       { id: 'mirage', name: 'Mirage', rules: false, stages: 3 },
       { id: 'spore-storm', name: 'Spore Storm', rules: false, stages: 3 },

@@ -1,0 +1,16 @@
+{
+  "id": "escort",
+  "role": "escort",
+  "sprite": "escort",
+  "score": {
+    "base": 50
+  },
+  "fire": {
+    "pattern": "aimed",
+    "shotsPerDive": 2,
+    "cooldownFrames": 32
+  },
+  "dive": {
+    "paths": ["dive-raider"]
+  }
+}

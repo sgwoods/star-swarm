@@ -1,0 +1,358 @@
+{
+  "id": "convoy",
+  "name": "Convoy rules",
+  "playfield": {
+    "width": 224,
+    "height": 288
+  },
+  "lives": {
+    "default": 3,
+    "options": [2, 3, 5]
+  },
+  "extraLives": {
+    "award": {
+      "mode": "thresholds",
+      "first": 7000
+    }
+  },
+  "player": {
+    "stepPattern": [1, 2],
+    "maxShots": 1,
+    "y": 248,
+    "width": 16,
+    "height": 16,
+    "minX": 0,
+    "maxX": 207,
+    "hitWindow": {
+      "dxMin": -6,
+      "dxMax": 6,
+      "dyMin": -6,
+      "dyMax": 6
+    },
+    "respawnFrames": 120,
+    "shot": {
+      "speed": 6,
+      "width": 1,
+      "height": 4,
+      "muzzleOffsetX": 7,
+      "windows": {
+        "single": [
+          {
+            "dxMin": -6,
+            "dxMax": 6,
+            "dyMin": -6,
+            "dyMax": 6
+          }
+        ],
+        "dual": [
+          {
+            "dxMin": -6,
+            "dxMax": 6,
+            "dyMin": -6,
+            "dyMax": 6
+          }
+        ]
+      }
+    }
+  },
+  "enemies": {
+    "maxBullets": 4,
+    "updatePhases": 4,
+    "bomberReadyTimers": {
+      "drone": 12,
+      "wing": 6,
+      "escort": 4,
+      "flagship": 2
+    },
+    "bullet": {
+      "speed": 2,
+      "width": 1,
+      "height": 3
+    },
+    "collision": {
+      "enabled": true
+    },
+    "dive": {
+      "baseLaunchRate": 1,
+      "launchCost": 64,
+      "bumpAfterFrames": 1200,
+      "returnPath": "return-drop",
+      "reentryY": -16
+    },
+    "bombing": {
+      "continuousCooldownFrames": 36,
+      "vectors": [-24, -12, 0, 12, 24]
+    }
+  },
+  "formation": {
+    "sway": {
+      "amplitude": 8,
+      "stepPixels": 1,
+      "stepFrames": 4
+    },
+    "breathe": {
+      "steps": 48,
+      "stepFrames": 3,
+      "columns": [48, 48, 48, 48, 48, 48, 48, 48, 48, 48],
+      "rows": [0, 0, 0, 0, 0, 0]
+    },
+    "animatedStageKinds": ["normal"]
+  },
+  "starfield": {
+    "speed": {
+      "base": 48,
+      "stageMultiplier": 0,
+      "mask": 0,
+      "plateauStage": 0
+    }
+  },
+  "challengeStages": {
+    "enabled": false,
+    "firstStage": 1,
+    "everyStages": 1
+  },
+  "scoring": {
+    "movingMultiplier": 2
+  },
+  "difficulty": {
+    "defaultRank": "standard",
+    "ranks": {
+      "standard": {
+        "label": "Standard - every convoy a little more eager than the last",
+        "stageTable": {
+          "rows": [
+            {
+              "launchRates": {
+                "drone": 2,
+                "wing": 1,
+                "escort": 0,
+                "flagship": 0
+              },
+              "maxDivers": 1,
+              "maxDiversBump": 2,
+              "continuousBombingAt": 6
+            },
+            {
+              "launchRates": {
+                "drone": 3,
+                "wing": 2,
+                "escort": 1,
+                "flagship": 0
+              },
+              "maxDivers": 2,
+              "maxDiversBump": 2,
+              "continuousBombingAt": 6
+            },
+            {
+              "launchRates": {
+                "drone": 3,
+                "wing": 2,
+                "escort": 1,
+                "flagship": 1
+              },
+              "maxDivers": 3,
+              "maxDiversBump": 4,
+              "continuousBombingAt": 7
+            },
+            {
+              "launchRates": {
+                "drone": 4,
+                "wing": 3,
+                "escort": 2,
+                "flagship": 1
+              },
+              "maxDivers": 3,
+              "maxDiversBump": 4,
+              "continuousBombingAt": 8
+            },
+            {
+              "launchRates": {
+                "drone": 4,
+                "wing": 3,
+                "escort": 2,
+                "flagship": 1
+              },
+              "maxDivers": 4,
+              "maxDiversBump": 5,
+              "continuousBombingAt": 8
+            },
+            {
+              "launchRates": {
+                "drone": 5,
+                "wing": 4,
+                "escort": 3,
+                "flagship": 2
+              },
+              "maxDivers": 4,
+              "maxDiversBump": 6,
+              "continuousBombingAt": 10
+            }
+          ],
+          "repeatLast": 1
+        }
+      }
+    }
+  },
+  "provenance": {
+    "playfield": {
+      "confidence": "provisional",
+      "note": "The console's own playfield, shared with every game on it so one cabinet plays both lineages. This game's own number: the repository's arcade reference documents the other lineage, not this one, so nothing here is read out of a ROM."
+    },
+    "lives.default": {
+      "confidence": "provisional",
+      "note": "Three ships to start. This game's own number: the repository's arcade reference documents the other lineage, not this one, so nothing here is read out of a ROM."
+    },
+    "lives.options": {
+      "confidence": "provisional",
+      "note": "The settings a player may choose from. This game's own number: the repository's arcade reference documents the other lineage, not this one, so nothing here is read out of a ROM."
+    },
+    "extraLives.award": {
+      "confidence": "provisional",
+      "note": "One bonus ship, once, at 7,000 points, and never again: the lineage awards a single extra ship rather than a repeating ladder. This game's own number: the repository's arcade reference documents the other lineage, not this one, so nothing here is read out of a ROM."
+    },
+    "player.stepPattern": {
+      "confidence": "provisional",
+      "note": "The console's stick cadence, kept the same as the other lineage's so both families feel the same under the hand. This game's own number: the repository's arcade reference documents the other lineage, not this one, so nothing here is read out of a ROM."
+    },
+    "player.maxShots": {
+      "confidence": "provisional",
+      "note": "One shot in flight at a time, and the next only once it has hit something or left the top of the screen. The defining constraint of this lineage. This game's own number: the repository's arcade reference documents the other lineage, not this one, so nothing here is read out of a ROM."
+    },
+    "player.y": {
+      "confidence": "provisional",
+      "note": "The console's fighter row, shared with the other games."
+    },
+    "player.width": {
+      "confidence": "provisional",
+      "note": "The console's 16x16 sprite."
+    },
+    "player.height": {
+      "confidence": "provisional",
+      "note": "As player.width."
+    },
+    "player.minX": {
+      "confidence": "provisional",
+      "note": "The console's travel limits, shared with the other games."
+    },
+    "player.maxX": {
+      "confidence": "provisional",
+      "note": "As player.minX."
+    },
+    "player.hitWindow": {
+      "confidence": "provisional",
+      "note": "A symmetric window the size of the fighter's hull. This game's own number: the repository's arcade reference documents the other lineage, not this one, so nothing here is read out of a ROM."
+    },
+    "player.respawnFrames": {
+      "confidence": "provisional",
+      "note": "Two seconds off the field after a loss: longer than the death explosion, which tests/unit/effects.test.ts requires. This game's own number: the repository's arcade reference documents the other lineage, not this one, so nothing here is read out of a ROM."
+    },
+    "player.shot.speed": {
+      "confidence": "provisional",
+      "note": "With one shot in flight this number is the fire rate as well as the travel speed. This game's own number: the repository's arcade reference documents the other lineage, not this one, so nothing here is read out of a ROM."
+    },
+    "player.shot.width": {
+      "confidence": "provisional",
+      "note": "Presentation."
+    },
+    "player.shot.height": {
+      "confidence": "provisional",
+      "note": "Presentation."
+    },
+    "player.shot.muzzleOffsetX": {
+      "confidence": "provisional",
+      "note": "Where the muzzle is drawn on this game's fighter. Presentation."
+    },
+    "player.shot.windows.single": {
+      "confidence": "provisional",
+      "note": "The shot's hit window. This game's own number: the repository's arcade reference documents the other lineage, not this one, so nothing here is read out of a ROM."
+    },
+    "player.shot.windows.dual": {
+      "confidence": "provisional",
+      "note": "Required by the schema and never used: this game has no dual fighter, because dualFighter is not enabled."
+    },
+    "enemies.maxBullets": {
+      "confidence": "provisional",
+      "note": "Bullets in flight at once, across every diver. This game's own number: the repository's arcade reference documents the other lineage, not this one, so nothing here is read out of a ROM."
+    },
+    "enemies.updatePhases": {
+      "confidence": "provisional",
+      "note": "A four-frame round robin, as the console's other games run, so launches land within four frames of when they are due. This game's own number: the repository's arcade reference documents the other lineage, not this one, so nothing here is read out of a ROM."
+    },
+    "enemies.bomberReadyTimers": {
+      "confidence": "provisional",
+      "note": "Each role's bomb timer at the start of a convoy. This game's own number: the repository's arcade reference documents the other lineage, not this one, so nothing here is read out of a ROM."
+    },
+    "enemies.bullet.speed": {
+      "confidence": "provisional",
+      "note": "This game's own number: the repository's arcade reference documents the other lineage, not this one, so nothing here is read out of a ROM."
+    },
+    "enemies.bullet.width": {
+      "confidence": "provisional",
+      "note": "Presentation."
+    },
+    "enemies.bullet.height": {
+      "confidence": "provisional",
+      "note": "Presentation."
+    },
+    "enemies.collision.enabled": {
+      "confidence": "provisional",
+      "note": "A diver that reaches the fighter destroys it. This game's own number: the repository's arcade reference documents the other lineage, not this one, so nothing here is read out of a ROM."
+    },
+    "enemies.dive.baseLaunchRate": {
+      "confidence": "provisional",
+      "note": "With launchCost, sets how often a role with a row rate of 0 dives: one every 256 frames, under the diver limit. This game's own number: the repository's arcade reference documents the other lineage, not this one, so nothing here is read out of a ROM."
+    },
+    "enemies.dive.launchCost": {
+      "confidence": "provisional",
+      "note": "See enemies.dive.baseLaunchRate. The row rates are what make scouts dive more often than flagships. This game's own number: the repository's arcade reference documents the other lineage, not this one, so nothing here is read out of a ROM."
+    },
+    "enemies.dive.bumpAfterFrames": {
+      "confidence": "provisional",
+      "note": "Twenty seconds of diving before the row's raised diver limit takes over. This game's own number: the repository's arcade reference documents the other lineage, not this one, so nothing here is read out of a ROM."
+    },
+    "enemies.dive.returnPath": {
+      "confidence": "provisional",
+      "note": "A diver that leaves by the bottom re-enters at the top, at the x it left by, and flies straight back to its slot in the convoy. That it returns is the lineage's behaviour; the path's speed is ours."
+    },
+    "enemies.dive.reentryY": {
+      "confidence": "provisional",
+      "note": "One sprite height above the top of the playfield, so a returning diver is fully clear of the screen when it reappears."
+    },
+    "enemies.bombing.continuousCooldownFrames": {
+      "confidence": "provisional",
+      "note": "The delay between shots once few enough aliens remain that bombing is continuous. This game's own number: the repository's arcade reference documents the other lineage, not this one, so nothing here is read out of a ROM."
+    },
+    "enemies.bombing.vectors": {
+      "confidence": "provisional",
+      "note": "Five quantised headings, so a bomb can be sidestepped. This game's own number: the repository's arcade reference documents the other lineage, not this one, so nothing here is read out of a ROM."
+    },
+    "formation.sway": {
+      "confidence": "provisional",
+      "note": "Only the entry: the engine's sway runs while the convoy drops into place and hands over to the breathe the moment it is centred, which is also when diving may begin."
+    },
+    "formation.breathe": {
+      "confidence": "provisional",
+      "note": "The convoy's side-to-side drift, written as a breathe in which every column moves the same 48 px and no row moves, so the whole block slides right and back as one for as long as the convoy lasts. The grid's originX sits 24 px left of centre, so the drift is centred. The real lineage reverses when the convoy's outermost survivor reaches the edge of the screen; that depends on which columns are still alive, which no rules number expresses, so this drift keeps one fixed width."
+    },
+    "formation.animatedStageKinds": {
+      "confidence": "provisional",
+      "note": "Every stage of this game is a normal stage."
+    },
+    "starfield": {
+      "confidence": "provisional",
+      "note": "A steady scroll that does not speed up with the stage. Presentation."
+    },
+    "challengeStages": {
+      "confidence": "provisional",
+      "note": "This game has no bonus or challenge stages. The two numbers are required by the schema and read by nothing while enabled is false."
+    },
+    "scoring.movingMultiplier": {
+      "confidence": "provisional",
+      "note": "A diver is worth twice what it is worth in the convoy: a scout 60, a raider 80, an escort 100. The flagship overrides it on its own document, to 2.5, so a lone diving flagship is worth 150. This game's own number: the repository's arcade reference documents the other lineage, not this one, so nothing here is read out of a ROM."
+    },
+    "difficulty.ranks.standard.stageTable": {
+      "confidence": "provisional",
+      "note": "One rank. Each convoy launches more often and lets more divers out at once than the one before, and the sixth row repeats for ever. This game's own number: the repository's arcade reference documents the other lineage, not this one, so nothing here is read out of a ROM."
+    }
+  }
+}

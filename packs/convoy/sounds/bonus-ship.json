@@ -1,0 +1,25 @@
+{
+  "id": "bonus-ship",
+  "wave": "square",
+  "duty": 0.25,
+  "envelope": [0.004, 0.55, 0.446],
+  "volume": 0.36,
+  "sequence": [
+    {
+      "freq": 1046.5,
+      "duration": 0.08
+    },
+    {
+      "freq": 1318.51,
+      "duration": 0.08
+    },
+    {
+      "freq": 1567.98,
+      "duration": 0.08
+    },
+    {
+      "freq": [2093.0, 2349.32],
+      "duration": 0.2
+    }
+  ]
+}

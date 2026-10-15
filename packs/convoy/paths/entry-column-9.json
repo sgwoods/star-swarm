@@ -1,0 +1,10 @@
+{
+  "id": "entry-column-9",
+  "start": [152, -16],
+  "segments": [
+    {
+      "type": "toSlot",
+      "speed": 3
+    }
+  ]
+}

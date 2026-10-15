@@ -1,0 +1,8 @@
+{
+  "id": "zap",
+  "wave": "square",
+  "freq": [1760, 620],
+  "duty": 0.3,
+  "envelope": [0.002, 0.03, 0.08],
+  "volume": 0.26
+}

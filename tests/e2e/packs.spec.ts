@@ -109,6 +109,7 @@ test('a composed list is kept, played, drawn, and still there after a reload', a
   await openCard(page, 'packs', 'packs');
   expect(await page.evaluate(() => window.starSwarm?.editorRows)).toEqual([
     'Classic=1',
+    'Convoy=OFF',
     'Deep Sea=OFF',
     'Mirage=OFF',
     'Spore Storm=OFF',
