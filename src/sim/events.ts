@@ -252,6 +252,40 @@ export interface ChallengeGroupClearedEvent {
   readonly bonus: number;
 }
 
+/**
+ * A leader left the formation as a sortie, with the escorts its alien names
+ * (`src/sim/groups.ts`). Raised after the `enemy-dived` of the leader and of each
+ * escort, so a subscriber hears the dive and then learns it was a group.
+ *
+ * A pack that declares no escorts never raises it.
+ */
+export interface SortieLaunchedEvent {
+  readonly type: 'sortie-launched';
+  /** The group's id for the stage, which `sortie-destroyed` repeats. */
+  readonly group: number;
+  /** The leader. */
+  readonly targetId: number;
+  readonly alienId: string;
+  /** The escorts, already diving, in the order they were chosen. May be empty. */
+  readonly members: readonly number[];
+  readonly x: number;
+  readonly y: number;
+}
+
+/**
+ * A whole sortie was destroyed, none of it escaping, and the pack pays for that
+ * (`scoring.escortBonus.wholeGroup`). Raised beside the kill that completed it and
+ * before the score it adds, like `challenge-group-cleared`, and only when there is
+ * a bonus to pay.
+ */
+export interface SortieDestroyedEvent {
+  readonly type: 'sortie-destroyed';
+  readonly group: number;
+  /** The leader, which may have died before the kill that completed the group. */
+  readonly targetId: number;
+  readonly bonus: number;
+}
+
 /** The end-of-stage award on a stage that was not perfect: `perHit × hits`. */
 export interface ChallengeBonusEvent {
   readonly type: 'challenge-bonus';
@@ -397,6 +431,8 @@ export type SimEvent =
   | GameOverEvent
   | StageClearedEvent
   | ChallengeGroupClearedEvent
+  | SortieLaunchedEvent
+  | SortieDestroyedEvent
   | ChallengeBonusEvent
   | ChallengePerfectEvent
   | ChallengeEndedEvent

@@ -925,21 +925,58 @@ through the same `returnPath` Classic's do. The controls are the same three, and
 the game needed no new input action. Nothing under `src/` names it, and
 `tests/sim/convoy.test.ts` holds that true by scanning the tree.
 
-It found one thing the platform cannot say: a **sortie group**, a leader and its
-members formed at launch and keeping one identity for the whole flight, which the
-lineage's escorted flagship needs and Classic's escorted captor needs too. So a
-flagship here dives alone, and is worth what the lineage pays a flagship with no
-escort. The pack's README sets out the gap, and the two smaller places the game
-departs from its lineage — a convoy that drops into place at the start of a stage,
-and a drift of fixed width, written as a breathe in which every column moves
-together.
+It found one thing the platform could not say when it shipped: a **sortie
+group**, a leader and its members formed at launch and keeping one identity for the
+whole flight, which the lineage's escorted flagship needs and Classic's escorted
+captor needs too. The platform says it now (below), but the pack declares no
+escorts, so a flagship here dives alone, and is worth what the lineage pays a
+flagship with no escort. The pack's README sets out what is left to declare, and
+the two smaller places the game departs from its lineage — a convoy that drops into
+place at the start of a stage, and a drift of fixed width, written as a breathe in
+which every column moves together.
+
+**And a sortie is a group.** In both lineages a score can depend on which enemies
+flew together, so the platform can say so. An alien whose `dive.escorts` names who
+flies with it is launched by the attack director with up to that many settled
+enemies, found at the pack's offsets from its slot along the formation's axes.
+They fly its dive path from where each of them sits and hold their place beside it
+until each leaves the bottom. `src/sim/groups.ts` records them as one group for the
+whole flight, including the wrap-around back to the top. A sortie is one launch:
+the leader spends the credit and passes the diver-limit check, and its escorts
+count as divers from then on. A capture attempt is one of these launches too, and
+it goes alone.
+
+Scoring reads the group in exactly three ways, all from `scoring.escortBonus` in a
+`rules.json` and all for the one `role` it names:
+
+- what launched with the leader, latched onto it at launch (`byEscortCount`);
+- what is still flying with it when it dies, for the pairs a pack lists
+  (`atKill`);
+- the whole group destroyed with none escaping (`wholeGroup`).
+
+That role is stated in scoring rather than taken from `capture.captorRole`, so a
+game with no tractor beam can still have escorts. No score reads the order of
+kills. Neither lineage has such a rule, and the record keeps no kill log for one
+to read.
+
+The record does not know how a group was born, but a launch is the only birth
+built so far. The challenge stage's group of eight and the transform attack's trio
+are still state machines of their own, in `src/sim/challenge.ts` and
+`src/sim/dive.ts`.
+
+No shipped pack declares an escort, so no shipped game forms a group. For a world
+that forms none, `groupFingerprint` returns nothing rather than an empty list,
+which is why every golden replay recorded before groups existed still reproduces
+byte for byte. `tests/unit/groups.test.ts` holds all of this, including that no
+installed pack declares an escort.
 
 The split follows the classification in the rules-and-scoring scout report
 (section 9), not a fresh decision:
 
 **Platform — the shape any game in this lineage needs.** The score pipeline: a
 base value, a multiplier that depends on the target's motion _state_, and a
-separate bonus channel. The rules skeleton: reserve lives, threshold-based extra
+separate bonus channel — and the sortie group a bonus may read, with the three
+ways it reads one. The rules skeleton: reserve lives, threshold-based extra
 lives with a repeat interval and a ceiling, a cap on player shots and a cap on
 enemy bullets, rank as a selector over whole data tables rather than a
 multiplier, and a stage-number → table lookup whose plateau rule is per-table
@@ -949,7 +986,7 @@ sixteen numbers instead of forty, and why a differently shaped grid inherits bot
 motions with no new code. The starfield's speed byte.
 
 **Star Swarm's own, and therefore in the pack.** The specific values and the
-specific state machines: the 50/80/150 score bases, the escort-bonus latch, the
+specific state machines: the 50/80/150 score bases, the escort-bonus table, the
 capture channel and everything hanging off it (a sibling need not have any of
 it), the transform attack, the challenge cadence, the sway and breathe
 amplitudes, and the entry scripts.
@@ -1247,26 +1284,29 @@ describing as deliberately absent something that shipped two merges ago.
   admits, and no pack document uses it — what a boss stage would be has never
   been specified ([`docs/IDEAS.md`](IDEAS.md)).
   <!-- check:count classic.stages.boss 0 schema.stageKinds 3 -->
-- **There is no sortie group: no document can say that enemies fly together.** A
-  sortie group is a leader and its members, formed at launch and keeping one
-  identity for the whole flight, and scoring in both lineages reads one in three
-  ways — the members launched with the leader, the members still in flight when it
-  dies, and the whole group destroyed with none escaping. The attack director
-  launches one enemy of a role at a time and nothing names one alien as flying with
-  another, so none of the three can be stated. Convoy's flagship dives alone for
-  that reason ([`packs/convoy/README.md`](../packs/convoy/README.md)), and Classic's
-  captor does too, which is the item below.
-- **A captor never launches with escorts, so 800 and 1,600 are unreachable.** The
-  escort bonus itself is paid: a captor carries the latched value its stage start
-  installs and `enemyScore` in `src/sim/enemies.ts` adds it on the doubled branch,
-  so a captor destroyed mid-dive is worth 400 and one shot at home is worth 150.
-  What is missing is the _launch_: `src/sim/dive.ts` sends one enemy of a role down
-  per round robin and has no notion of a boss leading a wingman, so the pack's
+- **Convoy's flagship dives alone, though a document can now say that enemies fly
+  together.** A sortie group is a leader and its members, formed at launch and
+  keeping one identity for the whole flight, and scoring in both lineages reads one
+  in three ways — the members launched with the leader, the members still in flight
+  when it dies, and the whole group destroyed with none escaping. All of that is
+  built ([§4.4](#44-where-a-second-game-plugs-in)), but `packs/convoy/` declares no
+  escorts, so its flagship still dives alone
+  ([`packs/convoy/README.md`](../packs/convoy/README.md)), and Classic's captor
+  does too, which is the item below.
+- **Classic's bosses never launch with escorts, so 800 and 1,600 are unreachable
+  in Classic — by its data, not by the engine.** The escort bonus itself is paid: a
+  boss carries the latched value its stage start installs and `enemyScore` in
+  `src/sim/enemies.ts` adds it on the doubled branch, so a boss destroyed mid-dive
+  is worth 400 and one shot at home is worth 150. The attack director can launch a
+  sortie ([§4.4](#44-where-a-second-game-plugs-in)), but
+  `packs/classic/aliens/warden.json` names no escorts, so the pack's
   `scoring.escortBonus.byEscortCount` entries for one and two escorts are data
-  nothing can select. The scout report's acceptance tests **S7 and S9** are
-  therefore not satisfiable today, and the latch that makes them interesting —
-  killing the escorts first must not reduce the captor's value — cannot be
-  observed either.
+  nothing selects. Naming them is deliberately a change of its own, because it
+  changes how Classic plays and rewrites its golden replays. Until then the scout
+  report's acceptance tests **S7 and S9** are not satisfiable in Classic, and the
+  latch that makes them interesting — killing the escorts first must not reduce
+  the boss's value — is observed only by `tests/unit/groups.test.ts`, on a warden
+  given escorts for the test.
 - **There is no pulsing-formation sound.** `formation-settled` is raised on the
   frame the sway passes back through zero and the breathe begins there, which is
   asserted in `tests/unit/formation.test.ts`; the arcade starts its pulsing
@@ -1321,8 +1361,9 @@ divisions of labour did not survive contact with the code, and the code is what
 this document follows:
 
 - **There is no scoring module and no stage module in the simulation.** Scoring
-  lives in `src/sim/enemies.ts` and `src/sim/world.ts`, because a score is a
-  property of the thing destroyed and the run it happened in rather than a stage
+  lives in `src/sim/enemies.ts` and `src/sim/world.ts`, with what a sortie group is
+  worth in `src/sim/groups.ts`, because a score is a property of the thing
+  destroyed, the group it flew in and the run it happened in rather than a stage
   in a pipeline. Stage resolution is `src/content/stages.ts`, on the content side
   of the boundary, because turning a stage number into documents is content work:
   the simulation is handed a resolved `StageContent` and never learns a pack

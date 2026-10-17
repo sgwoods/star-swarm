@@ -377,8 +377,9 @@ traced, and it is written out there.
 Three things that are easy to undo by accident:
 
 - **A captor's dive is an ordinary dive.** `src/sim/dive.ts` asks the channel one
-  question on a captor-role launch and changes only the path. A second launcher,
-  or a second kind of motion, is the mistake this arrangement prevents.
+  question on a captor-role launch and changes only the path — and, for an alien
+  that names escorts, sends it without them. A second launcher, or a second kind
+  of motion, is the mistake this arrangement prevents.
 - **`Enemy.home` names a slot in one of two tables.** `inCaptiveSlot` says which:
   the alien slots, or the captive slots a stolen fighter parks in. `homePosition`
   and `isRightOfCentre` in `src/sim/formation.ts` take the flag; a call that

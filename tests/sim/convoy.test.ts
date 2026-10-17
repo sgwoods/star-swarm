@@ -13,7 +13,7 @@
  *    capture, no dual fighter, no challenge stages, one shot in flight;
  * 3. played, its divers leave by the bottom and come back in at the top, and the
  *    fighter never has a second shot in flight;
- * 4. the one thing the lineage has that the platform cannot express — a flagship
+ * 4. the one thing the lineage has that this pack does not declare — a flagship
  *    diving with escorts, worth more for the company it keeps — is absent in the
  *    way `packs/convoy/README.md` says: a flagship is only ever worth its value in
  *    the convoy or its value diving alone.
@@ -190,8 +190,8 @@ describe('played, it behaves like its lineage', () => {
 
   it('pays a flagship its convoy value or its lone-dive value, and nothing else', () => {
     // The lineage pays more for a flagship shot while its escorts fly with it.
-    // Nothing launches escorts with it here — the gap the pack README names — so
-    // a flagship is worth 60 at home and 150 diving alone, and never anything a
+    // The pack names no escorts for it — the gap the pack README names — so a
+    // flagship is worth 60 at home and 150 diving alone, and never anything a
     // sortie group would pay.
     const paid = new Set(runs.flatMap((run) => run.flagshipScores));
     expect([...paid].sort((a, b) => a - b)).toEqual([60, 150]);

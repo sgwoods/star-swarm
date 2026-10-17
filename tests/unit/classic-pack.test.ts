@@ -474,12 +474,20 @@ describe('the rest of the Classic rules', () => {
     expect([1, 2, 4, 12].some((n) => isChallengeStage(rules, n))).toBe(false);
   });
 
-  it('scores a diving captor 400, 800 and 1,600 from a base and a latched bonus', () => {
+  it('scores a diving boss 400, 800 and 1,600 from a base and a latched bonus', () => {
     const base = 150;
     const doubled = base * rules.scoring.movingMultiplier;
-    const bonus = rules.scoring.escortBonus.byEscortCount;
-    expect(rules.scoring.escortBonus.latchedAtLaunch).toBe(true);
-    expect([0, 1, 2].map((escorts) => doubled + (bonus[escorts] ?? 0))).toEqual([400, 800, 1600]);
+    const record = rules.scoring.escortBonus;
+    expect(record.role).toBe('warden');
+    expect([0, 1, 2].map((escorts) => doubled + (record.byEscortCount[escorts] ?? 0))).toEqual([
+      400, 800, 1600,
+    ]);
+    // Latched, and nothing else: the boss's record is not revised at its kill by
+    // who is still flying, and destroying a boss with its escorts pays nothing
+    // extra. Those are the other two readings a group allows, and the arcade
+    // uses neither (reference section 9).
+    expect(record.atKill).toEqual([]);
+    expect(record.wholeGroup).toEqual([]);
   });
 
   it('steps the challenge group bonus by challenge-stage index and holds it at 3,000', () => {
@@ -649,6 +657,7 @@ describe('how far each value may be trusted', () => {
       'difficulty.ranks.D.stageSequence.normal',
       'scoring.movingMultiplier',
       'scoring.escortBonus',
+      'scoring.escortBonus.role',
       'scoring.transformGroupBonus',
       'scoring.challenge.groupBonus',
       'scoring.challenge.perHit',

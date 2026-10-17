@@ -346,6 +346,9 @@ export function loadPack(source: PackSource): LoadResult {
     alien.dive?.paths.forEach((path, index) => {
       requireRef(file, `dive.paths[${String(index)}]`, 'paths', path);
     });
+    alien.dive?.escorts?.roles.forEach((role, index) => {
+      requireRole(file, `dive.escorts.roles[${String(index)}]`, role);
+    });
     alien.abilities.forEach((ability, index) => {
       checkAbility(file, `abilities[${String(index)}]`, alien, ability);
     });
@@ -510,6 +513,10 @@ export function loadPack(source: PackSource): LoadResult {
     }
     if (capture.captiveAlien !== undefined) {
       requireRef(RULES_FILE, 'capture.captiveAlien', 'aliens', capture.captiveAlien);
+    }
+    const escortRole = rules.scoring.escortBonus.role;
+    if (escortRole !== undefined) {
+      requireRole(RULES_FILE, 'scoring.escortBonus.role', escortRole);
     }
     if (rules.transform !== undefined) {
       rules.transform.types.forEach((id, index) => {

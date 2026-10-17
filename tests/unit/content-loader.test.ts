@@ -267,6 +267,26 @@ describe('the rules layer', () => {
     expect(errors[0]?.field).toBe('difficulty.ranks.A.stageTable.rows[0].launchRates.wing');
   });
 
+  it('catches an escort record carried by a role the pack never declares', () => {
+    const errors = errorsFrom({
+      'rules.json': { ...RULES, scoring: { escortBonus: { role: 'flagship' } } },
+    });
+    expect(errors[0]?.field).toBe('scoring.escortBonus.role');
+  });
+
+  it('catches an escort role the pack never declares', () => {
+    const errors = errorsFrom({
+      'aliens/drone.json': {
+        ...ALIEN,
+        dive: {
+          paths: ['left-hook'],
+          escorts: { roles: ['wing'], max: 1, offsets: [{ column: 1, row: 0 }] },
+        },
+      },
+    });
+    expect(errors[0]).toMatchObject({ file: 'aliens/drone.json', field: 'dive.escorts.roles[0]' });
+  });
+
   it('catches a transform type that is not an alien in the pack', () => {
     const errors = errorsFrom({
       'rules.json': { ...RULES, transform: { enabled: true, types: ['ghost'] } },

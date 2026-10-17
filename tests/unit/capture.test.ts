@@ -511,11 +511,11 @@ describe('exactly one captured fighter, ever', () => {
   });
 
   it('R9 — a capture attempt arrives solo, so its kill is worth the solo 400', () => {
-    // R9 is "it arrives solo — never with escorts". Star Swarm has no escort
-    // launch at all: the director launches one enemy of a role per round robin
-    // (`src/sim/dive.ts`), so *every* captor is solo and the arcade's 800 and
-    // 1,600 are unreachable — recorded in `docs/ARCHITECTURE.md` section 5 rather
-    // than papered over here.
+    // R9 is "it arrives solo — never with escorts". Classic's warden names no
+    // escorts, so *every* captor is solo and the arcade's 800 and 1,600 are
+    // unreachable in Classic — recorded in `docs/ARCHITECTURE.md` section 5 rather
+    // than papered over here. That a leader which does name escorts still makes
+    // its capture attempt alone is `tests/unit/groups.test.ts`.
     //
     // What is assertable is the consequence, and it is the one a flat score table
     // gets wrong: the captor carries the escort record its stage start installed,

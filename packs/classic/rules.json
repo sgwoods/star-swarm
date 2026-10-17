@@ -300,7 +300,7 @@
   "scoring": {
     "movingMultiplier": 2,
     "escortBonus": {
-      "latchedAtLaunch": true,
+      "role": "warden",
       "byEscortCount": [100, 500, 1300]
     },
     "transformGroupBonus": {
@@ -2260,7 +2260,11 @@
     },
     "scoring.escortBonus": {
       "confidence": "verified",
-      "note": "`d_1CFD` = {13, 5, 1} units of 100 indexed by escort count, added to a captor's doubled 300 to give 1,600 / 800 / 400. Latched at launch and reset to the solo entry at every stage start — the per-boss record `bmbr_boss_scode` is written in exactly two places and nothing updates it when an escort dies, so killing the escorts first does not reduce the captor's value. Arcade reference section 9."
+      "note": "`d_1CFD` = {13, 5, 1} units of 100 indexed by escort count, added to a boss's doubled 300 to give 1,600 / 800 / 400. Latched at launch and reset to the solo entry at every stage start — the per-boss record `bmbr_boss_scode` is written in exactly two places and nothing updates it when an escort dies, so killing the escorts first does not reduce the boss's value; nothing is read at the kill, so there is no `atKill` entry, and no bonus for destroying a boss and its escorts together, so there is no `wholeGroup`. Arcade reference section 9."
+    },
+    "scoring.escortBonus.role": {
+      "confidence": "verified",
+      "note": "The escort record is per boss object — four of them, one per `warden` — and only a boss reads it at its kill. Stated here rather than inferred from `capture.captorRole`, which happens to name the same role. Arcade reference section 9."
     },
     "scoring.transformGroupBonus": {
       "confidence": "verified",

@@ -227,6 +227,34 @@ attack. `score` carries the **base** value only; the diving value is the rules
 layer's multiplier applied to it. `hp` above 1 wants `hitSprites`, one entry per
 hit already taken.
 
+**Escorts.** An alien whose `dive` carries `escorts` leads a **sortie** whenever
+the attack director launches it. Up to `max` settled enemies of the listed `roles`
+launch with it, looked for at its `offsets` in the order listed. What a generator
+gets wrong:
+
+- **Offsets are steps along the formation's axes**, `column` to the right and
+  `row` down the screen, not slot coordinates — and the axes include the captive
+  row, exactly as in §7.2. An offset where nobody of those roles is sitting in its
+  slot is skipped, so a busy neighbourhood launches a smaller group, down to none.
+- **Escorts fly the leader's dive**, mirrored as it is, from where each of them
+  sits, and hold that place beside it until each leaves the bottom. Their own dive
+  paths and weight play no part, and their role need not be one the difficulty
+  rows name (§7.1) — only the leader's must. Each escort's own `returns` decides
+  whether it comes back.
+- **A sortie is one launch.** The diver limit is checked for the leader only, and
+  the escorts count against it from then on. A capture attempt goes alone.
+- **The score reads the group in three ways, and only through a `rules.json`.**
+  `scoring.escortBonus` pays for the one `role` it names and no other:
+  - `byEscortCount`, latched when the leader launches;
+  - `atKill`, the pairs of escorts launched and escorts still flying with it that
+    pay something else when it dies;
+  - `wholeGroup`, paid when the leader and every escort are destroyed in flight,
+    none of them reaching a slot or leaving the field.
+
+  A pack layered over Classic's rules gets the role `packs/classic/rules.json`
+  names. A sortie led by any other role still flies together, and each of its
+  enemies is worth what it always was, but the group itself pays nothing.
+
 **Abilities.** An alien switches an ability on by listing it in `abilities`, at
 most once each, with the parameters that ability's schema names; the engine owns
 everything else. What each one does, and what it will not do whatever the pack
@@ -433,29 +461,28 @@ Refuse when the prompt needs any of these:
 
 - An **ability** the registry does not implement: anything an alien _does_ beyond
   moving, firing its configured pattern, taking `hp` hits, being worth points,
-  and the abilities of §5 as they are specified there. Growing, healing,
-  reflecting, stealing anything other than the one capture the channel already
-  implements, changing type on being hit, touching the fighter's controls — and a
-  variation the implemented ones do not offer, such as a shield that blocks from
-  one side only, minions that join the formation, or a mirror that copies the
-  fighter's vertical movement.
+  leading the escorts of §5, and the abilities of §5 as they are specified there.
+  Growing, healing, reflecting, stealing anything other than the one capture the
+  channel already implements, changing type on being hit, touching the fighter's
+  controls — and a variation the implemented ones do not offer, such as a shield
+  that blocks from one side only, minions that join the formation, or a mirror
+  that copies the fighter's vertical movement.
 - A **per-stage rule**: different lives, different bullet speeds, a different shot
   cap, a different diver limit for one stage. `stage.modifiers` and
   `stage.diveRules` look like the place and are read by nothing (§2.3); the real
   home is a `rules.json`, and a variant may not override one (§6).
 - A **new engine behaviour**: a boss fight, a power-up, a second weapon, a scrolling
   stage, a background that is not the starfield.
-- A **sortie group**: enemies that fly together, or a score that depends on which
-  enemies flew together. That is a leader and its members, formed at launch and
-  keeping one identity for the whole flight, and scoring read off it — the members
-  that launched with the leader, the members still in flight when it dies, or the
-  whole group destroyed with none escaping. The attack director launches one enemy
-  of a role at a time and no document can name one alien as flying with another.
-  An escorted flagship, a wingman, and a squadron worth a bonus for being cleared
-  together — beyond the two sets the rules layer already pays for, a challenge
-  stage's group of eight and the transform attack's trio — are all this. `packs/convoy/README.md` records it as the one thing the
-  second lineage needed that a pack cannot say, and everything else that game
-  needed, it could.
+- A **group born any other way than a launch**. A sortie is the one birth there is
+  (§5): enemies that form a group as an entry wave, as a split's fragments or a
+  spawner's minions, or as the transform attack's trio cannot be named as one,
+  beyond the two sets the rules layer already pays for — a challenge stage's group
+  of eight and the transform attack's trio.
+- A **group score beyond the three readings of §5**: anything that depends on the
+  order its members die (there is no kill log, by design), or that changes what an
+  escort is worth for having flown in one. The same goes for a **leader's death
+  changing the rest of its group or the fleet** — a stun, a formation that breaks
+  up, dependants that die with it.
 - Anything **section 2 forbids** (§3), however the prompt frames it — as a test, a
   placeholder, a tribute, or a claim that the names are not trademarked.
 
