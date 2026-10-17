@@ -42,12 +42,16 @@ effects their events want. All of it has moved to
 [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#44-where-a-second-game-plugs-in)
 ([§4.4](ARCHITECTURE.md#44-where-a-second-game-plugs-in) and
 [§4.7](ARCHITECTURE.md#47-the-playability-pass)), which is where a thing that
-exists is described. What the milestone still owes is the same kind of work:
+exists is described.
 
-- **Ship: a second game**, rather than a variant of this one — the Galaxian-lineage
-  mode the captain's standing direction asks for. It will be another pack plus
-  another `rules.json` and a variant document naming them, and the question it will
-  answer is whether that is really all it takes.
+The second game has landed too, and moved to
+[`docs/ARCHITECTURE.md`](ARCHITECTURE.md#44-where-a-second-game-plugs-in): the
+Galaxian-lineage game, as a pack, a `rules.json` and a variant document and
+nothing else. What it **found** rather than built is the one thing that answer
+stops short of — a sortie group, enemies that fly together and are scored as a
+group, which the second lineage's escorted flagship needs and the first game's
+escorted captor needs as well. Whether the engine grows one is a question for the
+captain rather than a task, so it is not scheduled here.
 
 The pack manager and the stage-sequence editor have landed, and moved to
 [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#the-pack-manager-and-the-stage-sequence-editor)
@@ -68,8 +72,8 @@ _Exit check:_ a player can change the rules from inside the game, a forged pack
 fails validation for being unplayable rather than merely malformed, and a pack
 with a new ability plays without an engine change — the first met by the pack
 manager and the stage-sequence editor, the second by the validator's playability
-pass, and the third by `tests/sim/ability-pack.test.ts`. What the milestone still
-owes is the second game.
+pass, and the third by `tests/sim/ability-pack.test.ts`. The second game is in as
+well, by a pack, a `rules.json` and a variant and no engine change.
 
 ## Now: Milestone 4 — prompt forge
 

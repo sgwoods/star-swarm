@@ -1,0 +1,16 @@
+{
+  "id": "raider",
+  "role": "wing",
+  "sprite": "raider",
+  "score": {
+    "base": 40
+  },
+  "fire": {
+    "pattern": "aimed",
+    "shotsPerDive": 1,
+    "cooldownFrames": 36
+  },
+  "dive": {
+    "paths": ["dive-raider"]
+  }
+}

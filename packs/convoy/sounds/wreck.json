@@ -1,0 +1,23 @@
+{
+  "id": "wreck",
+  "wave": "square",
+  "duty": 0.4,
+  "envelope": [0.01, 0.5, 0.3],
+  "volume": 0.44,
+  "sequence": [
+    {
+      "freq": [600, 220],
+      "duration": 0.25
+    },
+    {
+      "freq": [420, 90],
+      "duration": 0.35
+    },
+    {
+      "freq": [1200, 60],
+      "duration": 0.6,
+      "wave": "noise",
+      "volume": 0.4
+    }
+  ]
+}

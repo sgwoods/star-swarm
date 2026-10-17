@@ -36,6 +36,7 @@ import { personaSchema } from '../../../src/content/personas.js';
 import type {
   AlienAbility,
   Formation,
+  Rules,
   Sprite,
   StageSequence,
 } from '../../../src/content/schema.js';
@@ -662,6 +663,23 @@ function mirageAbility<T extends AlienAbility['type']>(
   return found as Extract<AlienAbility, { type: T }>;
 }
 
+/** The second lineage's game: its own formation, which it declares one of. */
+function convoyFormation(): Formation {
+  const formations = [...installedPack('convoy').formations.values()];
+  const formation = formations[0];
+  if (formation === undefined || formations.length !== 1) {
+    throw new Error(`packs/convoy declares ${String(formations.length)} formations, expected one`);
+  }
+  return formation;
+}
+
+/** The second lineage's rules, which it ships rather than inherits. */
+function convoyRules(): Rules {
+  const rules = installedPack('convoy').rules;
+  if (rules === undefined) throw new Error('packs/convoy ships no rules.json');
+  return rules;
+}
+
 /**
  * The forged pack's own stage sequence.
  *
@@ -783,6 +801,7 @@ export function counters(root = REPO_ROOT): ReadonlyMap<string, () => number> {
     ['autoplay.forgedPersonas', () => personasOf('deep-sea').length],
     ['autoplay.sporeStormPersonas', () => personasOf('spore-storm').length],
     ['autoplay.miragePersonas', () => personasOf('mirage').length],
+    ['autoplay.convoyPersonas', () => personasOf('convoy').length],
     [
       'autoplay.axes',
       () => Object.keys(personaSchema.shape).filter((key) => !PERSONA_LABELLING.has(key)).length,
@@ -1000,6 +1019,26 @@ export function counters(root = REPO_ROOT): ReadonlyMap<string, () => number> {
       'mirage.glassStrengthPercent',
       () => Math.round(mirageAbility('glass', 'mirrorPlayer').strength * 100),
     ],
+
+    /**
+     * The second lineage's game, which layers over nothing — so its rules are
+     * counted from its own document, and its README's numbers cannot outlive them.
+     */
+    ['convoy.aliens', () => installedPack('convoy').aliens.size],
+    ['convoy.paths', () => installedPack('convoy').paths.size],
+    ['convoy.stages', () => installedPack('convoy').stages.size],
+    ['convoy.sprites', () => installedPack('convoy').sprites.size],
+    ['convoy.sounds', () => installedPack('convoy').sounds.size],
+    ['convoy.roles', () => Object.keys(installedPack('convoy').manifest.roles).length],
+    ['convoy.formationSlots', () => convoyFormation().slots.length],
+    ['convoy.formationColumns', () => formationAxes(convoyFormation()).columns.length],
+    ['convoy.formationRows', () => formationAxes(convoyFormation()).rows.length],
+    ['convoy.maxShots', () => convoyRules().player.maxShots],
+    [
+      'convoy.difficultyRows',
+      () => convoyRules().difficulty.ranks.standard?.stageTable.rows.length ?? 0,
+    ],
+    ['convoy.driftPixels', () => convoyRules().formation.breathe?.columns[0] ?? 0],
 
     /* The rules layer. */
     ['rules.ranks', () => Object.keys(classicRules().difficulty.ranks).length],

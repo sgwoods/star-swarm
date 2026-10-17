@@ -1,0 +1,21 @@
+{
+  "id": "next-convoy",
+  "wave": "square",
+  "duty": 0.25,
+  "envelope": [0.004, 0.6, 0.396],
+  "volume": 0.24,
+  "sequence": [
+    {
+      "freq": 783.99,
+      "duration": 0.1
+    },
+    {
+      "freq": 1046.5,
+      "duration": 0.1
+    },
+    {
+      "freq": 1318.51,
+      "duration": 0.22
+    }
+  ]
+}

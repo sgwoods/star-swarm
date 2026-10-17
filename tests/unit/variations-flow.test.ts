@@ -170,6 +170,7 @@ describe('an edit to a shipped game makes a named game beside it', () => {
     // the very object the build loaded, not a copy someone composed.
     expect(flow.games.map((game) => game.id)).toEqual([
       'classic',
+      'convoy',
       'spore-storm',
       'mirage',
       'deep-sea',
@@ -388,6 +389,7 @@ describe('a variation a later build has shipped a game under the id of', () => {
     const { flow, settings } = cabinet(storage);
     expect(flow.games.map((game) => game.id)).toEqual([
       'classic',
+      'convoy',
       'spore-storm',
       'mirage',
       'deep-sea',

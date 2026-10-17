@@ -1,0 +1,266 @@
+{
+  "id": "convoy",
+  "formation": "convoy46",
+  "waves": [
+    {
+      "at": 0,
+      "slots": [
+        {
+          "alien": "scout",
+          "path": "entry-column-0",
+          "home": 36
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-1",
+          "home": 37
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-2",
+          "home": 38
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-3",
+          "home": 39
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-4",
+          "home": 40
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-5",
+          "home": 41
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-6",
+          "home": 42
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-7",
+          "home": 43
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-8",
+          "home": 44
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-9",
+          "home": 45
+        }
+      ]
+    },
+    {
+      "at": 18,
+      "slots": [
+        {
+          "alien": "scout",
+          "path": "entry-column-0",
+          "home": 26
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-1",
+          "home": 27
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-2",
+          "home": 28
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-3",
+          "home": 29
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-4",
+          "home": 30
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-5",
+          "home": 31
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-6",
+          "home": 32
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-7",
+          "home": 33
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-8",
+          "home": 34
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-9",
+          "home": 35
+        }
+      ]
+    },
+    {
+      "at": 36,
+      "slots": [
+        {
+          "alien": "scout",
+          "path": "entry-column-0",
+          "home": 16
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-1",
+          "home": 17
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-2",
+          "home": 18
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-3",
+          "home": 19
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-4",
+          "home": 20
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-5",
+          "home": 21
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-6",
+          "home": 22
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-7",
+          "home": 23
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-8",
+          "home": 24
+        },
+        {
+          "alien": "scout",
+          "path": "entry-column-9",
+          "home": 25
+        }
+      ]
+    },
+    {
+      "at": 54,
+      "slots": [
+        {
+          "alien": "raider",
+          "path": "entry-column-1",
+          "home": 8
+        },
+        {
+          "alien": "raider",
+          "path": "entry-column-2",
+          "home": 9
+        },
+        {
+          "alien": "raider",
+          "path": "entry-column-3",
+          "home": 10
+        },
+        {
+          "alien": "raider",
+          "path": "entry-column-4",
+          "home": 11
+        },
+        {
+          "alien": "raider",
+          "path": "entry-column-5",
+          "home": 12
+        },
+        {
+          "alien": "raider",
+          "path": "entry-column-6",
+          "home": 13
+        },
+        {
+          "alien": "raider",
+          "path": "entry-column-7",
+          "home": 14
+        },
+        {
+          "alien": "raider",
+          "path": "entry-column-8",
+          "home": 15
+        }
+      ]
+    },
+    {
+      "at": 72,
+      "slots": [
+        {
+          "alien": "escort",
+          "path": "entry-column-2",
+          "home": 2
+        },
+        {
+          "alien": "escort",
+          "path": "entry-column-3",
+          "home": 3
+        },
+        {
+          "alien": "escort",
+          "path": "entry-column-4",
+          "home": 4
+        },
+        {
+          "alien": "escort",
+          "path": "entry-column-5",
+          "home": 5
+        },
+        {
+          "alien": "escort",
+          "path": "entry-column-6",
+          "home": 6
+        },
+        {
+          "alien": "escort",
+          "path": "entry-column-7",
+          "home": 7
+        }
+      ]
+    },
+    {
+      "at": 90,
+      "slots": [
+        {
+          "alien": "flagship",
+          "path": "entry-column-3",
+          "home": 0
+        },
+        {
+          "alien": "flagship",
+          "path": "entry-column-6",
+          "home": 1
+        }
+      ]
+    }
+  ]
+}
