@@ -2,15 +2,16 @@
 
 Pure game simulation. What is here: `world.ts`, `player.ts`, `shots.ts`,
 `collision.ts`, `lives.ts`, `events.ts`, `enemies.ts`, `formation.ts`, `paths.ts`
-(segment interpreter), `dive.ts` and `challenge.ts`, and the ability registry in
-`abilities/` — which holds the capture channel as `abilities/capture-beam.ts`
-beside the six abilities a pack's aliens switch on (its own README). What
-`docs/DESIGN.md` section 9 also lists and is not here: `scoring.ts` and
-`stages.ts` were never written — scoring lives in `enemies.ts` and `world.ts`, and
-resolving a stage number to its documents is content work in
-`src/content/stages.ts`. `docs/ARCHITECTURE.md` §5 records both divergences.
+(segment interpreter), `dive.ts`, `groups.ts` and `challenge.ts`, and the ability
+registry in `abilities/` — which holds the capture channel as
+`abilities/capture-beam.ts` beside the six abilities a pack's aliens switch on (its
+own README). What `docs/DESIGN.md` section 9 also lists and is not here:
+`scoring.ts` and `stages.ts` were never written — scoring lives in `enemies.ts`,
+`world.ts` and `groups.ts`, and resolving a stage number to its documents is
+content work in `src/content/stages.ts`. `docs/ARCHITECTURE.md` §5 records both
+divergences.
 <!-- check:absent src/sim/scoring.ts src/sim/stages.ts -->
-<!-- check:count sim.modules 11 sim.abilities.modules 8 -->
+<!-- check:count sim.modules 12 sim.abilities.modules 8 -->
 
 Milestone 1 landed the player half: `world.ts`, `player.ts`, `shots.ts`,
 `collision.ts`, `lives.ts` and `events.ts`. Milestone 2's first task replaced
@@ -42,6 +43,22 @@ A captor's dive is an ordinary dive with a beam on it: the director asks
 `abilities/capture-beam.ts` one question when a captor-role launch comes up — is this one an
 attempt? — and launches it through the same credit, the same diver limit and the
 same `beginDive` whichever way the answer goes. All that differs is the path.
+
+**A sortie is one launch, and a group is an identity, not a kill log.** An alien
+whose `dive.escorts` names who flies with it launches with up to that many
+settled enemies, found at the pack's offsets from its slot. They fly its dive path
+from where each of them sits, and `groups.ts` records them as one group for the
+whole flight, the wrap-around back to the top included. Scoring reads the group in
+three ways and no others:
+
+- the escorts launched with the leader, latched onto it;
+- the escorts still flying with it when it dies;
+- the whole group destroyed with none escaping.
+
+No score anywhere depends on the order of kills. A capture attempt is still one
+of these launches, and it goes alone. An alien that names no escorts forms no
+group, and `groupFingerprint` is then absent rather than empty, so every golden
+recorded before groups existed still reproduces.
 
 **Capture is one channel, and the channel is the rule.** There is exactly one
 captured fighter in a run, ever, and a captor may only be chosen while the channel

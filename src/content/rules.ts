@@ -358,22 +358,55 @@ export function resolveTransformType(rules: Rules, stage: number): string | unde
 }
 
 /**
- * What a captor's own kill pays on top of its value, for `escorts` escorts.
+ * What a sortie leader's own kill pays on top of its value, for `escorts`
+ * escorts launched with it — the record that is **latched** at launch.
  *
  * The one place a flat `{type, moving} -> points` table gets the arcade wrong,
- * and the reason an alien stores its **base** score alone: a captor is its base
+ * and the reason an alien stores its **base** score alone: a boss is its base
  * doubled *plus* a bonus chosen by how many escorts launched with it — 300 + 100,
  * 500 or 1,300, giving 400, 800 and 1,600 (`docs/DESIGN.md` section 4, reference
- * section 9). The role that carries it is the pack's `capture.captorRole`, which
- * is what "a captor's value" means: the arcade keeps one escort record per boss
- * object, and a boss is exactly the thing that captures.
+ * section 9). The role that carries it is the pack's `scoring.escortBonus.role`:
+ * the arcade keeps one escort record per boss object, and which object that is
+ * belongs to scoring, not to the tractor beam the same boss happens to carry.
  *
  * Returns 0 for every other role, and for an escort count the pack's table does
  * not reach — a pack that states no table pays no bonus rather than a default.
  */
 export function resolveEscortBonus(rules: Rules, role: string, escorts: number): number {
-  if (role !== rules.capture.captorRole) return 0;
-  return rules.scoring.escortBonus.byEscortCount[escorts] ?? 0;
+  const record = rules.scoring.escortBonus;
+  if (record.role === undefined || role !== record.role) return 0;
+  return record.byEscortCount[escorts] ?? 0;
+}
+
+/**
+ * What a leader's kill pays instead of its latched record, if anything: the
+ * `atKill` entry for the escorts it launched with and those still flying with it.
+ *
+ * `undefined` means the latch stands, which is every case a pack does not list
+ * and every case for a role that carries no record. It never interpolates: a
+ * pair is listed or it is not.
+ */
+export function resolveEscortBonusAtKill(
+  rules: Rules,
+  role: string,
+  escorts: number,
+  inFlight: number,
+): number | undefined {
+  const record = rules.scoring.escortBonus;
+  if (record.role === undefined || role !== record.role) return undefined;
+  return record.atKill.find((entry) => entry.escorts === escorts && entry.inFlight === inFlight)
+    ?.bonus;
+}
+
+/**
+ * What destroying a whole sortie pays, beside the kill that completes it, for a
+ * leader of `role` that launched with `escorts` escorts. 0 for a role that
+ * carries no record, and for a count the table does not reach.
+ */
+export function resolveWholeGroupBonus(rules: Rules, role: string, escorts: number): number {
+  const record = rules.scoring.escortBonus;
+  if (record.role === undefined || role !== record.role) return 0;
+  return record.wholeGroup[escorts] ?? 0;
 }
 
 /** Convenience wrapper so callers do not have to import `resolveRow` as well. */

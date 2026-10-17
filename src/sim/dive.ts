@@ -34,6 +34,12 @@
  *    re-enters at the top and flies the pack's return path, which ends in the
  *    same segment the entry waves use. There is one homing implementation in the
  *    simulation and it lives in the path interpreter.
+ * 7. **A sortie is one launch.** A leader whose alien names escorts takes them
+ *    with it on the same credit, the same diver-limit check and the same path:
+ *    the escorts are chosen by the pack's rule over the formation, fly the
+ *    leader's dive from where each of them sits, and are recorded as one group
+ *    (`./groups.ts`). An alien that names none launches exactly as before, and no
+ *    group exists.
  *
  * No constants: every number arrives in the `Rules` value.
  */
@@ -53,15 +59,17 @@ import {
   resolveTransformType,
   transformGroupIndex,
 } from '../content/rules.js';
-import type { DifficultyRow, Rules } from '../content/schema.js';
+import type { DifficultyRow, DiveEscorts, Rules } from '../content/schema.js';
 import type { StageContent } from '../content/stages.js';
 import type { Rng } from '../engine/rng.js';
 import type { CaptureState } from './abilities/capture-beam.js';
 import { beginCaptureDive } from './abilities/capture-beam.js';
 import type { Enemy, Fleet, ScriptedFire } from './enemies.js';
-import { beginDive, fleetEnemies, spawnDiver } from './enemies.js';
+import { aimPoint, beginDive, fleetEnemies, NO_SLOT, spawnDiver } from './enemies.js';
 import type { FormationState } from './formation.js';
 import { isRightOfCentre } from './formation.js';
+import type { Group, GroupState } from './groups.js';
+import { formSortie } from './groups.js';
 import { headingToVector, vectorToHeading, type Vec2 } from './paths.js';
 import { launchEnemyBullet, type EnemyBulletPool } from './shots.js';
 
@@ -183,6 +191,8 @@ export interface AttackContext {
    * only difference is which path it flies (`src/sim/abilities/capture-beam.ts`).
    */
   readonly capture: CaptureState | undefined;
+  /** Where a sortie is recorded, the moment one launches (`./groups.ts`). */
+  readonly groups: GroupState;
   /** The fighter's anchor, or `undefined` while it is off the field. */
   readonly playerAt: Vec2 | undefined;
   /** `fire` segments the fleet's flights passed through on this frame. */
@@ -191,8 +201,10 @@ export interface AttackContext {
 
 /** What one step of the director did, for the world to turn into events. */
 export interface AttackStep {
-  /** Enemies that began a dive on this frame. */
+  /** Enemies that began a dive on this frame, a sortie's escorts after its leader. */
   readonly dived: readonly Enemy[];
+  /** The sorties that launched on this frame. Empty for a pack that declares none. */
+  readonly sorties: readonly Group[];
   /** Enemies that dropped at least one bomb on this frame. */
   readonly fired: readonly Enemy[];
   /** The group a transform put on the field on this frame, if any. */
@@ -206,6 +218,7 @@ export interface AttackStep {
 /** Nothing happened, because nothing may. Frozen: callers only read it. */
 const NO_ATTACK: AttackStep = Object.freeze({
   dived: Object.freeze([]),
+  sorties: Object.freeze([]),
   fired: Object.freeze([]),
   transformed: Object.freeze([]),
   transformedFrom: undefined,
@@ -230,11 +243,13 @@ export function stepAttacks(state: DiveState, ctx: AttackContext): AttackStep {
   const transformed: Enemy[] = [];
   const parent = state.transformTarget;
   const transforming = stepTransform(state, ctx, alive, transformed);
-  const dived = state.armed ? launchDives(state, ctx) : [];
+  const sorties: Group[] = [];
+  const dived = state.armed ? launchDives(state, ctx, sorties) : [];
   const fired = dropBombs(state, ctx, alive);
 
   return {
     dived,
+    sorties,
     fired,
     transformed,
     // The parent is forgotten as the group launches, so it is read from before.
@@ -255,8 +270,11 @@ export function stepAttacks(state: DiveState, ctx: AttackContext): AttackStep {
  * **saturates** at one launch: a role blocked by the diver limit does not bank
  * launches, so the moment a slot frees the field does not fill with five enemies
  * that were queued up behind it.
+ *
+ * A sortie is one launch: the limit is checked for its leader, and its escorts
+ * count as divers from the moment they leave, like anything else that is diving.
  */
-function launchDives(state: DiveState, ctx: AttackContext): Enemy[] {
+function launchDives(state: DiveState, ctx: AttackContext, sorties: Group[]): Enemy[] {
   const { fleet, rules } = ctx;
   if (fleet.frame % rules.enemies.updatePhases !== 0) return [];
 
@@ -271,10 +289,15 @@ function launchDives(state: DiveState, ctx: AttackContext): Enemy[] {
     if (credit >= launchCost && diving < limit) {
       const enemy = pickDiver(ctx, role);
       if (enemy !== undefined) {
-        launchDive(ctx, enemy);
+        const sortie = launchDive(ctx, enemy);
         credit -= launchCost;
         diving += 1;
         dived.push(enemy);
+        if (sortie !== undefined) {
+          diving += sortie.escorts.length;
+          dived.push(...sortie.escorts);
+          sorties.push(sortie.group);
+        }
       }
     }
     state.credit.set(role, credit);
@@ -309,16 +332,27 @@ function pickDiver(ctx: AttackContext, role: string): Enemy | undefined {
   return eligible[eligible.length - 1];
 }
 
+/** A leader that launched as a sortie, and who went with it. */
+interface Sortie {
+  readonly group: Group;
+  readonly escorts: readonly Enemy[];
+}
+
 /**
- * Send one enemy down one of its dive paths.
+ * Send one enemy down one of its dive paths — with its escorts, if its alien
+ * names any.
  *
  * Which path is a seeded draw; whether it flies mirrored is **not** — an enemy in
  * the right-hand half of the formation sweeps right and one in the left half
  * sweeps left, which is what makes the dives fan outwards the way the arcade's do
  * (`docs/reference/arcade-reference.md` section 5) rather than all crossing the
  * same piece of screen.
+ *
+ * Returns the sortie, or `undefined` for an alien that dives alone — which is
+ * every alien a pack has not given `dive.escorts`, and so the whole of how this
+ * stays exactly what it was for them.
  */
-function launchDive(ctx: AttackContext, enemy: Enemy): void {
+function launchDive(ctx: AttackContext, enemy: Enemy): Sortie | undefined {
   // A capture attempt is this launch with a different path on it. Asking first
   // means the capture channel's own gate — no attempt while a fighter is held,
   // only every nth eligible launch — is the only thing deciding whether a beam
@@ -329,7 +363,62 @@ function launchDive(ctx: AttackContext, enemy: Enemy): void {
       : beginCaptureDive(ctx.capture, ctx.rules, ctx.formation, enemy);
   const path = capturing ?? ctx.rng.pick(enemy.divePaths);
   const mirror = isRightOfCentre(ctx.formation, enemy.home);
+  const from: Vec2 = [enemy.x, enemy.y];
   beginDive(ctx.fleet, enemy, ctx.content, ctx.formation, ctx.rules, path, mirror, ctx.playerAt);
+
+  if (enemy.escorts === undefined) return undefined;
+  // A capture attempt goes alone — the arcade's tractor-beam boss "will skip
+  // escort selection" — but it is still a launch, so its record is still
+  // written, at the solo value.
+  const escorts = capturing === undefined ? pickEscorts(ctx, enemy, enemy.escorts) : [];
+  const aim = aimPoint(ctx.rules, ctx.playerAt);
+  for (const escort of escorts) {
+    // The leader's own path and mirror, flown from where the escort sits, at
+    // the leader's aim point moved by the same offset: every segment of a dive
+    // is relative to the flyer's pose, so the escort keeps its place beside the
+    // leader for as long as the leader's dive does.
+    const dx = escort.x - from[0];
+    const dy = escort.y - from[1];
+    beginDive(ctx.fleet, escort, ctx.content, ctx.formation, ctx.rules, path, mirror, [
+      aim[0] + dx,
+      aim[1] + dy,
+    ]);
+  }
+  return { group: formSortie(ctx.groups, ctx.rules, enemy, escorts), escorts };
+}
+
+/**
+ * Who flies with a leader: the settled enemies of the escort roles found at the
+ * pack's offsets from the leader's slot, in the order the offsets are listed,
+ * until `max` are found.
+ *
+ * A rule over the formation and not a draw, so it takes nothing from the seeded
+ * generator. Offsets count steps along the formation's own axes, which is what
+ * makes "the next column over" mean the same in a formation of any spacing. An
+ * escort's own dive paths and weight play no part: it flies the leader's dive.
+ */
+function pickEscorts(ctx: AttackContext, leader: Enemy, escorts: DiveEscorts): Enemy[] {
+  const { formation } = ctx;
+  if (leader.home === NO_SLOT || leader.inCaptiveSlot) return [];
+  const column = formation.slotColumn[leader.home];
+  const row = formation.slotRow[leader.home];
+  if (column === undefined || row === undefined) return [];
+
+  const chosen: Enemy[] = [];
+  for (const offset of escorts.offsets) {
+    if (chosen.length >= escorts.max) break;
+    const found = ctx.fleet.enemies.find(
+      (enemy) =>
+        enemy.state === 'home' &&
+        !enemy.inCaptiveSlot &&
+        enemy.home !== NO_SLOT &&
+        escorts.roles.includes(enemy.role) &&
+        formation.slotColumn[enemy.home] === column + offset.column &&
+        formation.slotRow[enemy.home] === row + offset.row,
+    );
+    if (found !== undefined) chosen.push(found);
+  }
+  return chosen;
 }
 
 /* -------------------------------------------------------------------------- */

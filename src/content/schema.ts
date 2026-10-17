@@ -633,6 +633,69 @@ export const pathSegmentSchema = z.discriminatedUnion('type', [
 
 export type PathSegment = z.infer<typeof pathSegmentSchema>;
 
+/**
+ * One place an escort is looked for, as steps along the formation's own axes
+ * from the leader's slot: `column` to the right, `row` down the screen.
+ *
+ * Steps rather than slot coordinates, so "the next column over" means the same
+ * thing in a formation whose columns are 2 apart and in one whose columns are 1
+ * apart. The axes are the ones `formationAxes` derives, which include the
+ * captive slots' rows and columns.
+ */
+export const escortOffsetSchema = z.strictObject({
+  column: z.number().int(),
+  row: z.number().int(),
+});
+
+/**
+ * A leader's escorts: up to `max` settled enemies of `roles`, taken from the
+ * formation at `offsets` from the leader's slot, in the order listed.
+ *
+ * A rule over the formation rather than a draw, so which enemies fly together is
+ * the pack's to say and costs the seeded generator nothing. The escorts fly the
+ * leader's own dive path, mirrored as it is, and keep the place they launched
+ * from beside it (`src/sim/dive.ts`).
+ */
+export const diveEscortsSchema = z
+  .strictObject({
+    /** Roles an escort may be. Its own dive paths and weight play no part. */
+    roles: z.array(idSchema).min(1),
+    /** The most that fly with one leader. */
+    max: z.number().int().positive(),
+    /** Where to look, in order of preference. */
+    offsets: z.array(escortOffsetSchema).min(1),
+  })
+  .superRefine((escorts, ctx) => {
+    // A promise the engine cannot keep is refused rather than quietly shortened.
+    if (escorts.max > escorts.offsets.length) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['max'],
+        message: `${String(escorts.max)} escorts cannot be found at ${String(escorts.offsets.length)} offsets`,
+      });
+    }
+    const seen = new Set<string>();
+    escorts.offsets.forEach((offset, index) => {
+      const key = `${String(offset.column)},${String(offset.row)}`;
+      if (offset.column === 0 && offset.row === 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['offsets', index],
+          message: "an offset of 0, 0 is the leader's own slot",
+        });
+      } else if (seen.has(key)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['offsets', index],
+          message: `offset ${key} is listed twice`,
+        });
+      }
+      seen.add(key);
+    });
+  });
+
+export type DiveEscorts = z.infer<typeof diveEscortsSchema>;
+
 export const pathSchema = z.strictObject({
   id: idSchema,
   /**
@@ -724,6 +787,11 @@ export const alienSchema = z.strictObject({
        * an alien does is therefore the alien's business, not the engine's.
        */
       returns: z.boolean().default(true),
+      /**
+       * Who flies with this alien when the attack director launches it: a sortie
+       * (`src/sim/groups.ts`). Omitted, it dives alone, as every alien always has.
+       */
+      escorts: diveEscortsSchema.optional(),
     })
     .optional(),
   /**
@@ -1609,14 +1677,60 @@ export const rulesSchema = z.strictObject({
       /** What a moving target's base value is multiplied by. */
       movingMultiplier: z.number().positive().default(2),
       /**
-       * Escort bonus added to a captor's value, indexed by escort count. Latched
-       * when it launches, so killing its escorts first does not reduce it — which
-       * a flat score table gets wrong (`docs/DESIGN.md` section 4).
+       * What a sortie leader's group is worth (`src/sim/groups.ts`): the three
+       * ways a score reads the group that launched with it, and nothing else.
        */
       escortBonus: z
         .strictObject({
-          latchedAtLaunch: z.boolean().default(true),
+          /**
+           * The role whose kill carries an escort record. Nothing else pays one,
+           * and nothing pays one when this is omitted. It is stated here rather
+           * than taken from `capture.captorRole`, because which enemy leads a
+           * sortie has nothing to do with which one carries a tractor beam.
+           */
+          role: idSchema.optional(),
+          /**
+           * Added to the leader's diving value, indexed by the escorts that
+           * launched with it. **Latched** when it launches and never revised by an
+           * escort's death, so killing the escorts first does not reduce it —
+           * which a flat score table gets wrong (`docs/DESIGN.md` section 4). Every
+           * stage starts every enemy of `role` on the first entry.
+           */
           byEscortCount: z.array(z.number().int().nonnegative()).default([]),
+          /**
+           * Read at the leader's kill instead: a leader that launched with
+           * `escorts` and dies with `inFlight` of them still flying with it is
+           * worth `bonus` in place of its latched entry. An escort that has
+           * reached its slot, been destroyed or left the field is no longer in
+           * flight. Only the pairs listed differ from the latch.
+           */
+          atKill: z
+            .array(
+              z
+                .strictObject({
+                  escorts: z.number().int().nonnegative(),
+                  inFlight: z.number().int().nonnegative(),
+                  bonus: z.number().int().nonnegative(),
+                })
+                .refine((entry) => entry.inFlight <= entry.escorts, {
+                  message: 'more escorts cannot be in flight than launched',
+                  path: ['inFlight'],
+                }),
+            )
+            .default([])
+            .refine(
+              (entries) =>
+                new Set(
+                  entries.map((entry) => `${String(entry.escorts)},${String(entry.inFlight)}`),
+                ).size === entries.length,
+              { message: 'each escorts, inFlight pair may be listed once' },
+            ),
+          /**
+           * Paid beside the kill that completes it, indexed by the escorts that
+           * launched: the leader and every one of its escorts destroyed while
+           * flying together, none of them having reached a slot or left the field.
+           */
+          wholeGroup: z.array(z.number().int().nonnegative()).default([]),
         })
         .prefault({}),
       /** Bonus for destroying a whole transform group, indexed by transform cycle. */

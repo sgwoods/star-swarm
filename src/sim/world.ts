@@ -20,7 +20,8 @@
  * awards (`src/sim/challenge.ts`), extra lives, and the per-enemy abilities a
  * pack switches on (`src/sim/abilities/registry.ts`). A captor's dive is an
  * ordinary dive with a beam on it, so it launches through the same director and
- * the same `beginDive`.
+ * the same `beginDive` — and so does a sortie, whose group and the three ways a
+ * score reads it are `src/sim/groups.ts`.
  *
  * **Three ways to lose a fighter, two events.** Being shot and being *flown into*
  * are the same loss — the arcade has one routine for every hit on the fighter — so
@@ -83,6 +84,14 @@ import {
 import type { SimEvent } from './events.js';
 import type { FormationState } from './formation.js';
 import { createFormation, stepFormation } from './formation.js';
+import type { GroupDestroyed, GroupState } from './groups.js';
+import {
+  createGroupState,
+  escortBonusAtKill,
+  groupFingerprint,
+  groupNoteDestroyed,
+  groupNoteSurvived,
+} from './groups.js';
 import { createLives, type LivesState } from './lives.js';
 import type { Vec2 } from './paths.js';
 import { createPlayer, type PlayerState, shipAnchors, startX, stepPlayer } from './player.js';
@@ -160,6 +169,12 @@ export interface World {
    * Replaced every stage, because it is keyed by enemy id and ids are per stage.
    */
   abilities: AbilityState;
+  /**
+   * The sorties flown this stage: who launched with whom, and who is still
+   * flying with whom (`src/sim/groups.ts`). Replaced every stage for the same
+   * reason as `abilities`, and empty for a pack that declares no escorts.
+   */
+  groups: GroupState;
   rng: Rng;
   /** Events raised by the step just run. Replaced every step, never appended to across steps. */
   events: SimEvent[];
@@ -226,6 +241,7 @@ export function createWorld(options: WorldOptions): World {
     dive: createDiveState(rules, stage, options.rank),
     capture: createCaptureState(rules, stage, options.rank),
     abilities: createAbilityState(),
+    groups: createGroupState(),
     rng,
     events: [],
   };
@@ -261,7 +277,9 @@ function addScore(world: World, delta: number): void {
  * Two rules, and which applies is the stage's business rather than the enemy's:
  *
  * - On an ordinary stage the value comes from the enemy's *state* — doubled
- *   unless it is at home or rotating back into its slot (see {@link enemyScore}).
+ *   unless it is at home or rotating back into its slot (see {@link enemyScore})
+ *   — with a sortie leader's escort record as its group resolves it at the kill
+ *   ({@link escortBonusAtKill}).
  * - On a challenge stage it comes from the **stage**, because the original
  *   overwrites every enemy's score group at the start of one; a challenge flyer
  *   is worth 100 on the first challenge stage and 160 on the second whatever
@@ -272,7 +290,12 @@ function destroyAward(
   enemy: Enemy,
 ): { readonly score: number; readonly groupBonus: number } {
   const challenge = world.challenge;
-  if (challenge === undefined) return { score: enemyScore(enemy), groupBonus: 0 };
+  if (challenge === undefined) {
+    return {
+      score: enemyScore(enemy, escortBonusAtKill(world.groups, world.rules, enemy)),
+      groupBonus: 0,
+    };
+  }
   const hit = recordChallengeHit(challenge, enemy.wave);
   return { score: hit.impact, groupBonus: hit.groupBonus };
 }
@@ -297,6 +320,24 @@ function payChallengeGroup(world: World, enemy: Enemy, bonus: number): void {
     bonus,
   });
   addScore(world, bonus);
+}
+
+/**
+ * Pay the whole sortie that kill completed, if the pack pays for one.
+ *
+ * The same shape as {@link payChallengeGroup}, for the same reasons: a bonus for
+ * clearing a set is its own award arriving beside the kill, not part of the last
+ * member's value.
+ */
+function paySortie(world: World, destroyed: GroupDestroyed | undefined): void {
+  if (destroyed === undefined || destroyed.bonus <= 0) return;
+  world.events.push({
+    type: 'sortie-destroyed',
+    group: destroyed.group.id,
+    targetId: destroyed.group.leader,
+    bonus: destroyed.bonus,
+  });
+  addScore(world, destroyed.bonus);
 }
 
 /**
@@ -343,6 +384,7 @@ function resolvePlayerShots(world: World): void {
       } else {
         const award = destroyAward(world, enemy);
         const transformBonus = noteDestroyed(world.dive, world.rules, world.stage, enemy);
+        const sortie = groupNoteDestroyed(world.groups, world.rules, enemy, world.fleet.enemies);
         const priorState = enemy.state;
         enemy.state = 'dead';
         world.fleet.flights.delete(enemy.id);
@@ -368,6 +410,7 @@ function resolvePlayerShots(world: World): void {
         addScore(world, award.score);
         addScore(world, transformBonus);
         payChallengeGroup(world, enemy, award.groupBonus);
+        paySortie(world, sortie);
         // Whatever the kill leaves behind arrives after it: a split's fragments.
         resolveAbilityKill(world, enemy);
       }
@@ -636,6 +679,7 @@ function enterStage(world: World, stage: number): void {
   world.fleet = world.content === undefined ? NO_FLEET() : createFleet(world.content, world.rules);
   world.dive = createDiveState(world.rules, stage, world.rank);
   world.abilities = createAbilityState();
+  world.groups = createGroupState();
   // The capture channel is *not* replaced: a captured fighter stays with its
   // captor for the rest of the game, and re-enters as the last ship of this
   // stage's wave.
@@ -769,8 +813,11 @@ function stepEnemies(world: World): void {
       y: enemy.y,
     });
   }
+  // Home again, or gone: either way a diver's flight with its sortie is over.
+  for (const enemy of step.homed) groupNoteSurvived(world.groups, enemy);
   for (const enemy of step.departed) {
     noteDeparted(world.dive, enemy);
+    groupNoteSurvived(world.groups, enemy);
     world.events.push({
       type: 'enemy-departed',
       targetId: enemy.id,
@@ -789,6 +836,7 @@ function stepEnemies(world: World): void {
     rng: world.rng,
     bullets: world.enemyBullets,
     capture: world.capture,
+    groups: world.groups,
     playerAt,
     scripted: step.fired,
   });
@@ -800,6 +848,18 @@ function stepEnemies(world: World): void {
       alienId: enemy.alienId,
       x: enemy.x,
       y: enemy.y,
+    });
+  }
+  for (const group of attack.sorties) {
+    const leader = world.fleet.enemies.find((enemy) => enemy.id === group.leader);
+    world.events.push({
+      type: 'sortie-launched',
+      group: group.id,
+      targetId: group.leader,
+      alienId: leader?.alienId ?? '',
+      members: [...group.members],
+      x: leader?.x ?? 0,
+      y: leader?.y ?? 0,
     });
   }
   for (const enemy of attack.fired) {
@@ -1051,6 +1111,8 @@ export function fingerprintWorld(world: World): string {
     capture: captureFingerprint(world.capture),
     // Absent, not empty, while no ability has acted: see `abilityFingerprint`.
     abilities: abilityFingerprint(world.abilities),
+    // Absent, not empty, while no sortie has flown: see `groupFingerprint`.
+    groups: groupFingerprint(world.groups),
     formation: world.formation && [
       world.formation.frame,
       world.formation.motion,

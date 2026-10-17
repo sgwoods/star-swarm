@@ -66,21 +66,23 @@ Three places, each recorded as provisional in `rules.json`'s `provenance` or her
   outermost survivor reaches the edge of the screen, so a thinned convoy travels
   further. Which columns are still alive is not something a rules number can
   express, so this drift is the same 48 px whatever is left.
-- **A flagship dives alone.** This one is not a choice. It is the gap below.
+- **A flagship dives alone.** It is the gap below, which the platform can now
+  close and this pack does not yet.
 
-## What the platform cannot express yet: a sortie group
+## What this pack does not declare yet: a sortie group
 
 In the lineage, a flagship peels off with up to two escorts from beside it, and
 the three fly the attack together. What the flagship is worth depends on that
 company: more when escorts launched with it, and most when it had two and neither
 is still in flight at the moment it is shot.
 
-The platform has no way to say any of that. What it lacks is a **sortie group** — a
-leader and its members, formed at launch and keeping one identity for the whole
-flight. The attack director launches one enemy of a role at a time
-(`launchDives` and `pickDiver` in `src/sim/dive.ts`), and no document can name one
-alien as flying with another. Without a group there is nothing for scoring to read,
-and scoring in this family reads a group in three ways and only three:
+When this pack shipped, the platform had no way to say any of that. What it lacked
+was a **sortie group** — a leader and its members, formed at launch and keeping one
+identity for the whole flight. It has one now: an alien's `dive.escorts` names who
+flies with it, and `src/sim/groups.ts` keeps the group
+([`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md#44-where-a-second-game-plugs-in)
+§4.4). Scoring in this family reads a group in three ways and only three, and
+`scoring.escortBonus` in a `rules.json` can state each:
 
 1. how many members launched with the leader, fixed at launch;
 2. which members are still in flight when the leader dies;
@@ -90,19 +92,19 @@ This is not specific to this game. It is general to both lineages. Classic alrea
 declares its escort table — a diving captor worth 400, 800 or 1,600 for no, one or
 two escorts — but its launcher never sends escorts, so 800 and 1,600 cannot be
 reached in Star Swarm today, and `src/sim/enemies.ts` says as much where it
-describes `escortBonus`. A sortie group would not only let this game's flagship
-dive with its escorts; it would complete the first game too.
+describes `escortBonus`. Declaring escorts would not only let this game's flagship
+dive with them; it would complete the first game too.
 
-Nothing is wrong here. The engine's own note shows the shape was foreseen, and it
-is simply not built yet. Building it is the captain's decision, and
+Nothing is wrong here. Declaring escorts changes how this game plays, so it is a
+change of its own and the captain's decision, as it is for Classic, and
 `docs/ARCHITECTURE.md` §5 records it as not here yet.
 
 **Everything else in this lineage is expressible, and the game is otherwise
 complete.** A flagship here dives like any other alien, on its own curving run,
 and is worth 60 in the convoy and 150 diving alone, which is the lineage's own value
 for a flagship with no escort. It is never worth anything a sortie group would pay,
-and `tests/sim/convoy.test.ts` holds it to that, so the day groups arrive is the
-day that test says so.
+and `tests/sim/convoy.test.ts` holds it to that, so the day this pack declares
+escorts is the day that test says so.
 
 ## What playing it measured
 
