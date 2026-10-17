@@ -752,9 +752,9 @@ The lab directory holds a second page, `capture.html` with
 `src/ui/lab/capture.ts` behind it, and `npm run capture` (`scripts/capture.ts`)
 is the command that drives it:
 
-    npm run capture -- --replay dual-fighter --from 2600 --to 5400 --fps 10
+    npm run capture -- --replay dual-fighter --from 3800 --to 6600 --fps 10
 
-![The dual-fighter golden from step 2,600, rendered by that command](media/capture-dual-fighter.gif)
+![The dual-fighter golden from step 3,800, rendered by that command](media/capture-dual-fighter.gif)
 
 The command starts its own dev server on a free port, opens the page in headless
 Chromium, and hands it one run: a golden's log with the seed, cabinet and starting
@@ -778,13 +778,13 @@ Three properties follow, and the command checks the two it can:
 - **The clip is the backbuffer.** A GIF is decoded again and compared with the
   frames, scaled the same way, byte for byte. `flags=neighbor` and `dither=none`
   are what make that hold, and the comparison is what shows it: on the clip above,
-  `flags=bilinear` changes about five million of 120 million pixels at `--scale 2`,
-  `dither=bayer` about fifty million, and a 64-colour palette 9,100 — the beam and
-  the explosions are drawn with blending, so the clip holds 151 colours, which is
+  `flags=bilinear` changes about four million of 120 million pixels at `--scale 2`,
+  `dither=bayer` about fifty million, and a 64-colour palette 14,000 — the beam and
+  the explosions are drawn with blending, so the clip holds 244 colours, which is
   why the palette defaults to 256. An MP4 is not checked: H.264 subsamples colour.
 - **Time is a choice, not a measurement.** No clock is read, so a slow machine
-  renders the same clip more slowly. The 467 frames above, from a run of 5,400
-  steps, took about three seconds end to end on an arm64 Mac.
+  renders the same clip more slowly. The 467 frames above, from a run of 7,400
+  steps, took about two seconds end to end on an arm64 Mac.
 
 `ffmpeg` is an external tool rather than a dependency; without it on the `PATH`
 the command stops and says so. The capture page is kept out of the bundle the way
@@ -964,11 +964,17 @@ built so far. The challenge stage's group of eight and the transform attack's tr
 are still state machines of their own, in `src/sim/challenge.ts` and
 `src/sim/dive.ts`.
 
-No shipped pack declares an escort, so no shipped game forms a group. For a world
-that forms none, `groupFingerprint` returns nothing rather than an empty list,
-which is why every golden replay recorded before groups existed still reproduces
-byte for byte. `tests/unit/groups.test.ts` holds all of this, including that no
-installed pack declares an escort.
+Classic is the one shipped pack that declares an escort. Its `warden` takes up to
+two `wing`s from the three top-row slots beneath it — its own column and one
+either side, the left one first, which is the arcade's own window
+([reference](reference/arcade-reference.md#boss-escorts) section 6) — so a boss
+dives alone, with one escort or with two, and is worth 400, 800 or 1,600, latched
+when it launches. Classic, and `swarm-remix`, which flies Classic's warden, are
+therefore the games that form groups. For a world that forms none,
+`groupFingerprint` returns nothing rather than an empty list, so it fingerprints
+exactly as it did before groups existed. `tests/unit/groups.test.ts` holds all of
+this, including that Classic's warden is the only alien that names escorts, and
+`tests/sim/classic-escorts.test.ts` pays all three values on the shipped pack.
 
 The split follows the classification in the rules-and-scoring scout report
 (section 9), not a fresh decision:
@@ -1291,22 +1297,19 @@ describing as deliberately absent something that shipped two merges ago.
   when it dies, and the whole group destroyed with none escaping. All of that is
   built ([§4.4](#44-where-a-second-game-plugs-in)), but `packs/convoy/` declares no
   escorts, so its flagship still dives alone
-  ([`packs/convoy/README.md`](../packs/convoy/README.md)), and Classic's captor
-  does too, which is the item below.
-- **Classic's bosses never launch with escorts, so 800 and 1,600 are unreachable
-  in Classic — by its data, not by the engine.** The escort bonus itself is paid: a
-  boss carries the latched value its stage start installs and `enemyScore` in
-  `src/sim/enemies.ts` adds it on the doubled branch, so a boss destroyed mid-dive
-  is worth 400 and one shot at home is worth 150. The attack director can launch a
-  sortie ([§4.4](#44-where-a-second-game-plugs-in)), but
-  `packs/classic/aliens/warden.json` names no escorts, so the pack's
-  `scoring.escortBonus.byEscortCount` entries for one and two escorts are data
-  nothing selects. Naming them is deliberately a change of its own, because it
-  changes how Classic plays and rewrites its golden replays. Until then the scout
-  report's acceptance tests **S7 and S9** are not satisfiable in Classic, and the
-  latch that makes them interesting — killing the escorts first must not reduce
-  the boss's value — is observed only by `tests/unit/groups.test.ts`, on a warden
-  given escorts for the test.
+  ([`packs/convoy/README.md`](../packs/convoy/README.md)). Classic's warden does
+  name them (§4.4).
+- **Which of Classic's bosses launches is a weighted draw, not the arcade's
+  preference for a full escort.** The arcade's boss launcher looks first for a
+  boss with two of its three wings free, then one with one, and only then takes
+  any boss at all, so a boss with company is chosen over one without
+  ([reference](reference/arcade-reference.md#boss-escorts) section 6). The attack
+  director picks the warden by the aliens' dive weights
+  ([§4.4](#44-where-a-second-game-plugs-in)), and then takes whatever escorts its
+  window holds, so a boss launches alone or with one more often than the arcade's
+  would once the wings start thinning out. No document can state the preference:
+  it is a rule about choosing the leader, and an alien's `dive.escorts` describes
+  only who goes with one.
 - **There is no pulsing-formation sound.** `formation-settled` is raised on the
   frame the sway passes back through zero and the breathe begins there, which is
   asserted in `tests/unit/formation.test.ts`; the arcade starts its pulsing

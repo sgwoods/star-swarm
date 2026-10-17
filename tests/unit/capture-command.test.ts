@@ -97,7 +97,7 @@ describe('resolving a replay', () => {
     expect(request.stage).toBe(20);
     // `unbombedCabinet`: the golden's rules, not the pack's.
     expect(request.rules.enemies.maxBullets).toBe(0);
-    expect(request.replay.steps).toBe(5_400);
+    expect(request.replay.steps).toBe(7_400);
   });
 
   it('refuses a stage for a golden, and a name that is neither a golden nor a log', () => {

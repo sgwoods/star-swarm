@@ -2,7 +2,7 @@
  * Render a replay to a clip: `docs/ROADMAP.md`, "Capturing gameplay video",
  * phase 1.
  *
- *     npm run capture -- --replay dual-fighter --from 2600 --to 5400 --fps 10
+ *     npm run capture -- --replay dual-fighter --from 3800 --to 6600 --fps 10
  *
  * A replay is a seed and an input log, so the run it describes can be played
  * again at any speed. This plays it through the real simulation and the real

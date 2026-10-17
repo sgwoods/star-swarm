@@ -67,6 +67,26 @@ function armedWorld(stage = 1, options: { seed?: string; rules?: Rules } = {}): 
   return world;
 }
 
+/**
+ * The divers the row's limit is a limit on: everything diving except the escorts
+ * flying beside a leader.
+ *
+ * The arcade compares the flying count with `max_bombers` once, before a launch,
+ * and then sends a boss and its wingmen whatever that leaves ([LIST] main
+ * `$1BBA`–`$1BC2`, then `$1CE3`/`$1CE6`). So a sortie may carry the raw count past
+ * the limit by its escorts, and what the limit holds is the count without them.
+ */
+function launchedDivers(world: World): number {
+  const escorts = new Set(world.groups.groups.flatMap((group) => group.members));
+  let flyingEscorts = 0;
+  for (const enemy of world.fleet.enemies) {
+    if (escorts.has(enemy.id) && (enemy.state === 'diving' || enemy.state === 'beaming')) {
+      flyingEscorts += 1;
+    }
+  }
+  return diverCount(world.fleet) - flyingEscorts;
+}
+
 /** Step `steps` frames, returning every event raised along the way. */
 function run(world: World, steps: number, frame = EMPTY_FRAME): SimEvent[] {
   const events: SimEvent[] = [];
@@ -160,14 +180,18 @@ describe('how many may dive at once', () => {
     const bumpAt = rules.enemies.dive.bumpAfterFrames;
     let before = 0;
     let after = 0;
+    let raw = 0;
     for (let i = 0; i < 2_400; i += 1) {
       stepWorld(world, EMPTY_FRAME);
-      const diving = diverCount(world.fleet);
+      const diving = launchedDivers(world);
       if (world.dive.frame < bumpAt) before = Math.max(before, diving);
       else after = Math.max(after, diving);
+      raw = Math.max(raw, diverCount(world.fleet));
     }
     expect(before).toBe(4);
     expect(after).toBe(6);
+    // And escorts really did fly over it: a warden's sortie is one launch.
+    expect(raw).toBeGreaterThan(6);
   });
 
   it('reports the limit in force rather than one of the two blindly', () => {
@@ -177,12 +201,12 @@ describe('how many may dive at once', () => {
     expect(maxDiversNow(world.dive, rules)).toBe(6);
   });
 
-  it('never exceeds the limit on any frame of a long run', () => {
+  it('never exceeds the limit on any frame of a long run, escorts aside', () => {
     for (const stage of [1, 13, 20]) {
       const world = armedWorld(stage, { rules: longLived(), seed: `cap-${String(stage)}` });
       for (let i = 0; i < 1_800; i += 1) {
         stepWorld(world, EMPTY_FRAME);
-        expect(diverCount(world.fleet)).toBeLessThanOrEqual(maxDiversNow(world.dive, rules));
+        expect(launchedDivers(world)).toBeLessThanOrEqual(maxDiversNow(world.dive, rules));
       }
     }
   });

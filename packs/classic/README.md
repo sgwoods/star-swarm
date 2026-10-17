@@ -37,7 +37,11 @@ rather than a sprite of its own name, because that is what it is.
   50/100 is never stored as two numbers — `docs/DESIGN.md` section 4 explains why
   a flat pair gets a captor's latched escort bonus wrong. The `warden` is the
   two-hit role: `hp: 2` and `hitSprites: ["warden-hit"]`, which is how its first
-  hit changes its colour instead of destroying it. Each also carries its `fire`
+  hit changes its colour instead of destroying it. It is also the one alien that
+  leads a sortie: its `dive.escorts` takes up to two `wing`s from the three
+  top-row slots beneath it — its own column and one either side, the left one
+  first — which is **verified**, the arcade's own wingman window decoded in
+  reference section 6. A capture attempt still goes alone. Each also carries its `fire`
   pattern and its `dive`, from the dive task. Plus the three transform types and
   `captive`, the player's own captured fighter — base 500, so it is 500 parked
   and 1,000 attacking through the same doubling rule as everything else.

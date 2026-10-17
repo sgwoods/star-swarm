@@ -57,8 +57,8 @@ three ways and no others:
 
 No score anywhere depends on the order of kills. A capture attempt is still one
 of these launches, and it goes alone. An alien that names no escorts forms no
-group, and `groupFingerprint` is then absent rather than empty, so every golden
-recorded before groups existed still reproduces.
+group, and `groupFingerprint` is then absent rather than empty, so a world that
+forms none fingerprints exactly as it did before groups existed.
 
 **Capture is one channel, and the channel is the rule.** There is exactly one
 captured fighter in a run, ever, and a captor may only be chosen while the channel

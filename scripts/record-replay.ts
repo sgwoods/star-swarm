@@ -381,16 +381,20 @@ export const GOLDENS: readonly GoldenSpec[] = [
   // a diver is now something to be flown around as well as shot, and the
   // 100-frame sweeper walked into one on stage 1 five times over and never
   // reached stage 2 — which would have cost this golden the one thing only it
-  // covers. 175 clears stage 1 and rolls on, on four fighters rather than three.
-  // The number is the test pilot's, not the game's; no difficulty value moved,
-  // and the run ends in game over at step 3,444 either way, because a sweeper
-  // that never dodges cannot survive stage 2 on any period tried.
+  // covers. 175 cleared stage 1 and rolled on, on four fighters rather than three.
+  //
+  // It moved again, to 180, when Classic's wardens began launching with escorts:
+  // a warden's dive now brings up to two wings down with it, and the 175-frame
+  // sweeper lost its fifth fighter on stage 1 with three enemies left. 180 clears
+  // stage 1 and rolls on. The number is the test pilot's, not the game's; no
+  // difficulty value moved, and the run ends in game over on stage 2 either way,
+  // because a sweeper that never dodges cannot survive it on any period tried.
   {
     name: 'player-survival',
     seed: 'golden-player-survival',
     inputSeed: 'pilot-2',
     steps: 5_400,
-    sweepPeriod: 175,
+    sweepPeriod: 180,
     rules: fiveShipCabinet(),
   },
   // The capture mechanic: three goldens over one pilot and one seed, each cut a
@@ -414,23 +418,28 @@ export const GOLDENS: readonly GoldenSpec[] = [
   },
   // A rescue: the captor dives again with its captive beside it, is shot while they
   // are both attacking, and the freed ship spins and docks as a second fighter.
+  //
+  // The cut moved from 3,400 to 4,700 when Classic's wardens began launching with
+  // escorts: the same pilot is captured four times before it gets the rescue it
+  // used to get after one, and the dock lands at step 4,549.
   {
     name: 'capture-rescue',
     seed: 'golden-capture',
     inputSeed: 'capture',
-    steps: 3_400,
+    steps: 4_700,
     stage: 20,
     capture: true,
     rules: unbombedCabinet(),
   },
   // And a dual fighter playing on: two ships, a two-bullet spread per shot with the
   // cap still at two logical shots, and still no capture attempt — a dual fighter is
-  // never targeted.
+  // never targeted. Cut at 7,400 rather than 5,400 since the rescue moved later
+  // (above): stage 20 is cleared at step 7,000.
   {
     name: 'dual-fighter',
     seed: 'golden-capture',
     inputSeed: 'capture',
-    steps: 5_400,
+    steps: 7_400,
     stage: 20,
     capture: true,
     rules: unbombedCabinet(),

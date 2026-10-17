@@ -267,7 +267,7 @@ describe('what the goldens actually cover', () => {
     expect(eventsOfType(events, 'target-destroyed').length).toBeGreaterThan(40);
 
     // And **no beam at all after the rescue docked**, however many captors launched
-    // in the two and a half thousand steps that follow: a dual fighter is never
+    // in the nearly three thousand steps that follow: a dual fighter is never
     // targeted, because the channel is not idle (report acceptance test R6).
     const docked = events.findIndex((event) => event.type === 'fighter-docked');
     expect(docked).toBeGreaterThan(0);
@@ -404,38 +404,55 @@ describe('what the goldens actually cover', () => {
     });
   });
 
-  it('S8 — pays a captor 400 mid-dive and 150 at home, across four real runs', () => {
-    // The scout report's S8, asserted over runs nobody wrote for it: a captor's
-    // kill is either its plain 150 (at home, or rotating back into its slot) or
-    // 300 doubled plus the 100-unit solo escort record its stage start installed.
-    // A third value anywhere in four recorded games means the escort bonus has
-    // stopped riding the doubling — which a single staged kill would not catch,
-    // because it would agree on whichever case it staged.
-    const bonus = rules.scoring.escortBonus.byEscortCount[0] ?? 0;
+  it('S7–S9 — pays a boss 150 at home and 400, 800 or 1,600 mid-dive, across five real runs', () => {
+    // The scout report's S7, S8 and S9, asserted over runs nobody wrote for them: a
+    // boss's kill is either its plain 150 (at home, or rotating back into its slot)
+    // or 300 doubled plus the escort record latched when it last launched this
+    // stage — the solo 100 a stage start installs, 500 with one escort, 1,300 with
+    // two. Latched means the record is the launch's and never the kill's, so the
+    // expected value is read off `sortie-launched` alone and an escort's death
+    // changes nothing. A value anywhere else in five recorded games means the
+    // bonus stopped riding the doubling or stopped being latched — which a single
+    // staged kill would not catch, because it would agree on whichever case it
+    // staged.
+    const table = rules.scoring.escortBonus.byEscortCount;
+    expect(table).toEqual([100, 500, 1300]);
     const atHome = 150;
-    const diving = 150 * rules.scoring.movingMultiplier + bonus;
-    expect([atHome, diving]).toEqual([150, 400]);
+    const diving = (escorts: number) =>
+      150 * rules.scoring.movingMultiplier + (table[escorts] ?? 0);
+    expect([atHome, diving(0), diving(1), diving(2)]).toEqual([150, 400, 800, 1600]);
 
     let captorKills = 0;
     let diveKills = 0;
-    for (const golden of ['player-core', 'player-survival', 'stage-dives', 'dual-fighter']) {
-      const { events } = replayEvents(golden);
-      const scores = eventsOfType(events, 'target-destroyed')
-        .filter((event) => event.alienId === rules.capture.captorRole)
-        .map((event) => event.score);
-      captorKills += scores.length;
-      diveKills += scores.filter((score) => score === diving).length;
-      expect([golden, [...new Set(scores)].sort((a, b) => a - b)]).toEqual([
-        golden,
-        [...new Set(scores)]
-          .sort((a, b) => a - b)
-          .filter((score) => score === atHome || score === diving),
-      ]);
+    let escortedKills = 0;
+    const golds = [
+      'player-core',
+      'player-survival',
+      'stage-dives',
+      'capture-rescue',
+      'dual-fighter',
+    ];
+    for (const golden of golds) {
+      const latched = new Map<number, number>();
+      for (const event of replayEvents(golden).events) {
+        if (event.type === 'stage-started') latched.clear();
+        if (event.type === 'sortie-launched' && event.alienId === rules.capture.captorRole) {
+          latched.set(event.targetId, event.members.length);
+        }
+        if (event.type !== 'target-destroyed' || event.alienId !== rules.capture.captorRole)
+          continue;
+        captorKills += 1;
+        const expected = diving(latched.get(event.targetId) ?? 0);
+        expect([golden, event.score]).toEqual([golden, event.score === atHome ? atHome : expected]);
+        if (event.score === expected) diveKills += 1;
+        if (event.score > diving(0)) escortedKills += 1;
+      }
     }
-    // And the interesting case really occurs, rather than every captor happening
-    // to be shot in its slot.
+    // And the interesting cases really occur, rather than every boss happening to
+    // be shot in its slot or alone.
     expect(captorKills).toBeGreaterThan(4);
     expect(diveKills).toBeGreaterThan(0);
+    expect(escortedKills).toBeGreaterThan(0);
   });
 
   it('pays exactly 19,000 for a perfect first challenge stage', () => {
