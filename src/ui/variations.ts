@@ -47,6 +47,8 @@ export const VARIATION_TEXT = Object.freeze({
   deleteHeading: 'DELETE GAME?',
   keep: 'KEEP',
   delete: 'DELETE',
+  /** A variation's high scores are its own, so they go with it. */
+  scoresGo: 'ITS HIGH SCORES GO TOO',
   cannotUndo: 'IT CANNOT BE UNDONE',
   deleteKeys: keyLine([KEY.values, 'MOVE'], [KEY.ok, 'CHOOSES']),
   deleteBack: keyLine([KEY.back, 'BACK']),
@@ -255,6 +257,7 @@ export function createDeleteConfirm(): DeleteConfirm {
 export function deleteConfirmNotes(name: string): readonly MenuLine[] {
   return [
     { text: name, tone: 'note' },
+    { text: VARIATION_TEXT.scoresGo, tone: 'refuse' },
     { text: VARIATION_TEXT.cannotUndo, tone: 'refuse' },
     { text: VARIATION_TEXT.deleteKeys, tone: 'help' },
     { text: VARIATION_TEXT.deleteBack, tone: 'help' },

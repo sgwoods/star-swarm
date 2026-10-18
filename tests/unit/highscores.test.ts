@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createHighScoreBoard,
+  createHighScoreBook,
   createInitialsEntry,
   DEFAULT_HIGH_SCORES,
   formatTableScore,
@@ -193,6 +194,100 @@ describe('storage that is not there', () => {
     expect(() => storage.load()).not.toThrow();
     expect(() => storage.save('{"version":1,"entries":[]}')).not.toThrow();
     expect(storage.load()).toBe('{"version":1,"entries":[]}');
+  });
+});
+
+/**
+ * One table per game. A score is comparable only with scores from the same game,
+ * so a variation's table must never be the game it was made from.
+ */
+describe('the book of tables, one per game', () => {
+  it('keeps each game its own table, so a score in one is not in another', () => {
+    const book = createHighScoreBook({ carryTo: 'classic', defaults: TABLE });
+    expect(book.boardFor('classic').submit('CLS', 50_000, 9)).toBe(0);
+    expect(book.boardFor('convoy').entries()).toEqual(TABLE);
+    expect(book.boardFor('classic-2').entries()).toEqual(TABLE);
+    expect(book.boardFor('classic').best()).toBe(50_000);
+    expect(book.boardFor('classic-2').best()).toBe(10_000);
+  });
+
+  it('hands back the same board for the same game', () => {
+    const book = createHighScoreBook({ carryTo: 'classic' });
+    expect(book.boardFor('convoy')).toBe(book.boardFor('convoy'));
+  });
+
+  it('writes every table into one version 2 document and reads them all back', () => {
+    const storage = createMemoryStorage();
+    const book = createHighScoreBook({ storage, carryTo: 'classic', defaults: [] });
+    book.boardFor('classic').submit('CLS', 4_000, 2);
+    book.boardFor('convoy').submit('CNV', 3_000, 3);
+    expect(JSON.parse(storage.load() ?? '')).toEqual({
+      version: 2,
+      tables: {
+        classic: [{ initials: 'CLS', score: 4_000, stage: 2 }],
+        convoy: [{ initials: 'CNV', score: 3_000, stage: 3 }],
+      },
+    });
+
+    const again = createHighScoreBook({ storage, carryTo: 'classic', defaults: TABLE });
+    expect(again.boardFor('classic').entries()).toEqual([
+      { initials: 'CLS', score: 4_000, stage: 2 },
+    ]);
+    expect(again.boardFor('convoy').best()).toBe(3_000);
+    // A game with no table yet starts from the defaults, as the one table did.
+    expect(again.boardFor('deep-sea').entries()).toEqual(TABLE);
+  });
+
+  it('carries a version 1 table, which names no game, to the game it is told to, and writes version 2 back', () => {
+    const legacy = [
+      { initials: 'OLD', score: 77_000, stage: 14 },
+      { initials: 'AAA', score: 30_000, stage: 12 },
+    ];
+    const storage = createMemoryStorage(JSON.stringify({ version: 1, entries: legacy }));
+    const book = createHighScoreBook({ storage, carryTo: 'classic' });
+
+    // Nothing earned is dropped: the whole table is the carried game's...
+    expect(book.boardFor('classic').entries()).toEqual(legacy);
+    // ...and no other game's, so a variation does not inherit it either.
+    expect(book.boardFor('classic-2').entries()).toEqual(DEFAULT_HIGH_SCORES);
+    expect(book.boardFor('convoy').entries()).toEqual(DEFAULT_HIGH_SCORES);
+    // Upgraded on read, before any submission, so the question is asked once.
+    expect(JSON.parse(storage.load() ?? '')).toEqual({ version: 2, tables: { classic: legacy } });
+  });
+
+  it('reads a corrupt table as no table, without losing the others', () => {
+    const storage = createMemoryStorage(
+      JSON.stringify({
+        version: 2,
+        tables: { classic: [{ initials: 'CLS', score: 4_000, stage: 2 }], convoy: 'garbage' },
+      }),
+    );
+    const book = createHighScoreBook({ storage, carryTo: 'classic', defaults: TABLE });
+    expect(book.boardFor('classic').best()).toBe(4_000);
+    expect(book.boardFor('convoy').entries()).toEqual(TABLE);
+  });
+
+  it('forgets a game, so an id used again later starts from the defaults', () => {
+    const storage = createMemoryStorage();
+    const book = createHighScoreBook({ storage, carryTo: 'classic', defaults: TABLE });
+    book.boardFor('classic-2').submit('GON', 90_000, 20);
+    book.boardFor('classic').submit('CLS', 80_000, 18);
+    book.forget('classic-2');
+
+    expect(book.boardFor('classic-2').entries()).toEqual(TABLE);
+    expect(book.boardFor('classic').best()).toBe(80_000);
+    const again = createHighScoreBook({ storage, carryTo: 'classic', defaults: TABLE });
+    expect(again.boardFor('classic-2').entries()).toEqual(TABLE);
+    expect(again.boardFor('classic').best()).toBe(80_000);
+  });
+
+  it('says every table is session-only when the store is', () => {
+    const blocked = createWebStorage({ resolve: () => undefined });
+    const book = createHighScoreBook({ storage: blocked, carryTo: 'classic' });
+    expect(book.persistent).toBe(false);
+    expect(book.boardFor('convoy').persistent).toBe(false);
+    expect(book.boardFor('convoy').submit('NEW', 999_999)).toBe(0);
+    expect(book.boardFor('convoy').best()).toBe(999_999);
   });
 });
 

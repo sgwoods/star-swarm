@@ -72,8 +72,10 @@ test('the high-score table survives a reload', async ({ page }) => {
   const best = await page.evaluate(() => window.starSwarm?.highScore ?? 0);
   expect(best).toBeGreaterThan(0);
 
-  // Write a table directly, as a finished game would, and check the board reads
-  // it back on the next boot rather than falling back to the shipped defaults.
+  // Write a table directly, in the shape a build before per-game tables kept, and
+  // check the next boot reads it back rather than falling back to the shipped
+  // defaults: carried, whole, to the first game — the one this boot is on — and
+  // written back as one table per game.
   await page.evaluate(() => {
     localStorage.setItem(
       'star-swarm/high-scores/v1',
@@ -83,6 +85,11 @@ test('the high-score table survives a reload', async ({ page }) => {
   await page.reload();
   await page.waitForFunction(() => (window.starSwarm?.step ?? 0) > 0);
   expect(await page.evaluate(() => window.starSwarm?.highScore)).toBe(123_450);
+  const stored = await page.evaluate(() => localStorage.getItem('star-swarm/high-scores/v1'));
+  expect(JSON.parse(stored ?? '{}')).toEqual({
+    version: 2,
+    tables: { classic: [{ initials: 'ZZZ', score: 123_450, stage: 7 }] },
+  });
 });
 
 /**

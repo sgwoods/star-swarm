@@ -240,7 +240,7 @@ Four things to know before editing either side of it:
   other by `tests/unit/bundled-packs.test.ts`.
 
 Player settings live in `src/ui/settings.ts` and persist through
-`src/ui/storage.ts` — the one `KeyedStorage` the high-score table uses too, which
+`src/ui/storage.ts` — the one `KeyedStorage` the high-score tables use too, which
 catches on every path so that blocked site data degrades to defaults instead of
 throwing. The menu in `src/ui/menus.ts` **applies nothing**: a row writes a patch
 and `src/main.ts` is the one place a setting has consequences.

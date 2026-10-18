@@ -163,7 +163,7 @@ and never moves anything already on screen — the rows it blinks in are rows it
 already owned. A fetch that fails, or a host with no `build.json` to serve,
 changes nothing at all: `src/ui/build-info.ts` swallows it, counts a miss, and a
 detection already made is not retracted by going offline. Refreshing **does** lose
-the run in progress; the high-score table survives a reload, a game does not,
+the run in progress; the high-score tables survive a reload, a game does not,
 which is why nothing here ever refreshes for you.
 
 ### Refresh, or restart?
@@ -1449,6 +1449,33 @@ rather than throwing. A settings document outlives the build it was written
 against, so an id from another game — or a variant that is no longer installed —
 has to read as "use the default".
 
+### One high-score table per game
+
+A score is comparable only with scores from the same game, so each game on the list
+— a shipped one or a player's variation — keeps its own table, keyed by its id.
+`HighScoreBook` in `src/ui/highscores.ts` holds them all in one stored document
+under the same key the single table used, and hands each game an ordinary
+`HighScoreBoard`, so ordering, insertion and the tie rule are one implementation.
+The flow's `highScores` is the **chosen** game's table, and a run is filed in the
+table of the game it was started on. A variation set aside — one that will not load,
+so the game it was made from plays in its place — still files in its own table: a
+variation's score never reaches a reference game's table by any path. A game with no
+table yet starts from `DEFAULT_HIGH_SCORES`, as the one table did, and the attract
+title card reads the chosen game's name rather than one name for every game.
+
+Deleting a variation deletes its table, and the delete card says so
+(`ITS HIGH SCORES GO TOO`): the next variation made from the same game can be given
+the same id, and must not inherit a table from a game that no longer exists.
+
+**A table stored before this names no game, and which game set each score cannot be
+told** — every game the build offered shared it. It is carried, whole, to the first
+game on the list (`carryTo` in `src/main.ts`): CLASSIC, the game a cabinet boots on
+and the only game there was until the selector existed. Scores set on another game
+after the selector shipped are counted as CLASSIC's by that, and nothing can tell
+them apart now. The book writes its new shape straight back, so the carry happens
+once. `tests/unit/highscores.test.ts` holds the book; `tests/unit/variations-flow.test.ts`
+plays a run on a variation through the flow and checks CLASSIC's table is untouched.
+
 **Settings persist the way high scores do, and degrade the same way.**
 `src/ui/storage.ts` holds the one `KeyedStorage` both use: two methods over a
 string, neither of which may throw. `localStorage` is not available in every
@@ -1778,9 +1805,8 @@ appears on it, and neither does any other rules number: a count the rules list i
 selection, as a difficulty preset's rank is, where a point value would be a number of
 the player's own. Difficulty and autoplay stay on the settings card, where they are
 the player's — one preset id and one persona id across every game — rather than a
-game's. And there is **one high-score table for every game**: an entry is initials,
-a score and a stage, with no game recorded on it, so a run of a five-ship variation
-and a run of CLASSIC as shipped land in the same table.
+game's. And **every game keeps its own high-score table**, so a run of a five-ship
+variation never lands in the table of CLASSIC as shipped ([below](#one-high-score-table-per-game)).
 
 A flow built with nothing to compose with — a test of the machine on its own — opens
 no options card, exactly as it opens no pack card. `tests/unit/options.test.ts` holds

@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { isVariantDocument } from '../../src/content/variants.js';
 import { EMPTY_FRAME, frameOf, type InputFrame } from '../../src/engine/input.js';
 import { createComposer } from '../../src/ui/compose.js';
+import { launchEnemyBullet } from '../../src/sim/shots.js';
 import { createGameFlow, type FlowVariant, type GameFlow } from '../../src/ui/flow.js';
+import { createHighScoreBook, type HighScoreBook } from '../../src/ui/highscores.js';
 import { MENU_TEXT } from '../../src/ui/menus.js';
 import { PACKS_TEXT } from '../../src/ui/packs.js';
 import { createSettingsStore, type LegacyBase, type SettingsStore } from '../../src/ui/settings.js';
@@ -24,6 +26,7 @@ import { installedPacks, shippedVariants, shippedVariantSources } from '../helpe
  */
 
 const START = frameOf('start');
+const FIRE = frameOf('fire');
 const MENU = frameOf('menu');
 const UP = frameOf('up');
 const DOWN = frameOf('down');
@@ -54,7 +57,10 @@ const classic = (): FlowVariant => {
   return found;
 };
 
-function cabinet(storage: KeyedStorage = createMemoryStorage()): {
+function cabinet(
+  storage: KeyedStorage = createMemoryStorage(),
+  highScores?: HighScoreBook,
+): {
   readonly flow: GameFlow;
   readonly settings: SettingsStore;
 } {
@@ -64,6 +70,7 @@ function cabinet(storage: KeyedStorage = createMemoryStorage()): {
     seed: 'variations',
     settings,
     composer,
+    ...(highScores === undefined ? {} : { highScores }),
   });
   return { flow, settings };
 }
@@ -321,6 +328,88 @@ describe('a variation is the player’s to rename and delete', () => {
     const ids = flow.settingsMenu?.rows.map((row) => row.id) ?? [];
     expect(ids).not.toContain('name');
     expect(ids).not.toContain('delete');
+  });
+});
+
+/**
+ * A score is comparable only with scores from the same game, so a variation's
+ * high scores are its own table — never the table of the game it was made from.
+ */
+describe('a variation keeps its own high scores', () => {
+  /** Which games the stored book holds a table for. */
+  function tablesIn(storage: KeyedStorage): string[] {
+    const book = JSON.parse(storage.load() ?? '{}') as { tables?: Record<string, unknown> };
+    return Object.keys(book.tables ?? {});
+  }
+
+  /** Start a game on whatever is chosen, score in it, and lose every fighter. */
+  function playAGame(flow: GameFlow): void {
+    press(flow, START);
+    expect(flow.phase).toBe('playing');
+    for (let step = 0; step < 40_000 && flow.phase !== 'game-over'; step += 1) {
+      // Fire until something is hit, then bomb the fighter, as the flow tests do,
+      // every so often until the last one is gone.
+      if (flow.stats.score > 0 && flow.phase === 'playing' && step % 60 === 0) {
+        const world = flow.world;
+        launchEnemyBullet(world.enemyBullets, world.player.x, world.player.y - 2, 0, 2);
+      }
+      flow.step(step % 2 === 0 ? FIRE : EMPTY_FRAME);
+    }
+    expect(flow.phase).toBe('game-over');
+    expect(flow.stats.score).toBeGreaterThan(0);
+  }
+
+  it('files a run on a variation in its table, and leaves the reference game’s untouched', () => {
+    const scores = createMemoryStorage();
+    const book = createHighScoreBook({ storage: scores, carryTo: 'classic', defaults: [] });
+    const { flow } = cabinet(createMemoryStorage(), book);
+    toSettings(flow);
+    makeFromClassic(flow, 'deep-sea', 'REEFS');
+    leaveSettings(flow);
+    expect(flow.game.id).toBe('classic-2');
+    expect(flow.highScores).toBe(book.boardFor('classic-2'));
+
+    playAGame(flow);
+    const score = flow.stats.score;
+    for (let step = 0; step < 5_000 && flow.phase !== 'high-score-entry'; step += 1) {
+      flow.step(EMPTY_FRAME);
+    }
+    expect(flow.phase).toBe('high-score-entry');
+    press(flow, START);
+    press(flow, START);
+    press(flow, START);
+    expect(flow.phase).toBe('attract');
+
+    expect(book.boardFor('classic-2').best()).toBe(score);
+    expect(book.boardFor('classic').entries()).toEqual([]);
+    expect(tablesIn(scores)).toEqual(['classic-2']);
+  });
+
+  it('reads the chosen game’s table, and drops a variation’s with the variation', () => {
+    const scores = createMemoryStorage();
+    const book = createHighScoreBook({ storage: scores, carryTo: 'classic', defaults: [] });
+    book.boardFor('classic').submit('CLS', 40_000, 8);
+    const { flow } = cabinet(createMemoryStorage(), book);
+    toSettings(flow);
+    makeFromClassic(flow, 'deep-sea', 'REEFS');
+    expect(flow.highScores.best()).toBe(0);
+    flow.highScores.submit('REF', 9_000, 4);
+    choose(flow, 'classic');
+    expect(flow.highScores.best()).toBe(40_000);
+    choose(flow, 'classic-2');
+    expect(flow.highScores.best()).toBe(9_000);
+
+    toRow(flow, 'delete');
+    press(flow, RIGHT);
+    press(flow, LEFT);
+    expect(flow.deleteConfirm?.choice).toBe('delete');
+    press(flow, START);
+    expect(flow.game.id).toBe('classic');
+    expect(tablesIn(scores)).toEqual(['classic']);
+    // The next variation made from Classic is given the same id, and starts clean.
+    makeFromClassic(flow, 'swarm-remix', 'REMIXED');
+    expect(flow.game.id).toBe('classic-2');
+    expect(flow.highScores.best()).toBe(0);
   });
 });
 

@@ -172,9 +172,10 @@ import { createWorld, stepWorld, type World } from '../sim/world.js';
 import { type AttractDemo, createAttractDemo } from './attract.js';
 import { createAutopilot, type Pilot, viewOfWorld } from './autoplay.js';
 import {
-  createHighScoreBoard,
+  createHighScoreBook,
   createInitialsEntry,
   type HighScoreBoard,
+  type HighScoreBook,
   type InitialsEntry,
 } from './highscores.js';
 import {
@@ -331,7 +332,11 @@ export const DEFAULT_TIMINGS: FlowTimings = Object.freeze({
 interface FlowCommon {
   /** Seed root. Each game seeds from it and its index, so a session is reproducible. */
   readonly seed?: string;
-  readonly highScores?: HighScoreBoard;
+  /**
+   * Every game's high-score table. Each game on the list — shipped, or a
+   * player's variation — reads and writes its own, by its entry's id.
+   */
+  readonly highScores?: HighScoreBook;
   /**
    * The player's settings. Omitted means the defaults, unpersisted — which is
    * what a test of the machine on its own wants.
@@ -404,6 +409,11 @@ export interface GameFlow {
   readonly steps: number;
   /** Steps spent in the current phase. Drives every blink and timeout. */
   readonly phaseSteps: number;
+  /**
+   * The chosen game's high-score table, and no other game's. A variation's is
+   * its own, and so is one set aside: a run started on a variation is that
+   * variation's score even when the game it was made from played in its place.
+   */
   readonly highScores: HighScoreBoard;
   /** Present only during `high-score-entry`. */
   readonly entry: InitialsEntry | undefined;
@@ -537,13 +547,13 @@ function sameOrder(a: readonly string[] | undefined, b: readonly string[] | unde
 export function createGameFlow(options: FlowOptions): GameFlow {
   const { seed = 'star-swarm', resultRowsFor = resultRows } = options;
   const timings: FlowTimings = { ...DEFAULT_TIMINGS, ...options.timings };
-  const highScores = options.highScores ?? createHighScoreBoard();
 
   const variants: readonly FlowVariant[] = options.variants ?? [
     variantOfRules(options.rules, options.stages),
   ];
   const first = variants[0];
   if (first === undefined) throw new Error('a flow needs at least one variant');
+  const highScores = options.highScores ?? createHighScoreBook({ carryTo: first.id });
 
   const settingsStore = options.settings;
   const readSettings = (): Settings => settingsStore?.value ?? DEFAULT_SETTINGS;
@@ -708,6 +718,8 @@ export function createGameFlow(options: FlowOptions): GameFlow {
   let entry: InitialsEntry | undefined;
   let entryRank: number | undefined;
   let lastRank: number | undefined;
+  /** The table the run on the field belongs to: the game it was started on. */
+  let runScores: HighScoreBoard = highScores.boardFor(chosenEntry().id);
   let previous: InputFrame = 0;
   /**
    * The previous frame **as the human produced it**, kept beside `previous`.
@@ -1101,6 +1113,9 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     const chosen = chosenEntry();
     if (chosen.document === undefined) return;
     const next = referenceOf(chosen);
+    // Its table goes with it: a later variation can be given the same id, and
+    // must not inherit scores from a game that no longer exists.
+    highScores.forget(chosen.id);
     chosenId = next.id;
     writeSettings({
       variations: withVariation(chosen.document.id, undefined),
@@ -1124,6 +1139,7 @@ export function createGameFlow(options: FlowOptions): GameFlow {
       ...stageOption(),
     });
     game = world;
+    runScores = highScores.boardFor(chosenEntry().id);
     stats = { ...EMPTY_STATS, stage: world.stage };
     lastRank = undefined;
     enter('playing');
@@ -1132,7 +1148,7 @@ export function createGameFlow(options: FlowOptions): GameFlow {
 
   /** Leave the results screen: the table if the score earned a place, else attract. */
   const afterResults = (): void => {
-    const rank = highScores.rankFor(stats.score);
+    const rank = runScores.rankFor(stats.score);
     if (rank === undefined) {
       enter('attract');
       return;
@@ -1145,7 +1161,7 @@ export function createGameFlow(options: FlowOptions): GameFlow {
   /** Commit the initials and go back to attract. */
   const submitEntry = (): void => {
     const value = entry?.value ?? '';
-    lastRank = highScores.submit(value, stats.score, stats.stage);
+    lastRank = runScores.submit(value, stats.score, stats.stage);
     entry = undefined;
     entryRank = undefined;
     enter('attract');
@@ -1364,7 +1380,9 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     get phaseSteps(): number {
       return phaseSteps;
     },
-    highScores,
+    get highScores(): HighScoreBoard {
+      return highScores.boardFor(chosenEntry().id);
+    },
     get entry(): InitialsEntry | undefined {
       return entry;
     },

@@ -15,7 +15,7 @@ import {
   type GameFlow,
   type GamePhase,
 } from '../../src/ui/flow.js';
-import { createHighScoreBoard, type HighScoreEntry } from '../../src/ui/highscores.js';
+import { createHighScoreBook, type HighScoreEntry } from '../../src/ui/highscores.js';
 import { EMPTY_STATS, resultRows } from '../../src/ui/results.js';
 import {
   createSettingsStore,
@@ -53,7 +53,8 @@ function testFlow(
     rules,
     stages,
     seed: 'flow-test',
-    highScores: createHighScoreBoard({
+    highScores: createHighScoreBook({
+      carryTo: 'test',
       storage: createMemoryStorage(),
       defaults: options.defaults ?? [],
       capacity: options.capacity ?? 5,
@@ -396,7 +397,11 @@ describe('the challenge-stage results screen', () => {
       rules,
       stages,
       seed: 'challenge-flow',
-      highScores: createHighScoreBoard({ storage: createMemoryStorage(), defaults: [] }),
+      highScores: createHighScoreBook({
+        carryTo: 'test',
+        storage: createMemoryStorage(),
+        defaults: [],
+      }),
       demo: createAttractDemo({ rules, stages, seed: 'challenge-flow:attract' }),
     });
   }
@@ -540,7 +545,11 @@ function twoVariantFlow(
   return createGameFlow({
     variants: [flowVariant('first', rules), flowVariant('second', rules)],
     seed: 'two',
-    highScores: createHighScoreBoard({ storage: createMemoryStorage(), defaults: [] }),
+    highScores: createHighScoreBook({
+      carryTo: 'test',
+      storage: createMemoryStorage(),
+      defaults: [],
+    }),
     demo: createAttractDemo({
       rules: classicRules(),
       stages: classicStages(),
@@ -1094,7 +1103,11 @@ function steadyFlow(): GameFlow {
     rules: classicRules(),
     stages,
     seed: 'flow-pause',
-    highScores: createHighScoreBoard({ storage: createMemoryStorage(), defaults: [] }),
+    highScores: createHighScoreBook({
+      carryTo: 'test',
+      storage: createMemoryStorage(),
+      defaults: [],
+    }),
     demo: createAttractDemo({ rules: classicRules(), stages, seed: 'flow-pause:attract' }),
   });
 }
@@ -1536,7 +1549,11 @@ function watchableFlow(
     variants: [flowVariant('watchable', rules, { personas })],
     seed: 'watch',
     settings,
-    highScores: createHighScoreBoard({ storage: createMemoryStorage(), defaults: [] }),
+    highScores: createHighScoreBook({
+      carryTo: 'test',
+      storage: createMemoryStorage(),
+      defaults: [],
+    }),
     demo: createAttractDemo({ rules: classicRules(), stages: classicStages(), seed: 'watch:demo' }),
   });
   return { flow, settings };
