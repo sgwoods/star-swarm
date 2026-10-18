@@ -27,6 +27,10 @@ Four things worth knowing before editing:
   pause. It plays through the same master gain as every effect, so the volume and
   mute settings reach it with no control of its own.
 
+**Audio themes never reach this directory.** A theme is pack data that swaps one
+sound document for another (`src/content/themes.ts`); `src/main.ts` hands the
+themed sound map to `sfx.ts` and `music.ts`, which read it like any other.
+
 No audio context exists until `Synth.unlock()` runs, which belongs in a user
 gesture (`unlockOnFirstGesture`). Everything is silent and harmless without one.
 

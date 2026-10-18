@@ -7,9 +7,10 @@
  * card is a view onto that document and holds no setting of its own. `SHIPS` is
  * the document's `lives` — one of the counts the rules offer, the cabinet's own
  * starting-ship setting (`startingLivesOffered` in `src/content/rules.ts`) — and
- * `AUDIO` says which sound set the game plays. There is nowhere here to put a
- * number the rules do not already list, for the reason the difficulty preset has
- * nowhere to put a multiplier (`./settings.ts`).
+ * `AUDIO` is its `theme`, one of the audio themes its packs declare
+ * (`src/content/themes.ts`). There is nowhere here to put a number the rules do
+ * not already list or a sound no pack ships, for the reason the difficulty preset
+ * has nowhere to put a multiplier (`./settings.ts`).
  *
  * It is worked exactly as the pack manager is (`./packs.ts`), because it does the
  * same thing to the same document:
@@ -17,24 +18,26 @@
  * - **It edits a draft, judged as it changes.** `judge` is handed in, and the flow
  *   hands in the composer's (`./compose.ts`) — the loader's two passes and the
  *   structural half of the playability pass, over the document with the draft's
- *   count — so a count is refused on the card for exactly what a document in
- *   `variants/` stating it would be refused for.
+ *   count and theme — so a choice is refused on the card for exactly what a
+ *   document in `variants/` stating it would be refused for.
  * - **`ENTER` keeps and `ESC` cancels.** Over a shipped game keeping makes a new
  *   game — the naming card comes next, and the shipped game is never written —
  *   and over the player's own variation it changes that. The legend says which
  *   before the press, in the pack manager's words.
  *
- * **Only one audio theme exists**, and the `AUDIO` row says so rather than
- * offering a choice it cannot honour. A game's sounds are its packs' `sounds`,
- * `music` and sound documents, layered as everything else is; nothing in the
- * content model declares a second set a player could choose instead. So the row
- * is not editable, and the day a pack can declare one, this is where it is chosen.
+ * **`AUDIO` offers only what the packs declare.** A game whose packs declare two
+ * or more audio themes steps through them by name, wrapping, with the theme's own
+ * line under the row. One whose packs declare none — most games — reads `OWN`,
+ * says that only one theme exists and is not editable, rather than offering a
+ * choice it cannot honour. Keeping the packs' default theme states nothing, as
+ * keeping the rules' default count does not.
  *
  * A value with a cursor, like every card in `src/ui/`: `./flow.ts` calls a verb on
  * the matching input edge, and {@link drawOptionsCard} renders what the value says.
  */
 
 import type { ExtraLifeAward } from '../content/schema.js';
+import type { ThemeChoice } from '../content/themes.js';
 import { KEY, keyLine } from './keys.js';
 import { type CardRow, cycle, drawRowCard, fitText, type MenuLine } from './menus.js';
 import { EDITOR_CARD_WIDTH, PACKS_TEXT, type Verdict, verdictLines } from './packs.js';
@@ -49,7 +52,7 @@ export const OPTIONS_TEXT = Object.freeze({
   audioLabel: 'AUDIO',
   /** What `AUDIO` reads: the game's own sounds, as its packs layer them. */
   audioOwn: 'OWN',
-  /** Under `AUDIO`, always: there is no second theme to choose. */
+  /** Under `AUDIO` when the packs declare fewer than two themes: there is none to choose. */
   audioOnly: 'ONLY ONE THEME EXISTS',
   /** Under `SHIPS` for a count whose cabinet setting awards nothing. */
   noBonus: 'NO BONUS SHIPS',
@@ -57,6 +60,13 @@ export const OPTIONS_TEXT = Object.freeze({
 });
 
 export type OptionsRowId = 'ships' | 'audio';
+
+/** What the card is judging: a starting count and an audio theme together. */
+export interface OptionsDraft {
+  readonly lives: number;
+  /** The theme id, or `undefined` for a game whose packs declare none. */
+  readonly theme: string | undefined;
+}
 
 /** One row of the card. */
 export interface OptionsRow extends CardRow {
@@ -73,18 +83,24 @@ export interface OptionsCardOptions {
   readonly own: number;
   /** The extra-life award a count selects: the rules', resolved for that count. */
   readonly bonusOf: (lives: number) => ExtraLifeAward;
-  /** The verdict on a draft count. Asked once per distinct count. */
-  readonly judge: (lives: number) => Verdict;
+  /** The audio themes the packs declare, in order. Empty or omitted: the game has one sound. */
+  readonly themes?: readonly ThemeChoice[];
+  /** The theme the game's document plays now. Keeping exactly this changes nothing. */
+  readonly theme?: string | undefined;
+  /** The verdict on a draft. Asked once per distinct draft. */
+  readonly judge: (draft: OptionsDraft) => Verdict;
   /** True over a shipped game, where keeping makes a new one rather than changing it. */
   readonly makesNew?: boolean;
 }
 
-/** What keeping the card hands the flow: the count to store, or none. */
+/** What keeping the card hands the flow: what to store, field by field, or nothing. */
 export type OptionsKeep =
   | {
       readonly kept: true;
       /** The count to store, or `undefined` when it is the one the game already plays. */
       readonly lives: number | undefined;
+      /** The theme to store, or `undefined` when it is the one the game already plays. */
+      readonly theme: string | undefined;
     }
   | { readonly kept: false };
 
@@ -98,6 +114,8 @@ export interface OptionsCard {
   readonly row: OptionsRow;
   /** The starting count as drafted so far. */
   readonly lives: number;
+  /** The audio theme as drafted so far, or `undefined` when the packs declare none. */
+  readonly theme: string | undefined;
   readonly verdict: Verdict;
   /** True after `ENTER` was refused, until the draft changes. */
   readonly refused: boolean;
@@ -131,20 +149,60 @@ export function bonusLine(award: ExtraLifeAward): string {
   return `BONUS ${first} ${second} EVERY ${scoreText(award.repeat)}`;
 }
 
-/** Build the card. It opens on the game's own count, with the cursor on `SHIPS`. */
+/**
+ * The note under an offered theme: its own line, or where it sits in the list
+ * when the pack wrote none — never blank, so moving onto the row says something.
+ */
+function themeNote(themes: readonly ThemeChoice[], at: number): string {
+  const theme = themes[at];
+  return theme?.description ?? `THEME ${String(at + 1)} OF ${String(themes.length)}`;
+}
+
+/** Build the card. It opens on the game's own count and theme, with the cursor on `SHIPS`. */
 export function createOptionsCard(options: OptionsCardOptions): OptionsCard {
-  const { name, offered, own, bonusOf, judge, makesNew = false } = options;
+  const { name, offered, own, bonusOf, judge, makesNew = false, themes = [] } = options;
+  const ownTheme = options.theme;
   let lives = own;
+  let theme = ownTheme;
   let index = 0;
   let refused = false;
-  const verdicts = new Map<number, Verdict>();
+  const verdicts = new Map<string, Verdict>();
 
-  const verdictOf = (count: number): Verdict => {
-    const known = verdicts.get(count);
+  const draft = (): OptionsDraft => ({ lives, theme });
+
+  const verdictOf = (judged: OptionsDraft): Verdict => {
+    const key = `${String(judged.lives)} ${judged.theme ?? ''}`;
+    const known = verdicts.get(key);
     if (known !== undefined) return known;
-    const verdict = judge(count);
-    verdicts.set(count, verdict);
+    const verdict = judge(judged);
+    verdicts.set(key, verdict);
     return verdict;
+  };
+
+  const themeAt = (): number =>
+    Math.max(
+      0,
+      themes.findIndex((choice) => choice.id === theme),
+    );
+
+  const audioRow = (): OptionsRow => {
+    if (themes.length < 2) {
+      return {
+        id: 'audio',
+        label: OPTIONS_TEXT.audioLabel,
+        value: themes[0]?.name ?? OPTIONS_TEXT.audioOwn,
+        editable: false,
+        note: OPTIONS_TEXT.audioOnly,
+      };
+    }
+    const at = themeAt();
+    return {
+      id: 'audio',
+      label: OPTIONS_TEXT.audioLabel,
+      value: themes[at]?.name ?? OPTIONS_TEXT.audioOwn,
+      editable: true,
+      note: themeNote(themes, at),
+    };
   };
 
   const rowsOf = (): OptionsRow[] => {
@@ -157,13 +215,7 @@ export function createOptionsCard(options: OptionsCardOptions): OptionsCard {
         editable: choosable,
         note: choosable ? bonusLine(bonusOf(lives)) : OPTIONS_TEXT.shipsOnly,
       },
-      {
-        id: 'audio',
-        label: OPTIONS_TEXT.audioLabel,
-        value: OPTIONS_TEXT.audioOwn,
-        editable: false,
-        note: OPTIONS_TEXT.audioOnly,
-      },
+      audioRow(),
     ];
   };
 
@@ -192,8 +244,11 @@ export function createOptionsCard(options: OptionsCardOptions): OptionsCard {
     get lives(): number {
       return lives;
     },
+    get theme(): string | undefined {
+      return theme;
+    },
     get verdict(): Verdict {
-      return verdictOf(lives);
+      return verdictOf(draft());
     },
     get refused(): boolean {
       return refused;
@@ -207,18 +262,26 @@ export function createOptionsCard(options: OptionsCardOptions): OptionsCard {
     adjust: (delta) => {
       const row = rowAt();
       if (!row.editable || delta === 0) return;
-      // Only `SHIPS` is editable, and it walks the counts on offer, wrapping like
-      // every row that steps through a list.
-      const at = Math.max(0, offered.indexOf(lives));
-      lives = offered[cycle(at, delta, offered.length)] ?? lives;
+      // Each editable row walks the values on offer, wrapping like every row that
+      // steps through a list: `SHIPS` the counts, `AUDIO` the declared themes.
+      if (row.id === 'ships') {
+        const at = Math.max(0, offered.indexOf(lives));
+        lives = offered[cycle(at, delta, offered.length)] ?? lives;
+      } else {
+        theme = themes[cycle(themeAt(), delta, themes.length)]?.id ?? theme;
+      }
       refused = false;
     },
     keep: (): OptionsKeep => {
-      if (!verdictOf(lives).ok) {
+      if (!verdictOf(draft()).ok) {
         refused = true;
         return { kept: false };
       }
-      return { kept: true, lives: lives === own ? undefined : lives };
+      return {
+        kept: true,
+        lives: lives === own ? undefined : lives,
+        theme: theme === ownTheme ? undefined : theme,
+      };
     },
   };
 }

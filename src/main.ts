@@ -27,6 +27,7 @@ import {
   loadPack,
   loadVariants,
   type ResolvedVariant,
+  themedSounds,
 } from './content/index.js';
 import { createKeyboardInput, type InputFrame } from './engine/input.js';
 import { createLoop, STEP_HZ } from './engine/loop.js';
@@ -209,7 +210,7 @@ const synth = createSynth({
  * Everything derived from pack data, built when a variant comes into force and
  * never per frame: the sheet rasterises every sprite frame up front
  * (`src/render/README.md`), and the sound, music and explosion maps are the
- * variant's own `sounds`, `music` and `effects`.
+ * variant's own `sounds`, `music` and `effects`, played in its audio theme.
  *
  * These are `let` rather than `const` because a variant is chosen at run time,
  * and they have no initialiser because {@link applyVariant} is the only thing
@@ -247,16 +248,20 @@ function applyVariant(chosen: FlowVariant): void {
     sprites: variant.registry.sprites.values(),
     palette: variant.registry.manifest.palette,
   });
+  // The theme the game plays decides which document each sound id is; the
+  // bindings and cues are the packs' own either way. With no theme chosen this
+  // is the registry's own map, the same object.
+  const sounds = themedSounds(variant.registry, variant.theme);
   sfx = createSfx({
     player: synth,
-    sounds: variant.registry.sounds,
+    sounds,
     bindings: variant.registry.manifest.sounds,
   });
   // A jingle belongs to the game that started it.
   music?.stop();
   music = createMusic({
     player: synth,
-    sounds: variant.registry.sounds,
+    sounds,
     cues: variant.registry.manifest.music,
   });
   effects = createEffects({
@@ -772,6 +777,12 @@ declare global {
        */
       readonly startingLives: number;
       readonly variantLives: number;
+      /**
+       * The sound document the effect channel would play for the event type named,
+       * by id, in the variant in force's audio theme — empty when none is bound.
+       * What `tests/e2e/options.spec.ts` reads to see a kept theme reach the sound.
+       */
+      readonly soundFor: (event: string) => string;
       /** The exit confirmation's choice — `resume` or `exit`. Empty off that phase. */
       readonly exitChoice: string;
       /** Which motion the formation is running: sway, breathe or still. */
@@ -1013,6 +1024,7 @@ window.starSwarm = {
   get variantLives(): number {
     return flow.variant.lives;
   },
+  soundFor: (event: string): string => sfx.soundFor({ type: event })?.id ?? '',
   get exitChoice(): string {
     return flow.exitConfirm?.choice ?? '';
   },

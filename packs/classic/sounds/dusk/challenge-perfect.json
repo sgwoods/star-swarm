@@ -1,0 +1,121 @@
+{
+  "id": "dusk-challenge-perfect",
+  "wave": "sine",
+  "envelope": [0.06, 0.5, 0.44],
+  "volume": 0.34,
+  "sequence": [
+    {
+      "freq": 293.66,
+      "duration": 0.18
+    },
+    {
+      "freq": 349.23,
+      "duration": 0.18
+    },
+    {
+      "freq": 440,
+      "duration": 0.18
+    },
+    {
+      "freq": 392,
+      "duration": 0.18
+    },
+    {
+      "freq": 349.23,
+      "duration": 0.18
+    },
+    {
+      "freq": 329.63,
+      "duration": 0.18
+    },
+    {
+      "freq": 293.66,
+      "duration": 0.36
+    },
+    {
+      "freq": 329.63,
+      "duration": 0.18
+    },
+    {
+      "freq": 392,
+      "duration": 0.18
+    },
+    {
+      "freq": 466.16,
+      "duration": 0.18
+    },
+    {
+      "freq": 440,
+      "duration": 0.18
+    },
+    {
+      "freq": 392,
+      "duration": 0.18
+    },
+    {
+      "freq": 349.23,
+      "duration": 0.18
+    },
+    {
+      "freq": 329.63,
+      "duration": 0.36
+    },
+    {
+      "freq": 587.33,
+      "duration": 0.12
+    },
+    {
+      "freq": 698.46,
+      "duration": 0.12
+    },
+    {
+      "freq": 880,
+      "duration": 0.6
+    }
+  ],
+  "parts": [
+    {
+      "wave": "triangle",
+      "envelope": [0.05, 0.6, 0.35],
+      "volume": 0.4,
+      "sequence": [
+        {
+          "freq": 73.42,
+          "duration": 0.36
+        },
+        {
+          "freq": 110,
+          "duration": 0.36
+        },
+        {
+          "freq": 116.54,
+          "duration": 0.36
+        },
+        {
+          "freq": 87.31,
+          "duration": 0.36
+        },
+        {
+          "freq": 130.81,
+          "duration": 0.36
+        },
+        {
+          "freq": 98,
+          "duration": 0.36
+        },
+        {
+          "freq": 110,
+          "duration": 0.36
+        },
+        {
+          "freq": 82.41,
+          "duration": 0.36
+        },
+        {
+          "freq": 73.42,
+          "duration": 0.84
+        }
+      ]
+    }
+  ]
+}

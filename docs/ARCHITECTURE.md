@@ -1062,8 +1062,8 @@ game the gate passes and the browser cannot offer.
 
 **"Later wins" reaches the manifest and the rules, which is what makes an overlay
 pack possible.** `src/content/registry.ts` composes the layered packs' manifests
-field by field rather than taking the last one whole: `roles`, `formations` and
-`sounds` merge per key, the palette is a **union** (it is a permission list that
+field by field rather than taking the last one whole: `roles`, `formations`,
+`sounds` and the audio `themes` merge per key, the last stated `defaultTheme` wins, the palette is a **union** (it is a permission list that
 `src/render/sprites.ts` checks membership in and never indexes), and
 `stageBadges`, `music` and each half of `stageSequence` are replaced by the last
 pack that states a non-empty one. Rules are the whole document from the last pack that ships
@@ -1098,15 +1098,16 @@ content: a stage naming Classic's aliens, or a stage sequence naming Classic's
 stages, fails its own load. Richer overlays would need the reference pass to run
 over the composed variant, and nothing does that today.
 
-**A variant may state a combat order, a starting count, and where it came from.**
-Three optional fields exist for the player's variations
+**A variant may state a combat order, a starting count, an audio theme, and where it
+came from.** Four optional fields exist for the player's variations
 ([§6](#a-players-variations)), and a shipped document may use any of them:
 `stages`, an order for the combat stages stated after every pack — a selection
 among stage documents the packs already hold, checked against them, exactly as the
 stage-sequence editor's order is — `lives`, the fighters a game starts with, which
 must be one of the counts its rules offer (`lives.default` or one of
 `lives.options`, through `startingLivesOffered` in `src/content/rules.ts`), as a
-game's `SHIPS` row chooses it ([§6](#a-games-own-options)) — and `derivedFrom`,
+game's `SHIPS` row chooses it ([§6](#a-games-own-options)) — `theme`, one of the
+audio themes its packs declare, as the `AUDIO` row chooses it — and `derivedFrom`,
 the id of the game a document was made from. `derivedFrom` is provenance and
 nothing else: the loader does not resolve it, so a document plays the same whether
 the game it names is installed or not.
@@ -1120,7 +1121,9 @@ ships a pack with a `rules.json` that has them — which is also exactly what
 [§4.4](#44-where-a-second-game-plugs-in) says a sibling game does. `lives` is not
 an exception: it states no number the rules do not already list, any more than a
 preset states a rank they do not declare, and a count they do not offer is
-refused naming the field (`variants/x.json` · `lives`).
+refused naming the field (`variants/x.json` · `lives`). `theme` is not one either:
+it names sounds a pack ships, and one its packs do not declare is refused the same
+way.
 
 ### 4.6 The forge
 
@@ -1766,10 +1769,10 @@ appended for the cards ([below](#working-a-card)).
 **Every row is a field the game's variant document already selects**, so the card is
 a view onto that document and holds no setting of its own:
 
-| Row     | What it reads                      | What changing it does                                                                                |
-| ------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `SHIPS` | the fighters a game starts with    | steps through the counts the game's rules offer, wrapping, and says the bonus ships each one selects |
-| `AUDIO` | `OWN`, and `ONLY ONE THEME EXISTS` | nothing: it is not editable                                                                          |
+| Row     | What it reads                     | What changing it does                                                                                |
+| ------- | --------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `SHIPS` | the fighters a game starts with   | steps through the counts the game's rules offer, wrapping, and says the bonus ships each one selects |
+| `AUDIO` | the theme the game plays, by name | steps through the audio themes the game's packs declare, wrapping, and says each one's own line      |
 
 **`SHIPS` is the variant's `lives`** ([§4.5](#45-variants-the-games-this-build-offers)),
 so it offers exactly what the rules list — Classic's two to five, default three;
@@ -1781,10 +1784,34 @@ on its five. The count reaches every world the flow makes for the game, the attr
 demo's included, and the playability pass flies a variant on its own count too.
 Where the rules list one count, the row is dim and says `THE ONLY COUNT IT OFFERS`.
 
-**`AUDIO` says there is one theme, because there is.** A game's sounds are its packs'
-`sounds`, `music` and sound documents, layered like everything else; nothing in the
-content model declares a second set a player could choose instead, so the row does
-not pretend to offer one.
+**`AUDIO` is the variant's `theme`**, and offers only what a pack declares. A pack
+manifest may name **audio themes** (`themes`) and which of them is its
+`defaultTheme`; a theme is a name, a line, and a map from sound id to sound id —
+the sounds it plays _in place of_ the pack's own. Wherever a `sounds` binding or a
+`music` cue names a sound a theme replaces, the replacement plays; the bindings
+and cues themselves never change, so a theme cannot silence an event or give a
+silent one a sound, and it needs nothing from the audio layer. `themedSounds` in
+`src/content/themes.ts` is the one place a theme is applied, and `src/main.ts`
+hands its map to the effect and music channels when a variant comes into force.
+
+**The shipped sound is the default, exactly.** Each declaring pack's default
+substitutes nothing, and with no theme chosen `themedSounds` returns the
+registry's own sound map — the same object — so every shipped game hands the
+audio layer what it did before themes existed. `tests/unit/audio-themes.test.ts`
+holds every shipped game to that, event by event.
+
+Two packs declare a second theme. **Classic** offers `ARCADE`, its own sounds, and
+`DUSK` (`packs/classic/sounds/dusk/`): sine and triangle voices only, about an
+octave lower, with slower, softer envelopes and its own jingles in D minor.
+**Convoy** offers `CONVOY` and `GRIT` (`packs/convoy/sounds/grit/`): sawtooth voices
+in a lower register, its jingles in A minor, and longer, lower noise bursts. Those
+are descriptions of their values; whether either sounds good is the captain's
+call, and nobody had heard them when they shipped. Themes compose like the rest of
+a manifest — merged per id, the last stated default winning — so every game
+layered on Classic offers `ARCADE` and `DUSK` too. Because a theme substitutes by
+sound id in the composed registry, an overlay's sound under one of Classic's ids
+is replaced in `DUSK` like Classic's own, and an overlay's sounds under new ids
+play in every theme.
 
 **It is worked as the pack manager is, because it edits the same document.** The
 card holds a draft, judged as it changes by the same composer — the loader's two
@@ -1792,13 +1819,15 @@ passes and the structural half of the playability pass — so a count is refused
 the card for exactly what a document in `variants/` stating it would be. **Enter**
 keeps. Over a shipped game that makes a new game: the card says
 `KEEPING MAKES A NEW GAME`, the naming card comes next and refuses the shipped
-game's own name, and the result is a variation carrying `lives` — the shipped game
+game's own name, and the result is a variation carrying `lives` or `theme` — the shipped game
 starts on its own count as before, and choosing it again is the very variant the
 build loaded. Over the player's own variation the card says `KEEPING CHANGES YOURS`
 and writes the count in place; stepping back to the rules' default removes the field
-rather than stating it. Keeping the count the game already starts on makes nothing.
-A count a document states and its rules do not offer — an imported one, say — is
-refused as `SHIPS 99` / `ITS RULES DO NOT OFFER IT`.
+rather than stating it, and stepping back to the packs' default theme removes
+`theme` the same way. Keeping the count and theme the game already has makes
+nothing. A count a document states and its rules do not offer — an imported one,
+say — is refused as `SHIPS 99` / `ITS RULES DO NOT OFFER IT`, and a theme its packs
+do not declare as `AUDIO <id>` / `ITS PACKS DO NOT HAVE IT`.
 
 **What the card does not expose is as deliberate as what it does.** No scoring value
 appears on it, and neither does any other rules number: a count the rules list is a

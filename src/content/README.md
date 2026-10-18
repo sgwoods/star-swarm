@@ -14,6 +14,7 @@ model and section 6 the rules layer.
 | `variants.ts`  | A **variant**: one game, as a `variants/<id>.json` document — its packs and its difficulty presets, and a player's copy of one |
 | `rules.ts`     | Reads the rules layer: rank tables, stage sequences, cadence, plateaus, and everything the simulation steps                    |
 | `stages.ts`    | A stage _number_ to the resolved `StageContent` the simulation is handed                                                       |
+| `themes.ts`    | The sound map a game plays in its audio theme; the default is the registry's own map, unchanged                                |
 | `couplings.ts` | What a pack mix is coupled to under its rules, for the pack manager to say on its card                                         |
 | `errors.ts`    | `ContentError`, and the per-file report both the loader and the validator print                                                |
 
@@ -53,7 +54,8 @@ because a variant that could patch single numbers would be the difficulty
 multiplier section 6 rules out. The one number a variant states, `lives`, is a
 selection in that sense — one of the starting counts its rules offer
 (`startingLivesOffered` in `rules.ts`), checked as a preset's rank is checked
-against the ranks they declare. `docs/ARCHITECTURE.md` §4.5 has the whole of it,
+against the ranks they declare — and its `theme` is one of the audio themes its
+packs declare. `docs/ARCHITECTURE.md` §4.5 has the whole of it,
 including the one limit on an overlay pack: `loadPack` resolves references within a
 pack, so an overlay may replace a self-contained document and may not add one that
 names the base pack's content.

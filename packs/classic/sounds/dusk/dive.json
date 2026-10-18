@@ -1,0 +1,11 @@
+{
+  "id": "dusk-dive",
+  "wave": "sine",
+  "freq": [740, 185],
+  "vibrato": {
+    "rate": 7,
+    "depth": 0.08
+  },
+  "envelope": [0.03, 0.22, 0.2],
+  "volume": 0.26
+}

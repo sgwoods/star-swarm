@@ -120,8 +120,8 @@ const EMPTY_TABLE: SequenceTable = { rows: [], repeatLast: 1 };
  * pack into a game with no roles, no formation and no stage sequence. Each field
  * is therefore layered on its own terms:
  *
- * - **`roles`, `formations`, `sounds` and `effects` merge per key**, later
- *   winning — the same rule the content maps follow, and for the same reason.
+ * - **`roles`, `formations`, `sounds`, `effects` and `themes` merge per key**,
+ *   later winning — the same rule the content maps follow, and for the same reason.
  * - **`palette` is a union**, in layering order. It is a *permission list*:
  *   `src/render/sprites.ts` checks membership in it and never indexes it, so an
  *   overlay adding two colours must not have to restate the base's fourteen.
@@ -131,7 +131,8 @@ const EMPTY_TABLE: SequenceTable = { rows: [], repeatLast: 1 };
  *   not a set, and music cues are ranked by their order — and the two halves move
  *   separately because they already plateau separately.
  * - **`id`, `name`, `version` and `description` come from the last pack**, which
- *   is the one the registry reports as {@link ContentRegistry.active}.
+ *   is the one the registry reports as {@link ContentRegistry.active}, and
+ *   `defaultTheme` from the last pack that states one.
  *
  * Nothing here can *remove* a field: an overlay widens or replaces, never
  * empties. A game that wants no stage badges layers a base that has none.
@@ -182,6 +183,13 @@ export function composeManifest(
       (manifest) => manifest.music,
       (music) => music.length > 0,
       [],
+    ),
+    themes: mergeRecords(packs, (manifest) => manifest.themes),
+    defaultTheme: lastStated<string | undefined>(
+      packs,
+      (manifest) => manifest.defaultTheme,
+      (id) => id !== undefined,
+      undefined,
     ),
     stageBadges: lastStated(
       packs,

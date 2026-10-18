@@ -286,6 +286,25 @@
       "sound": "next-convoy"
     }
   ],
+  "themes": {
+    "convoy": { "name": "CONVOY", "description": "THE GAME AS IT SHIPPED" },
+    "grit": {
+      "name": "GRIT",
+      "description": "LOW HARSH SAWTOOTH VOICES",
+      "sounds": {
+        "zap": "grit-zap",
+        "spit": "grit-spit",
+        "pop": "grit-pop",
+        "wreck": "grit-wreck",
+        "swoop": "grit-swoop",
+        "bonus-ship": "grit-bonus-ship",
+        "last-ship": "grit-last-ship",
+        "launch": "grit-launch",
+        "next-convoy": "grit-next-convoy"
+      }
+    }
+  },
+  "defaultTheme": "convoy",
   "effects": {
     "player-hit": {
       "sprite": "explosion-player"

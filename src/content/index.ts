@@ -16,4 +16,5 @@ export * from './personas.js';
 export * from './registry.js';
 export * from './rules.js';
 export * from './stages.js';
+export * from './themes.js';
 export * from './variants.js';

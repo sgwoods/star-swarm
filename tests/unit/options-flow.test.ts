@@ -110,7 +110,7 @@ describe('a game’s options are reached from the game', () => {
       expect(optionsHeading(card?.name ?? '')).toBe('STAR SWARM OPTIONS');
       expect(card?.rows.map((row) => `${row.label}=${row.value}`)).toEqual([
         'SHIPS=3',
-        'AUDIO=OWN',
+        'AUDIO=ARCADE',
       ]);
       expect(card?.makesNew).toBe(true);
       // The shipped game's own count is the shipped game: its own verdict, unjudged.
@@ -296,6 +296,80 @@ describe('over the player’s own game, the card changes it', () => {
     const { flow } = cabinet(storage);
     expect(flow.game.id).toBe('classic-2');
     expect(flow.variant.lives).toBe(2);
+  });
+});
+
+describe('choosing an audio theme is choosing among what the pack declares', () => {
+  /** Open Classic's options, step down to `AUDIO` and onto the next theme. */
+  function toDusk(flow: GameFlow): void {
+    toAttract(flow);
+    press(flow, DOWN);
+    press(flow, DOWN);
+    expect(flow.optionsCard?.row.id).toBe('audio');
+    expect(flow.optionsCard?.row.editable).toBe(true);
+    press(flow, RIGHT);
+    expect(flow.optionsCard?.theme).toBe('dusk');
+  }
+
+  it('offers Classic’s themes by name, opening on its default', () => {
+    const { flow } = cabinet();
+    toAttract(flow);
+    press(flow, DOWN);
+    expect(flow.optionsCard?.theme).toBe('arcade');
+    press(flow, DOWN);
+    const seen: string[] = [];
+    for (let step = 0; step < 2; step += 1) {
+      press(flow, RIGHT);
+      seen.push(flow.optionsCard?.row.value ?? '');
+    }
+    expect(seen).toEqual(['DUSK', 'ARCADE']);
+  });
+
+  it('makes a game of the player’s own carrying the theme, and leaves CLASSIC as shipped', () => {
+    const before = onDisk();
+    const { flow, settings } = cabinet();
+    toDusk(flow);
+    expect(flow.optionsCard?.verdict.ok).toBe(true);
+    press(flow, START);
+    expect(flow.phase).toBe('name');
+    rename(flow, 'DUSK');
+
+    expect(flow.game).toMatchObject({ id: 'classic-2', variation: true });
+    expect(settings.value.variations[0]).toMatchObject({ derivedFrom: 'classic', theme: 'dusk' });
+    expect(settings.value.variations[0]).not.toHaveProperty('lives');
+    expect(flow.variant.theme).toBe('dusk');
+    expect(onDisk()).toEqual(before);
+
+    toClassic(flow);
+    expect(flow.variant).toBe(shipped('classic'));
+    expect(flow.variant.theme).toBe('arcade');
+  });
+
+  it('states no theme once a variation is back on the default', () => {
+    const { flow, settings } = cabinet();
+    toDusk(flow);
+    press(flow, START);
+    rename(flow, 'DUSK');
+    press(flow, DOWN);
+    expect(flow.optionsCard?.theme).toBe('dusk');
+    press(flow, DOWN);
+    press(flow, LEFT);
+    press(flow, START);
+    expect(settings.value.variations[0]).not.toHaveProperty('theme');
+    expect(flow.variant.theme).toBe('arcade');
+  });
+
+  it('offers each game its own packs’ themes', () => {
+    const { flow } = cabinet();
+    press(flow, DOWN);
+    press(flow, START);
+    expect(flow.game.id).toBe('convoy');
+    press(flow, DOWN);
+    expect(flow.optionsCard?.theme).toBe('convoy');
+    press(flow, DOWN);
+    expect(flow.optionsCard?.row).toMatchObject({ id: 'audio', value: 'CONVOY', editable: true });
+    press(flow, RIGHT);
+    expect(flow.optionsCard?.row.value).toBe('GRIT');
   });
 });
 

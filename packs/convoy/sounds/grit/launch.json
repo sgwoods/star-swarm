@@ -1,0 +1,65 @@
+{
+  "id": "grit-launch",
+  "wave": "sawtooth",
+  "envelope": [0.004, 0.6, 0.396],
+  "volume": 0.22,
+  "sequence": [
+    {
+      "freq": 220,
+      "duration": 0.12
+    },
+    {
+      "freq": 261.63,
+      "duration": 0.12
+    },
+    {
+      "freq": 329.63,
+      "duration": 0.12
+    },
+    {
+      "freq": 440,
+      "duration": 0.24
+    },
+    {
+      "freq": 392,
+      "duration": 0.12
+    },
+    {
+      "freq": 329.63,
+      "duration": 0.12
+    },
+    {
+      "freq": 293.66,
+      "duration": 0.12
+    },
+    {
+      "freq": 329.63,
+      "duration": 0.36
+    }
+  ],
+  "parts": [
+    {
+      "wave": "triangle",
+      "envelope": [0.004, 0.8, 0.196],
+      "volume": 0.4,
+      "sequence": [
+        {
+          "freq": 110,
+          "duration": 0.48
+        },
+        {
+          "freq": 87.31,
+          "duration": 0.24
+        },
+        {
+          "freq": 98,
+          "duration": 0.24
+        },
+        {
+          "freq": 110,
+          "duration": 0.36
+        }
+      ]
+    }
+  ]
+}

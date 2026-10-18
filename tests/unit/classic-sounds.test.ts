@@ -62,6 +62,29 @@ const JINGLE_SECONDS = 4;
 
 let pack: LoadedPack;
 
+/**
+ * Sound id → the sounds that stand in for it in some theme. A substitute is the
+ * sound it replaces as far as these tests are concerned: bound where that one is,
+ * and a jingle where that one is.
+ */
+const substitutesOf = (): Map<string, string[]> => {
+  const out = new Map<string, string[]>();
+  for (const theme of Object.values(pack.manifest.themes)) {
+    for (const [from, to] of Object.entries(theme.sounds))
+      out.set(from, [...(out.get(from) ?? []), to]);
+  }
+  return out;
+};
+
+/** Every sound a theme plays in another's place. */
+const substitutes = (): Set<string> => new Set([...substitutesOf().values()].flat());
+
+/** The ids a set stands for, together with every theme's stand-in for each. */
+const withSubstitutes = (ids: Iterable<string>): Set<string> => {
+  const table = substitutesOf();
+  return new Set([...ids].flatMap((id) => [id, ...(table.get(id) ?? [])]));
+};
+
 beforeAll(() => {
   const { source, errors } = readPackSource(PACK_DIR);
   expect(errors).toEqual([]);
@@ -73,12 +96,15 @@ beforeAll(() => {
 });
 
 describe('the Classic sound set', () => {
-  it('ships every effect Milestone 1 and 2 need', () => {
-    expect([...pack.sounds.keys()].sort()).toEqual([...REQUIRED_SOUNDS].sort());
+  it('ships every effect Milestone 1 and 2 need, as its own theme', () => {
+    const themed = substitutes();
+    expect([...pack.sounds.keys()].filter((id) => !themed.has(id)).sort()).toEqual(
+      [...REQUIRED_SOUNDS].sort(),
+    );
   });
 
   it('gives every sound a plan with at least one voice and a real length', () => {
-    const music = new Set(pack.manifest.music.map((cue) => cue.sound));
+    const music = withSubstitutes(pack.manifest.music.map((cue) => cue.sound));
     for (const [id, sound] of pack.sounds) {
       const plan = buildSoundPlan(sound);
       expect(plan.id, id).toBe(id);
@@ -89,7 +115,7 @@ describe('the Classic sound set', () => {
   });
 
   it('writes each named jingle as music — a melody with lines under it', () => {
-    for (const id of JINGLES) {
+    for (const id of withSubstitutes(JINGLES)) {
       const sound = pack.sounds.get(id);
       expect(sound?.sequence, id).toBeDefined();
       expect(sound?.parts?.length, id).toBeGreaterThanOrEqual(1);
@@ -136,7 +162,7 @@ describe('the manifest bindings', () => {
   });
 
   it('binds every sound the pack ships to some event, as an effect or a jingle', () => {
-    const bound = new Set([
+    const bound = withSubstitutes([
       ...Object.values(pack.manifest.sounds),
       ...pack.manifest.music.map((cue) => cue.sound),
     ]);

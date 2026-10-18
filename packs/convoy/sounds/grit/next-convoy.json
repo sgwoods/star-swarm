@@ -1,0 +1,20 @@
+{
+  "id": "grit-next-convoy",
+  "wave": "sawtooth",
+  "envelope": [0.004, 0.6, 0.396],
+  "volume": 0.2,
+  "sequence": [
+    {
+      "freq": 329.63,
+      "duration": 0.1
+    },
+    {
+      "freq": 440,
+      "duration": 0.1
+    },
+    {
+      "freq": 523.25,
+      "duration": 0.22
+    }
+  ]
+}

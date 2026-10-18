@@ -1,0 +1,24 @@
+{
+  "id": "grit-last-ship",
+  "wave": "sawtooth",
+  "envelope": [0.008, 0.58, 0.412],
+  "volume": 0.3,
+  "sequence": [
+    {
+      "freq": 329.63,
+      "duration": 0.2
+    },
+    {
+      "freq": 293.66,
+      "duration": 0.2
+    },
+    {
+      "freq": 261.63,
+      "duration": 0.2
+    },
+    {
+      "freq": [220, 110],
+      "duration": 0.7
+    }
+  ]
+}

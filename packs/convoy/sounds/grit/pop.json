@@ -1,0 +1,7 @@
+{
+  "id": "grit-pop",
+  "wave": "noise",
+  "freq": [1200, 80],
+  "envelope": [0.002, 0.1, 0.25],
+  "volume": 0.46
+}

@@ -51,6 +51,29 @@ Sequenced sounds spell their notes out as frequencies rather than note names,
 because the schema takes hertz. The scale used is ordinary equal temperament
 from A4 = 440 Hz, which keeps the jingles in tune with each other.
 
+**Themes.** These fifteen are the `ARCADE` theme, the pack's `defaultTheme`, and
+it substitutes nothing — so the game sounds exactly as the tables above say
+unless a player chooses otherwise. `DUSK` is the alternative, in `dusk/`: one
+document for each of the fifteen, with the same ids under a `dusk-` prefix, and
+`themes.dusk.sounds` in `../pack.json` naming which stands in for which. Its
+values, not a judgement of them:
+
+- **Voices**: sine and triangle only. No square wave anywhere, so none of the
+  narrow-pulse buzz the house style above is built on; the explosions are still
+  noise, filtered lower and held longer.
+- **Register**: effects sweep through lower bands — the rocket rises 330 → 990 Hz
+  against `fire`'s 880 → 2349 — and the jingles' basses sit around D2.
+- **Shape**: slower attacks and longer releases, slow vibrato where `ARCADE` has
+  fast, and the start, stage and results jingles stepping at 0.18 s a note
+  against `ARCADE`'s 0.1.
+- **Tunes**: new, original phrases in D minor rather than the major keys above,
+  each a sine melody over a triangle bass, the two stage jingles with a quiet
+  triangle harmony as well.
+
+Nobody had heard `DUSK` when it was written. Whether it suits the game is the
+captain's call; the tests hold only that it loads, fits the same length limits
+and stands in for every sound the pack binds or cues.
+
 Not every simulation event is bound, and none has to be: `src/sim/events.ts`
 raises more events than the two maps name, and an event with no binding is
 simply silent — the maps are the pack's choice of what makes a noise, not a table

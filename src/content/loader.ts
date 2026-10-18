@@ -466,6 +466,36 @@ export function loadPack(source: PackSource): LoadResult {
     requireRef(MANIFEST_FILE, `music[${String(index)}].sound`, 'sounds', cue.sound);
   });
 
+  // The audio themes, on the same terms: both sides of every substitution are
+  // this pack's sounds, and a pack offering themes says which one plays when a
+  // game names none — a default nobody declared would be a guess.
+  for (const [id, theme] of Object.entries(manifest.themes)) {
+    for (const [from, to] of Object.entries(theme.sounds)) {
+      requireRef(MANIFEST_FILE, `themes.${id}.sounds`, 'sounds', from);
+      requireRef(MANIFEST_FILE, `themes.${id}.sounds.${from}`, 'sounds', to);
+    }
+  }
+  const themeIds = Object.keys(manifest.themes);
+  if (manifest.defaultTheme === undefined) {
+    if (themeIds.length > 0) {
+      errors.push({
+        pack,
+        file: MANIFEST_FILE,
+        field: 'defaultTheme',
+        message: `a pack declaring themes names one as its default (${themeIds.join(', ')})`,
+      });
+    }
+  } else if (!themeIds.includes(manifest.defaultTheme)) {
+    errors.push({
+      pack,
+      file: MANIFEST_FILE,
+      field: 'defaultTheme',
+      message:
+        `"${manifest.defaultTheme}" names no theme in this pack ` +
+        `(${themeIds.join(', ') || 'none are declared'})`,
+    });
+  }
+
   // The event → effect bindings the renderer reads, on the same terms: a misspelt
   // sprite id is a load failure rather than a death that draws nothing.
   for (const [event, effect] of Object.entries(manifest.effects)) {

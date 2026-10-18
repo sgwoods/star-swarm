@@ -365,6 +365,29 @@ export const musicCueSchema = z.strictObject({
 
 export type MusicCue = z.infer<typeof musicCueSchema>;
 
+/**
+ * One audio theme a pack offers: a name a player chooses by, and the sounds it
+ * plays **instead of** the pack's own, as sound id → sound id.
+ *
+ * A substitution rather than a second `sounds` map and cue list because the
+ * theme changes what is heard, never when: every event binding and every music
+ * cue still stands, and wherever one names a sound this theme replaces, the
+ * replacement plays. So a theme cannot make an event silent or a silent one
+ * sound, and it needs no engine of its own — it is more sound documents, read by
+ * the same synth. An empty map is the pack's sounds exactly, which is what a
+ * pack's default theme normally is (`src/content/themes.ts`).
+ */
+export const audioThemeSchema = z.strictObject({
+  /** What the `AUDIO` row shows. Short: it sits in a row beside its label. */
+  name: z.string().min(1),
+  /** A line under the row, for what the theme is. */
+  description: z.string().optional(),
+  /** Sound id → the sound id this theme plays in its place. Both are this pack's. */
+  sounds: z.record(refSchema, refSchema).default({}),
+});
+
+export type AudioTheme = z.infer<typeof audioThemeSchema>;
+
 /* -------------------------------------------------------------------------- */
 /* 7.5 Abilities                                                                */
 /* -------------------------------------------------------------------------- */
@@ -1063,6 +1086,19 @@ export const packManifestSchema = z.strictObject({
    * than one jingle and the order says which wins.
    */
   music: z.array(musicCueSchema).default([]),
+  /**
+   * The audio themes a player may choose between, theme id → theme, in the order
+   * a player steps through them. Empty is the normal case: the game has one
+   * sound, the one `sounds` and `music` above describe.
+   *
+   * A pack that declares any names one of them as `defaultTheme`, which is what
+   * every game plays until a player chooses otherwise. The choice is a variant's
+   * `theme` (`src/content/variants.ts`), so it is a selection among what a pack
+   * declares and never a value of the player's own.
+   */
+  themes: z.record(idSchema, audioThemeSchema).default({}),
+  /** The theme a game plays when its document names none. Required with `themes`. */
+  defaultTheme: idSchema.optional(),
   /**
    * Simulation event name → effect: what the game *looks* like at a moment, as
    * data, on exactly the terms `sounds` above already sets.
