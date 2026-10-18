@@ -365,6 +365,11 @@ export function titleCardHeight(scheme: ControlScheme, gameList: boolean): numbe
 export interface AttractOptions {
   /** Steps spent in attract mode, for the card cycle and the blink. */
   readonly steps: number;
+  /**
+   * The chosen game's name, which is the title: a variation is its own game and
+   * reads as one, and the table on the other card is that game's alone.
+   */
+  readonly title: string;
   readonly highScores: readonly HighScoreEntry[];
   /** False when the table is session-only, so the screen can say so. */
   readonly persistent?: boolean;
@@ -384,6 +389,7 @@ export interface AttractOptions {
 export function drawAttract(ctx: CanvasRenderingContext2D, options: AttractOptions): void {
   const {
     steps,
+    title,
     highScores,
     persistent = true,
     cardSteps = CARD_STEPS,
@@ -396,11 +402,11 @@ export function drawAttract(ctx: CanvasRenderingContext2D, options: AttractOptio
     drawCentredPanel(ctx, centre, CARD_TOP, CARD_WIDTH, titleCardHeight(controls, gameList));
     // A one-pixel offset copy under the title: the cheapest arcade shadow, and
     // it keeps the letters legible whatever is behind them.
-    drawText(ctx, 'STAR SWARM', centre + 1, CARD_TOP + 13, {
+    drawText(ctx, title, centre + 1, CARD_TOP + 13, {
       colour: TITLE_SHADOW,
       align: 'center',
     });
-    drawText(ctx, 'STAR SWARM', centre, CARD_TOP + 12, { colour: TITLE_COLOUR, align: 'center' });
+    drawText(ctx, title, centre, CARD_TOP + 12, { colour: TITLE_COLOUR, align: 'center' });
     // Pause and exit are the keys a cabinet has none of, and the list is where the
     // other games and the settings — autoplay, difficulty and the rest — are: a
     // control nobody can find is half-shipped, and the pause card can only name

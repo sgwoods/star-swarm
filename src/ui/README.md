@@ -62,8 +62,10 @@ The front-end shell around it landed with Milestone 2:
   fitted to the room they leave, dropping `AUTO` before it cuts the label.
 - **The results screen counts from events**, not from bookkeeping added to the
   sim: `shot-fired` against `target-hit`/`target-destroyed` (`results.ts`).
-- **The high-score table degrades, never throws.** `highscores.ts` splits
-  ordering and insertion from persistence; `createWebStorage` catches on every
+- **The high-score table degrades, never throws, and there is one per game.**
+  `highscores.ts` splits ordering and insertion (`HighScoreBoard`) from
+  persistence, and keeps one board per game id in a single stored document
+  (`HighScoreBook`); `createWebStorage` catches on every
   path, including the property access itself, and falls back to a session-only
   table that behaves identically. A blocked storage API must never take the game
   down.
@@ -112,7 +114,7 @@ Milestone 3's front-end half landed next:
   rules layer resolves that rank into whole tables. There is nowhere in the shape
   to put a multiplier, which is the point — `docs/DESIGN.md` section 6 is explicit
   that rank selects data sets rather than scaling one.
-- **`storage.ts` is the one place persistence is written.** The high-score table
+- **`storage.ts` is the one place persistence is written.** The high-score tables
   and the settings share it, so the "a browser can revoke it between calls" case is
   handled once. Every path catches, the construction-time probe included, and the
   fallback is an in-memory store that behaves identically for one session.
@@ -235,7 +237,8 @@ Seams left for the tasks that follow, so they attach without editing a screen:
   screen draws, and `RunStats` is where new counters go. The card grows with the
   rows it is given.
 - **A pack-supplied default high-score table** — `DEFAULT_HIGH_SCORES` is ours
-  and provisional; `createHighScoreBoard({ defaults })` already takes one.
+  and provisional; `createHighScoreBook({ defaults })` already takes one, for
+  every game's table at once.
 
 See `docs/DESIGN.md` sections 4, 6 and 9, `docs/ARCHITECTURE.md` §4.5 and §6 for
 what exists, and `docs/ROADMAP.md` for what is next.

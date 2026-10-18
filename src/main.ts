@@ -50,11 +50,7 @@ import {
 import { drawBuildLine, drawBuildStamp } from './ui/build-stamp.js';
 import { createComposer } from './ui/compose.js';
 import { createGameFlow, type FlowStep, type FlowVariant, type GamePhase } from './ui/flow.js';
-import {
-  createHighScoreBoard,
-  drawInitialsEntry,
-  HIGH_SCORE_STORAGE_KEY,
-} from './ui/highscores.js';
+import { createHighScoreBook, drawInitialsEntry, HIGH_SCORE_STORAGE_KEY } from './ui/highscores.js';
 import { badgesForStage, drawHud, drawPersonaTag } from './ui/hud.js';
 import { drawSettings, drawVariantSelect, SELECT_CARD_TOP, SETTINGS_CARD_TOP } from './ui/menus.js';
 import { drawOptionsCard, optionsHeading } from './ui/options.js';
@@ -143,12 +139,18 @@ let variant: ResolvedVariant;
 // from this one.
 const SEED = 'star-swarm-m2';
 
-// The high-score table and the player's settings survive the tab if the browser
+// The high-score tables and the player's settings survive the tab if the browser
 // lets them, and quietly become session-only if it does not. One storage
 // implementation, two keys (`src/ui/storage.ts`): blocked site data must never
 // take the game down, so both degrade to defaults rather than throwing.
-const highScores = createHighScoreBoard({
+//
+// One table per game (`src/ui/highscores.ts`). A table written before that names
+// no game, so which game set each score cannot be told; it is carried to the
+// first game on the list — the one a cabinet boots on, and the only game there
+// was until the selector existed. `HighScoreBookOptions.carryTo` says why.
+const highScores = createHighScoreBook({
   storage: createWebStorage({ key: HIGH_SCORE_STORAGE_KEY }),
+  carryTo: firstVariant.id,
 });
 // A settings document written before the player's variations existed kept an
 // override per shipped game; reading one turns each into a variation of that game,
@@ -447,6 +449,7 @@ const loop = createLoop({
       case 'attract':
         drawAttract(ctx, {
           steps: flow.phaseSteps,
+          title: flow.game.name,
           highScores: flow.highScores.entries(),
           persistent: flow.highScores.persistent,
           controls: flow.settings.controls,

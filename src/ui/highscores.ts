@@ -11,6 +11,10 @@
  * - {@link HighScoreBoard} is ordering and insertion, and knows nothing about
  *   where the bytes go. It is therefore testable on the Node environment that
  *   `tests/unit/` runs, without a DOM.
+ * - {@link HighScoreBook} is one board **per game**, kept in one stored document.
+ *   A score is comparable only with scores from the same game, so a variation's
+ *   table is its own and never the game it was made from. The book is all that
+ *   knows tables are plural; a board is still one table over a `KeyedStorage`.
  *
  * Entry is worked like every other card (`./keys.ts`): it has one line of
  * choices — the letter under the cursor — so every direction walks the alphabet,
@@ -45,7 +49,11 @@ export const INITIALS_LENGTH = 3;
  */
 export const INITIALS_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ.-';
 
-/** Key the browser implementation stores under. */
+/**
+ * Key the browser implementation stores under. The `v1` is the key's, not the
+ * document's — the same arrangement as `SETTINGS_STORAGE_KEY` — so the reader of
+ * a newer document is the one that finds an older one under it.
+ */
 export const HIGH_SCORE_STORAGE_KEY = 'star-swarm/high-scores/v1';
 
 /**
@@ -62,7 +70,13 @@ export const DEFAULT_HIGH_SCORES: readonly HighScoreEntry[] = Object.freeze([
   { initials: 'EEE', score: 5_000, stage: 3 },
 ]);
 
-/** The document shape on disk. Bumped if the shape ever changes. */
+/**
+ * One table's document, as {@link createHighScoreBoard} reads and writes it.
+ *
+ * Also what a version 1 file under {@link HIGH_SCORE_STORAGE_KEY} was in full,
+ * when there was one table for every game. What is on disk now is the version 2
+ * book of them ({@link createHighScoreBook}).
+ */
 const DOCUMENT_VERSION = 1;
 
 interface StoredDocument {
@@ -204,6 +218,141 @@ export function createHighScoreBoard(options: HighScoreBoardOptions = {}): HighS
       table = next.slice(0, capacity);
       persist();
       return rank;
+    },
+  };
+}
+
+/** The book's document version: one table per game, keyed by the game's id. */
+const BOOK_VERSION = 2;
+
+interface StoredBook {
+  readonly version: number;
+  readonly tables: Readonly<Record<string, readonly HighScoreEntry[]>>;
+}
+
+/**
+ * Every game's table, one per game id: a shipped game's id, or a variation's.
+ *
+ * A score is only ever comparable with scores from the same game, so a table is
+ * never shared — a variation's table is its own and not the game it was made
+ * from, which is the point. A game with no table yet starts from the defaults,
+ * exactly as the one table used to.
+ */
+export interface HighScoreBook {
+  /** False when every table is session-only because storage is unavailable. */
+  readonly persistent: boolean;
+  /** The table for one game. The same board each call for the same id. */
+  boardFor: (game: string) => HighScoreBoard;
+  /** Drop a game's table, so an id used again later starts from the defaults. */
+  forget: (game: string) => void;
+}
+
+export interface HighScoreBookOptions {
+  readonly storage?: KeyedStorage;
+  readonly capacity?: number;
+  /** Table a game starts with. Defaults to {@link DEFAULT_HIGH_SCORES}. */
+  readonly defaults?: readonly HighScoreEntry[];
+  /**
+   * The game a version 1 document's one table is carried to.
+   *
+   * A version 1 entry names no game, so which game set it **cannot be told** —
+   * the table was shared by every game the build offered. The caller says where
+   * it goes, and the upgrade writes version 2 straight back, so the question is
+   * asked once. Required, because the first write of a book replaces whatever
+   * was stored: a book with nowhere to carry a version 1 table would discard it.
+   */
+  readonly carryTo: string;
+}
+
+/** Read the book. Anything unreadable reads as "no tables", one table at a time. */
+function parseBook(
+  text: string | undefined,
+  carryTo: string,
+): { readonly tables: Map<string, readonly HighScoreEntry[]>; readonly upgraded: boolean } {
+  const tables = new Map<string, readonly HighScoreEntry[]>();
+  if (text === undefined) return { tables, upgraded: false };
+  const legacy = parseHighScores(text);
+  if (legacy !== undefined) {
+    tables.set(carryTo, legacy);
+    return { tables, upgraded: true };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return { tables, upgraded: false };
+  }
+  if (typeof parsed !== 'object' || parsed === null) return { tables, upgraded: false };
+  const book = parsed as Partial<StoredBook>;
+  if (book.version !== BOOK_VERSION || typeof book.tables !== 'object' || book.tables === null) {
+    return { tables, upgraded: false };
+  }
+  for (const [game, entries] of Object.entries(book.tables)) {
+    const table = parseHighScores(JSON.stringify({ version: DOCUMENT_VERSION, entries }));
+    if (table !== undefined) tables.set(game, table);
+  }
+  return { tables, upgraded: false };
+}
+
+/**
+ * Build the book over one stored document.
+ *
+ * Each game's board is the ordinary {@link createHighScoreBoard}, handed a
+ * {@link KeyedStorage} that reads and writes that game's table inside the book —
+ * so ordering, insertion and the tie rule are the one implementation, and a
+ * blocked store degrades every table at once, the way it degraded the one.
+ */
+export function createHighScoreBook(options: HighScoreBookOptions): HighScoreBook {
+  const { storage = createMemoryStorage(), capacity, defaults, carryTo } = options;
+  const { tables, upgraded } = parseBook(storage.load(), carryTo);
+  const boards = new Map<string, HighScoreBoard>();
+
+  const persist = (): void => {
+    const book: StoredBook = { version: BOOK_VERSION, tables: Object.fromEntries(tables) };
+    storage.save(JSON.stringify(book));
+  };
+  if (upgraded) persist();
+
+  /** One game's table, as the board's own storage. */
+  const tableStorage = (game: string): KeyedStorage => ({
+    load: () => {
+      const entries = tables.get(game);
+      return entries === undefined
+        ? undefined
+        : JSON.stringify({ version: DOCUMENT_VERSION, entries });
+    },
+    save: (text) => {
+      const entries = parseHighScores(text);
+      if (entries === undefined) return false;
+      tables.set(game, entries);
+      persist();
+      return storage.persistent;
+    },
+    get persistent(): boolean {
+      return storage.persistent;
+    },
+  });
+
+  return {
+    get persistent(): boolean {
+      return storage.persistent;
+    },
+
+    boardFor(game) {
+      const known = boards.get(game);
+      if (known !== undefined) return known;
+      const board = createHighScoreBoard({
+        storage: tableStorage(game),
+        ...(capacity === undefined ? {} : { capacity }),
+        ...(defaults === undefined ? {} : { defaults }),
+      });
+      boards.set(game, board);
+      return board;
+    },
+
+    forget(game) {
+      boards.delete(game);
+      if (tables.delete(game)) persist();
     },
   };
 }

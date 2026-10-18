@@ -158,9 +158,10 @@ describe('deleting a game', () => {
     expect(confirm.choice).toBe('delete');
   });
 
-  it('says the name, that it cannot be undone, and how to answer', () => {
+  it('says the name, that its scores go with it, that it cannot be undone, and how to answer', () => {
     expect(deleteConfirmNotes('REEFS').map((line) => line.text)).toEqual([
       'REEFS',
+      VARIATION_TEXT.scoresGo,
       VARIATION_TEXT.cannotUndo,
       VARIATION_TEXT.deleteKeys,
       VARIATION_TEXT.deleteBack,
