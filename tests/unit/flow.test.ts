@@ -498,6 +498,8 @@ function flowVariant(
     readonly ranks?: string[];
     readonly personas?: readonly Persona[];
     readonly defaultPersona?: Persona;
+    /** Fighters it starts with. Omitted means the rules' own default. */
+    readonly lives?: number;
   } = {},
 ): FlowVariant {
   const presets =
@@ -512,6 +514,7 @@ function flowVariant(
     demonstration: options.demonstration ?? false,
     packs: [id],
     rules,
+    lives: options.lives ?? rules.lives.default,
     presets,
     defaultPreset: presets.find((preset) => preset.rank === rules.difficulty.defaultRank) ?? first,
     personas: options.personas ?? [],

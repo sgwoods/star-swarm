@@ -81,6 +81,7 @@ export const VERDICT_TEXT = Object.freeze({
   notInPacks: 'IS NOT IN THESE PACKS',
   isChallenge: 'IS A CHALLENGE STAGE',
   shippedId: 'A SHIPPED GAME HAS ITS ID',
+  livesNotOffered: 'ITS RULES DO NOT OFFER IT',
   badDocument: 'IT IS NOT A GAME DOCUMENT',
   clearsStages: 'CLEARS YOUR STAGE ORDER',
   fleet: 'ITS FLEET WILL NOT BUILD',
@@ -140,6 +141,9 @@ function refusalOf(errors: readonly ContentError[]): Verdict {
       `STAGE ${quoted(message)}`,
       /challenge/.test(message) ? VERDICT_TEXT.isChallenge : VERDICT_TEXT.notInPacks,
     ];
+  } else if (field === 'lives') {
+    // The count first, as the loader states it: a number is the document's.
+    details = [`SHIPS ${/^\d+/.exec(message)?.[0] ?? ''}`, VERDICT_TEXT.livesNotOffered];
   } else if (field === 'id' && /shipped/.test(message)) {
     details = [`ID ${quoted(message)}`, VERDICT_TEXT.shippedId];
   } else {

@@ -6,6 +6,7 @@
 `variations.ts` (the naming and delete cards for the player's own games),
 `exchange.ts` (the export and import cards that carry one between machines as
 text) and `text-port.ts` (the text box on the page those two cards use),
+`options.ts` (a game's own options card, opened from its attract screen),
 `compose.ts` (the judge behind them: what a player's document composes to, and
 whether it may be kept),
 `pause.ts` (the pause card and the one that asks before a run is thrown away),
@@ -21,10 +22,11 @@ and events and draws; it never writes back, and `src/sim/` never imports it.
 `hud.ts` landed with Milestone 1: score, reserve fighters and the stage badges.
 The front-end shell around it landed with Milestone 2:
 
-- **`flow.ts` is the one state machine.** Sixteen phases — the start-up variant
+- **`flow.ts` is the one state machine.** Seventeen phases — the start-up variant
   selector, attract, the settings menu and the pack, stage, naming, delete,
-  export and import cards it opens, playing, paused, the exit confirmation, the between-stage
-  challenge card, game over, results, high-score entry — and every
+  export and import cards it opens, a game's own options card, playing, paused,
+  the exit confirmation, the between-stage challenge card, game over, results,
+  high-score entry — and every
   transition is in that file. `challenge-results` is one of the two that go _back_
   to playing: the stage is over and the next is already on the field, so the world
   simply stops being stepped while the card is up. That is why it is a phase and
@@ -203,6 +205,14 @@ manager and the stage-sequence editor, Milestone 3's exit check:
   `<textarea>` over the bottom of the screen, selected for export and focused for
   import — and `src/main.ts` is what shows it, reports the clipboard's answer and
   feeds a paste back to the card.
+- **`options.ts` is a game's own settings, reached from the game.** Up or down on
+  a game's attract screen opens it, headed with that game's name, and it is a
+  third draft card over the same document the pack and stage cards edit: `SHIPS`
+  steps through the starting counts the game's rules offer and says which bonus
+  ships each one selects, and `AUDIO` says that only one theme exists rather than
+  offering a choice it cannot honour. Keeping a changed count over a shipped game
+  goes through the naming card like any edit, so the shipped game still starts on
+  its own count; `ESC` goes back to attract.
 - **`settings.ts` reads the shape before this one, once.** A version 1 document's
   per-game overrides become variations of those games on the first read, and
   version 2 is written straight back; its own header documents the stored shape.

@@ -297,9 +297,20 @@ describe('an import that is refused', () => {
   });
 
   it('carries a field no variant document has, as the loader refuses one in variants/', () => {
-    const text = JSON.stringify({ ...exported(), lives: 99 });
+    const text = JSON.stringify({ ...exported(), scoreMultiplier: 3 });
     const lines = refusedLines(text);
     expect(lines[0]).toBe(VERDICT_TEXT.wontLoad);
+  });
+
+  it('starts on a count of ships its rules do not offer', () => {
+    // `lives` is a field a variant has, but only as a selection among the counts
+    // the rules list: an import cannot hand itself ninety-nine ships.
+    const text = JSON.stringify({ ...exported(), lives: 99 });
+    expect(refusedLines(text)).toEqual([
+      VERDICT_TEXT.wontLoad,
+      'SHIPS 99',
+      VERDICT_TEXT.livesNotOffered,
+    ]);
   });
 
   it('is not JSON at all', () => {

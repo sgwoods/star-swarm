@@ -27,7 +27,9 @@
  *   pack, because a variant that could nudge individual numbers is a difficulty
  *   multiplier with a different name, and section 6 is explicit that rank selects
  *   whole data tables instead. A variant that wants different numbers ships a
- *   pack with a `rules.json` that has them.
+ *   pack with a `rules.json` that has them. The one number a variant states,
+ *   `lives`, is a selection in exactly that sense: it must be one of the counts
+ *   the rules already offer, as a preset's rank must be one they declare.
  */
 
 import { z } from 'zod';
@@ -37,6 +39,7 @@ import { ContentValidationError, fromZodError } from './errors.js';
 import type { LoadedPack } from './loader.js';
 import { defaultPersonaOf, type Persona, variantAutoplaySchema } from './personas.js';
 import { type ContentRegistry, createRegistry } from './registry.js';
+import { startingLivesOffered } from './rules.js';
 import { idSchema, type Rules } from './schema.js';
 import { createStageSource, type StageSource } from './stages.js';
 
@@ -125,6 +128,18 @@ export const variantSchema = z.strictObject({
    */
   stages: z.array(idSchema).optional(),
   /**
+   * Fighters a game starts with, including the one on the field. Omitted means
+   * the rules' own `lives.default`.
+   *
+   * A selection, never an override: it must be one of the counts the rules offer
+   * — their default or one of `lives.options`, which is the cabinet's own
+   * starting-ship setting (`startingLivesOffered`). A count selects which
+   * extra-life thresholds are in force as well as the reserve, so a game started
+   * on five is a different run and not just a longer one (`resolveExtraLifeAward`).
+   * A player's choice on a game's `SHIPS` row is this field of their variation.
+   */
+  lives: z.number().int().positive().optional(),
+  /**
    * The game this one was made from, when a player made it by editing another.
    *
    * **Provenance, never a reference.** The loader does not resolve it and nothing
@@ -183,6 +198,11 @@ export interface ResolvedVariant {
   readonly stages: readonly string[] | undefined;
   /** The game this one was made from, when it was made by editing one. Provenance only. */
   readonly derivedFrom: string | undefined;
+  /**
+   * Fighters a game starts with: the document's `lives`, or the rules' own
+   * default. Always one of `startingLivesOffered(rules)`.
+   */
+  readonly lives: number;
   /** Those packs, composed. */
   readonly registry: ContentRegistry;
   /** The rules in force. Present by construction: a variant without them fails to load. */
@@ -524,6 +544,22 @@ function resolveDocument(
     bad = true;
   }
 
+  // A starting count is checked the way a preset's rank is: against what the
+  // resolved rules offer, never as a number of its own.
+  const offered = startingLivesOffered(rules);
+  const lives = variant.lives ?? rules.lives.default;
+  if (!offered.includes(lives)) {
+    errors.push({
+      pack: VARIANTS_GROUP,
+      file,
+      field: 'lives',
+      message:
+        `${String(lives)} fighters is not a starting count the rules offer ` +
+        `(${offered.join(', ')})`,
+    });
+    bad = true;
+  }
+
   if (bad || defaultPreset === undefined) return { errors };
 
   return {
@@ -538,6 +574,7 @@ function resolveDocument(
       packs: variant.packs,
       stages,
       derivedFrom: variant.derivedFrom,
+      lives,
       registry,
       rules,
       presets,
@@ -687,6 +724,22 @@ export function withStages(
 ): VariantDocument {
   const { stages: _dropped, ...rest } = document;
   return stages === undefined ? rest : { ...rest, stages: [...stages] };
+}
+
+/**
+ * The starting count a document states, read leniently: its `lives` when that is
+ * a whole positive number, else `undefined` — the rules' own default. Whether the
+ * count is one the rules offer is the loader's question, not this one's.
+ */
+export function livesOf(document: VariantDocument): number | undefined {
+  const lives = document.lives;
+  return typeof lives === 'number' && Number.isInteger(lives) && lives > 0 ? lives : undefined;
+}
+
+/** The same document with its starting count replaced, or removed for `undefined`. */
+export function withLives(document: VariantDocument, lives: number | undefined): VariantDocument {
+  const { lives: _dropped, ...rest } = document;
+  return lives === undefined ? rest : { ...rest, lives };
 }
 
 export interface DeriveOptions {

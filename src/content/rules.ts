@@ -419,6 +419,19 @@ export function lookup<T>(table: PlateauTable<T> | undefined | null, index: numb
 /* Extra lives                                                                  */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * The starting-fighter counts these rules offer, ascending: the default and every
+ * one of `lives.options`, each once.
+ *
+ * What a variant's `lives` may select among, and what a game's `SHIPS` row steps
+ * through. A count the rules do not list is not on offer, for the reason a rank
+ * they do not declare is not: a variant selects among what its rules state, and
+ * never states a number of its own (`src/content/variants.ts`).
+ */
+export function startingLivesOffered(rules: Rules): readonly number[] {
+  return [...new Set([rules.lives.default, ...rules.lives.options])].sort((a, b) => a - b);
+}
+
 /** No thresholds at all — the last setting of most cabinets' tables. */
 export const NO_EXTRA_LIFE_AWARD: ExtraLifeAward = Object.freeze({ mode: 'none' });
 

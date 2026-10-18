@@ -286,17 +286,18 @@ exactly centred, the breathe taking over — and then the fighter opening up on 
 
 ![The game: entry waves, formation and the fighter shooting](media/arch-gameplay.gif)
 
-The front end around that is one state machine with sixteen phases — the start-up
+The front end around that is one state machine with seventeen phases — the start-up
 variant selector, attract, the settings menu, the pack manager, the
-stage-sequence editor and the naming, delete, export and import cards it opens, playing, paused,
+stage-sequence editor and the naming, delete, export and import cards it opens, a
+game's own options card, playing, paused,
 the exit confirmation, the between-stage challenge card, game over, results and
 high-score entry. The cabinet boots into the selector when there is more than one game to
-choose — the shipped games and the player's variations — and into attract when there is not; **Esc** from attract climbs back to the selector, whose last row opens the settings, or opens the settings directly when there is no selector. Behind the cards the demo is the _real_
+choose — the shipped games and the player's variations — and into attract when there is not; **Esc** from attract climbs back to the selector, whose last row opens the settings, or opens the settings directly when there is no selector, and **up** or **down** from attract opens that game's own options ([§6](#a-games-own-options)). Behind the cards the demo is the _real_
 simulation, flown in turn by the game's own autoplay personas (§7) — or, for a game
 that declares none, replaying a hand-written input log; start begins a game; three fighters
 lost ends it into the game-over banner, the hit-ratio results card, and then
 either the high-score table or straight back to attract.
-<!-- check:count flow.phases 16 -->
+<!-- check:count flow.phases 17 -->
 
 ![The front end: attract mode, a game, and out to the results card](media/arch-front-end.gif)
 
@@ -1097,15 +1098,18 @@ content: a stage naming Classic's aliens, or a stage sequence naming Classic's
 stages, fails its own load. Richer overlays would need the reference pass to run
 over the composed variant, and nothing does that today.
 
-**A variant may state a combat order, and where it came from.** Two optional
-fields exist for the player's variations
-([§6](#a-players-variations)), and a shipped document may use either: `stages`, an
-order for the combat stages stated after every pack — a selection among stage
-documents the packs already hold, checked against them, exactly as the
-stage-sequence editor's order is — and `derivedFrom`, the id of the game a
-document was made from. `derivedFrom` is provenance and nothing else: the loader
-does not resolve it, so a document plays the same whether the game it names is
-installed or not.
+**A variant may state a combat order, a starting count, and where it came from.**
+Three optional fields exist for the player's variations
+([§6](#a-players-variations)), and a shipped document may use any of them:
+`stages`, an order for the combat stages stated after every pack — a selection
+among stage documents the packs already hold, checked against them, exactly as the
+stage-sequence editor's order is — `lives`, the fighters a game starts with, which
+must be one of the counts its rules offer (`lives.default` or one of
+`lives.options`, through `startingLivesOffered` in `src/content/rules.ts`), as a
+game's `SHIPS` row chooses it ([§6](#a-games-own-options)) — and `derivedFrom`,
+the id of the game a document was made from. `derivedFrom` is provenance and
+nothing else: the loader does not resolve it, so a document plays the same whether
+the game it names is installed or not.
 
 **A variant does not override rules.** There is no mechanism in the schema for
 patching a rules field, deliberately: a variant that could nudge individual
@@ -1113,7 +1117,10 @@ numbers would be a difficulty multiplier with a different name, and
 [`docs/DESIGN.md`](DESIGN.md#6-configuration-system) section 6 is explicit that
 rank selects whole data tables instead. A variant that wants different numbers
 ships a pack with a `rules.json` that has them — which is also exactly what
-[§4.4](#44-where-a-second-game-plugs-in) says a sibling game does.
+[§4.4](#44-where-a-second-game-plugs-in) says a sibling game does. `lives` is not
+an exception: it states no number the rules do not already list, any more than a
+preset states a rank they do not declare, and a count they do not offer is
+refused naming the field (`variants/x.json` · `lives`).
 
 ### 4.6 The forge
 
@@ -1717,12 +1724,76 @@ it in a browser through the real box: make a variation, export it and read it ba
 off the real clipboard, clear `localStorage`, paste it with `CTRL+V`, keep it, and
 play it; and be refused one naming a pack this build does not install.
 
+### A game's own options
+
+**Each game has a card of its own, reached from the game.** **Up** or **down** on a
+game's attract screen — the two keys the fighter never reads — opens it over the
+demo, headed with the game's name (`STAR SWARM OPTIONS`), and **Esc** goes back to
+that attract screen. It is `src/ui/options.ts`, the `options` phase of
+`src/ui/flow.ts`, and the title card's third line says it is there:
+`U/D OPTIONS`. No input action was added for it; up and down are the two already
+appended for the cards ([below](#working-a-card)).
+
+![A game's own options: CLASSIC's attract card naming U/D OPTIONS, its card on its own three ships, five ships drafted with their bonus line, the naming card, the new game's card saying keeping changes it, and that game started on five](media/m3-game-options.png)
+
+**Every row is a field the game's variant document already selects**, so the card is
+a view onto that document and holds no setting of its own:
+
+| Row     | What it reads                      | What changing it does                                                                                |
+| ------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `SHIPS` | the fighters a game starts with    | steps through the counts the game's rules offer, wrapping, and says the bonus ships each one selects |
+| `AUDIO` | `OWN`, and `ONLY ONE THEME EXISTS` | nothing: it is not editable                                                                          |
+
+**`SHIPS` is the variant's `lives`** ([§4.5](#45-variants-the-games-this-build-offers)),
+so it offers exactly what the rules list — Classic's two to five, default three;
+Convoy's two, three or five — and nothing in between or beyond. A count is not only
+a longer game: the rules resolve a different extra-life award for it
+(`resolveExtraLifeAward`), the arcade's own behaviour, so the note under the row is
+that award — `BONUS 20K 70K EVERY 70K` on Classic's three, `BONUS 30K 120K EVERY 120K`
+on its five. The count reaches every world the flow makes for the game, the attract
+demo's included, and the playability pass flies a variant on its own count too.
+Where the rules list one count, the row is dim and says `THE ONLY COUNT IT OFFERS`.
+
+**`AUDIO` says there is one theme, because there is.** A game's sounds are its packs'
+`sounds`, `music` and sound documents, layered like everything else; nothing in the
+content model declares a second set a player could choose instead, so the row does
+not pretend to offer one.
+
+**It is worked as the pack manager is, because it edits the same document.** The
+card holds a draft, judged as it changes by the same composer — the loader's two
+passes and the structural half of the playability pass — so a count is refused on
+the card for exactly what a document in `variants/` stating it would be. **Enter**
+keeps. Over a shipped game that makes a new game: the card says
+`KEEPING MAKES A NEW GAME`, the naming card comes next and refuses the shipped
+game's own name, and the result is a variation carrying `lives` — the shipped game
+starts on its own count as before, and choosing it again is the very variant the
+build loaded. Over the player's own variation the card says `KEEPING CHANGES YOURS`
+and writes the count in place; stepping back to the rules' default removes the field
+rather than stating it. Keeping the count the game already starts on makes nothing.
+A count a document states and its rules do not offer — an imported one, say — is
+refused as `SHIPS 99` / `ITS RULES DO NOT OFFER IT`.
+
+**What the card does not expose is as deliberate as what it does.** No scoring value
+appears on it, and neither does any other rules number: a count the rules list is a
+selection, as a difficulty preset's rank is, where a point value would be a number of
+the player's own. Difficulty and autoplay stay on the settings card, where they are
+the player's — one preset id and one persona id across every game — rather than a
+game's. And there is **one high-score table for every game**: an entry is initials,
+a score and a stage, with no game recorded on it, so a run of a five-ship variation
+and a run of CLASSIC as shipped land in the same table.
+
+A flow built with nothing to compose with — a test of the machine on its own — opens
+no options card, exactly as it opens no pack card. `tests/unit/options.test.ts` holds
+the card, `tests/unit/options-flow.test.ts` the whole story through the state machine
+— including that every shipped document is byte-identical after a variation is made
+from one — and `tests/e2e/options.spec.ts` plays it in a browser.
+
 ### Working a card
 
-Eleven cards wait on an answer — the selector, the settings, the pack manager and
-the stage-sequence editor, the naming, delete, export and import cards, the pause
-card, the exit card and initials entry — and they are worked with one scheme, held in
-`src/ui/keys.ts`:
+Twelve cards wait on an answer — the selector, the settings, the pack manager and
+the stage-sequence editor, the naming, delete, export and import cards, a game's
+options card, the pause card, the exit card and initials entry — and they are
+worked with one scheme, held in `src/ui/keys.ts`:
 
 | Key     | On every card                                                  |
 | ------- | -------------------------------------------------------------- |
@@ -1778,10 +1849,10 @@ on any of them, and fits each line to its card in characters the font has.
 
 **The attract screen speaks the same voice.** It is not a card — nothing on it has
 a cursor — but it is where a player first reads the keys, and three changes had
-each written to it in their own words. Its title card is now three `keyLine`s
+each written to it in their own words. Its title card is now four `keyLine`s
 (`attractKeys` in `src/ui/attract.ts`): moving and firing, pausing and leaving,
-and the way back — `ESC GAMES, SETTINGS`, or `ESC SETTINGS` in a build with one
-game, where that is what it does. The blinking prompt under both attract cards is
+this game's options — `U/D OPTIONS` — and the way back — `ESC GAMES, SETTINGS`,
+or `ESC SETTINGS` in a build with one game, where that is what it does. The blinking prompt under both attract cards is
 `ENTER START`, the only place the screen says how to start. It is also the one
 screen that names the fire key, because it teaches the game rather than a card,
 so it names the key the player's own control scheme binds: `SPACE`, or `Z` on

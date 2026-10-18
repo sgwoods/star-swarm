@@ -371,6 +371,7 @@ function worldFor(variant: ResolvedVariant, flight: StageFlight, seed: string): 
     stages: only,
     stage: flight.number,
     rank: flight.rank,
+    lives: variant.lives,
   });
 }
 
@@ -708,7 +709,13 @@ export function clearsEnough(cleared: number): boolean {
 /** One whole game from the first stage, with the variant's own fighters. */
 export function playRun(variant: ResolvedVariant, persona: Persona, seed: string): number {
   const rank = variant.defaultPreset.rank;
-  const world = createWorld({ seed, rules: variant.rules, stages: variant.stagesFor(rank), rank });
+  const world = createWorld({
+    seed,
+    rules: variant.rules,
+    stages: variant.stagesFor(rank),
+    rank,
+    lives: variant.lives,
+  });
   const pilot = autopilotSource(world, { persona, seed: `pilot:${seed}` });
   for (let step = 0; step < PROTOCOL.runSteps && world.status === 'playing'; step += 1) {
     stepWorld(world, pilot.sample());

@@ -172,6 +172,8 @@ export interface AttractDemoOptions {
   readonly stages?: StageSource;
   /** The difficulty rank, so the demo world runs at the one its stages were resolved at. */
   readonly rank?: string;
+  /** Fighters each leg starts with: the game's own count. Omitted means the rules' default. */
+  readonly lives?: number;
   readonly seed?: string;
   /** Who demonstrates the game, in menu order. Empty or absent is the script. */
   readonly personas?: readonly Persona[];
@@ -207,6 +209,7 @@ export function createAttractDemo(options: AttractDemoOptions): AttractDemo {
   const worldOptions = {
     ...(options.stages === undefined ? {} : { stages: options.stages }),
     ...(options.rank === undefined ? {} : { rank: options.rank }),
+    ...(options.lives === undefined ? {} : { lives: options.lives }),
   };
 
   const newWorld = (): World => createWorld({ seed, rules, ...worldOptions });
@@ -328,10 +331,17 @@ export const ATTRACT_BACK = Object.freeze({
 });
 
 /**
+ * What up and down do from attract: open this game's own options
+ * (`./options.ts`). The two keys a game never reads, so a player trying the stick
+ * on the title screen does not land on a card.
+ */
+export const ATTRACT_OPTIONS = keyLine([KEY.rows, 'OPTIONS']);
+
+/**
  * The title card's keys, in the order they are drawn: playing first, then holding
- * and leaving a game, then the way back — to the list of games and the settings,
- * where difficulty and autoplay live, and the line that answers "how do I watch it
- * play itself" from the persona tag below.
+ * and leaving a game, then this game's own options, then the way back — to the
+ * list of games and the settings, where difficulty and autoplay live, and the line
+ * that answers "how do I watch it play itself" from the persona tag below.
  *
  * Written with `keyLine` like every card's help, so this screen and the cards a
  * player meets next name a key the same way. It is the one screen that names the
@@ -342,6 +352,7 @@ export function attractKeys(scheme: ControlScheme, gameList: boolean): readonly 
   return [
     keyLine([KEY.values, 'MOVE'], [fireKeyFor(scheme), 'FIRE']),
     keyLine([KEY.pause, 'PAUSE'], [KEY.exit, 'EXIT']),
+    ATTRACT_OPTIONS,
     gameList ? ATTRACT_BACK.list : ATTRACT_BACK.settings,
   ];
 }

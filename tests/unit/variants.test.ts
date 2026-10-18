@@ -10,12 +10,15 @@ import { resolveDifficultyRow } from '../../src/content/rules.js';
 import type { Rules } from '../../src/content/schema.js';
 import type { ResolvedVariant, VariantSource } from '../../src/content/variants.js';
 import {
+  deriveVariant,
+  livesOf,
   loadVariants,
   presetOf,
   presetsForRules,
   rankFor,
   resolveVariant,
   variantSchema,
+  withLives,
 } from '../../src/content/variants.js';
 import { classicPack, minimalRules } from '../helpers/rules.js';
 
@@ -538,6 +541,71 @@ describe('a variant resolved as a player chose it', () => {
     expect(!challenge.ok && challenge.errors[0]?.message).toMatch(/challenge stage/);
     const empty = resolveVariant(source, installedPacks(), { stages: [] });
     expect(!empty.ok && empty.errors[0]?.field).toBe('stages');
+  });
+});
+
+describe('a variant’s starting count', () => {
+  /**
+   * `lives` is the one number a variant document states, and it states it the way
+   * a preset states a rank: as a selection among what the rules already offer —
+   * Classic's default of three and its options of two to five — never as a number
+   * of its own.
+   */
+  const base = { id: 'x', name: 'X', packs: ['classic'] };
+
+  it('is the rules’ own default when the document states none', () => {
+    expect(loadOne(base).lives).toBe(3);
+  });
+
+  it('selects any count the rules offer', () => {
+    for (const lives of [2, 3, 4, 5]) expect(loadOne({ ...base, lives }).lives).toBe(lives);
+  });
+
+  it('refuses a count the rules do not offer, naming the field and the counts that are', () => {
+    const errors = refuse({ ...base, lives: 9 });
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.field).toBe('lives');
+    expect(errors[0]?.message).toBe(
+      '9 fighters is not a starting count the rules offer (2, 3, 4, 5)',
+    );
+  });
+
+  it('refuses a count that is not a whole number of fighters at the schema', () => {
+    for (const lives of [0, -1, 2.5, '3']) {
+      expect(refuse({ ...base, lives })[0]?.field).toBe('lives');
+    }
+  });
+
+  it('is checked against the rules of the packs it is layered over', () => {
+    // `two` ships rules with a default of three and no options, so five is not offered.
+    const packs = installedPacks();
+    packs.set('two', twoRankPack());
+    const result = resolveVariant(sourceOf('x.json', { ...base, lives: 5 }), packs, {
+      packs: ['classic', 'two'],
+    });
+    expect(!result.ok && result.errors.map((error) => error.field)).toEqual(['lives']);
+  });
+
+  it('is read leniently from a stored document, and replaced or removed whole', () => {
+    expect(livesOf({ lives: 4 })).toBe(4);
+    expect(livesOf({})).toBeUndefined();
+    expect(livesOf({ lives: '4' })).toBeUndefined();
+    expect(livesOf({ lives: 0 })).toBeUndefined();
+    expect(withLives({ ...base, lives: 4 }, 5)).toEqual({ ...base, lives: 5 });
+    expect(withLives({ ...base, lives: 4 }, undefined)).toEqual(base);
+  });
+
+  it('comes across when a game is derived from one that states it', () => {
+    const copy = deriveVariant(
+      { ...base, lives: 5 },
+      {
+        id: 'x-2',
+        name: 'X 2',
+        from: 'x',
+        packs: ['classic'],
+      },
+    );
+    expect(copy).toMatchObject({ id: 'x-2', derivedFrom: 'x', lives: 5 });
   });
 });
 
