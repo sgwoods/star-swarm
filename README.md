@@ -22,7 +22,10 @@ a game's attract screen **Esc** climbs to the game list, which is the top, so
 **Esc** there does nothing; the list's last row, **SETTINGS**, is where the
 difficulty, autoplay, sound, controls and CRT filter live. A game that ends leaves
 you on that game's attract screen, not on the list. A build with one game has no
-list, so there **Esc** from attract opens the settings directly.
+list, so there **Esc** from attract opens the settings directly. **↑** or **↓**
+on a game's attract screen opens that game's own options — the ships it starts
+with, and its sound — where a change to a shipped game is kept as a game of your
+own beside it, never as a change to the game itself.
 
 The top-right corner of the screen says which build you are looking at — the
 commit, whether the tree was modified, and the date — and a page that is open

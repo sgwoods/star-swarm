@@ -173,6 +173,15 @@ the end.
   with `DELETE` chosen; and a list with no rules refused on the card, `NOT KEPT`.
   Laid out three by two at half size, and captured as one picture of a page
   holding the six.
+- `m3-game-options.png` — a game's own options card: six frames of the dev
+  build's logical 224x288 backbuffer from one browser session driven only by the
+  keyboard, from a cleared `localStorage`. CLASSIC's attract title card with its
+  `U/D OPTIONS` line; down, and `STAR SWARM OPTIONS` on its own three ships with
+  `THE GAME'S OWN` as the verdict; right twice, five ships drafted, the bonus line
+  changed to five ships' thresholds and `KEEPING MAKES A NEW GAME`; enter, and the
+  naming card on `STAR SWARM 2` with `END` under the cursor; enter again, then down
+  on the new game's attract screen, and its card saying `KEEPING CHANGES YOURS`;
+  and that game started, four ships in reserve. Laid out three by two at 1x.
 - `m4-forge.gif` — the forged pack, played: one unedited take from live play, at
   the shipped dev build. The start-up selector with three games on it and the
   cursor moved onto `DEEP SEA`, the settings card opened with **Esc** and the

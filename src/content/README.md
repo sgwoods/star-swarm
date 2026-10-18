@@ -50,7 +50,10 @@ a player can start. It validates in the same two passes with the same
 `ContentError` shape — schema, then references against the packs that loaded — and
 it **selects rather than overrides**: rules are a whole document from a pack,
 because a variant that could patch single numbers would be the difficulty
-multiplier section 6 rules out. `docs/ARCHITECTURE.md` §4.5 has the whole of it,
+multiplier section 6 rules out. The one number a variant states, `lives`, is a
+selection in that sense — one of the starting counts its rules offer
+(`startingLivesOffered` in `rules.ts`), checked as a preset's rank is checked
+against the ranks they declare. `docs/ARCHITECTURE.md` §4.5 has the whole of it,
 including the one limit on an overlay pack: `loadPack` resolves references within a
 pack, so an overlay may replace a self-contained document and may not add one that
 names the base pack's content.

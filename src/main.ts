@@ -10,8 +10,9 @@
  * file owns the display, the input device, the sprite sheet, the starfield and
  * the audio, and nothing else. Attract demo, play, the pause and its exit
  * confirmation, the between-stage challenge card, game over, results and
- * high-score entry — and the settings screen with the pack manager, the
- * stage-sequence editor and the naming and delete cards it opens — all arrive
+ * high-score entry — the settings screen with the pack manager, the
+ * stage-sequence editor and the naming and delete cards it opens, and a game's
+ * own options card — all arrive
  * through one `flow.step(frame)`
  * call, which is why there are no phase flags here — including no `paused`
  * boolean, which is the flag `src/ui/flow.ts` refuses on the same grounds as
@@ -56,6 +57,7 @@ import {
 } from './ui/highscores.js';
 import { badgesForStage, drawHud, drawPersonaTag } from './ui/hud.js';
 import { drawSettings, drawVariantSelect, SELECT_CARD_TOP, SETTINGS_CARD_TOP } from './ui/menus.js';
+import { drawOptionsCard, optionsHeading } from './ui/options.js';
 import { drawPackEditor, drawStageEditor } from './ui/packs.js';
 import { CARD_TOP } from './ui/panel.js';
 import { drawExitConfirm, drawPaused, EXIT_CARD_TOP, PAUSE_CARD_TOP } from './ui/pause.js';
@@ -435,6 +437,7 @@ const loop = createLoop({
       flow.phase === 'delete' ||
       flow.phase === 'export' ||
       flow.phase === 'import' ||
+      flow.phase === 'options' ||
       flow.phase === 'variant-select';
     if (persona !== undefined && !onMenu) {
       drawPersonaTag(ctx, persona.label, hud);
@@ -571,6 +574,18 @@ const loop = createLoop({
         const card = flow.importCard;
         if (card !== undefined) {
           drawImportCard(ctx, card, {
+            steps: flow.phaseSteps,
+            x: LOGICAL_WIDTH / 2,
+            y: SETTINGS_CARD_TOP,
+          });
+        }
+        break;
+      }
+      case 'options': {
+        const card = flow.optionsCard;
+        if (card !== undefined) {
+          drawOptionsCard(ctx, {
+            card,
             steps: flow.phaseSteps,
             x: LOGICAL_WIDTH / 2,
             y: SETTINGS_CARD_TOP,
@@ -740,6 +755,20 @@ declare global {
       readonly editorDraft: readonly string[];
       readonly editorVerdict: readonly string[];
       readonly editorOk: boolean;
+      /**
+       * A game's options card: its heading, its rows as `label=value`, the row under
+       * the cursor and the verdict's lines. Empty off that phase.
+       */
+      readonly optionsHeading: string;
+      readonly optionsRows: readonly string[];
+      readonly optionsRow: string;
+      readonly optionsVerdict: readonly string[];
+      /**
+       * Fighters the world on screen started with, and the count the game in force
+       * starts every run on. `tests/e2e/options.spec.ts` holds a kept count to both.
+       */
+      readonly startingLives: number;
+      readonly variantLives: number;
       /** The exit confirmation's choice — `resume` or `exit`. Empty off that phase. */
       readonly exitChoice: string;
       /** Which motion the formation is running: sway, breathe or still. */
@@ -960,6 +989,26 @@ window.starSwarm = {
   },
   get editorOk(): boolean {
     return (flow.packEditor ?? flow.stageEditor)?.verdict.ok ?? false;
+  },
+  get optionsHeading(): string {
+    const card = flow.optionsCard;
+    return card === undefined ? '' : optionsHeading(card.name);
+  },
+  get optionsRows(): readonly string[] {
+    return (flow.optionsCard?.rows ?? []).map((row) => `${row.label}=${row.value}`);
+  },
+  get optionsRow(): string {
+    return flow.optionsCard?.row.id ?? '';
+  },
+  get optionsVerdict(): readonly string[] {
+    const verdict = flow.optionsCard?.verdict;
+    return verdict === undefined ? [] : [verdict.headline, ...verdict.details];
+  },
+  get startingLives(): number {
+    return flow.world.startingLives;
+  },
+  get variantLives(): number {
+    return flow.variant.lives;
   },
   get exitChoice(): string {
     return flow.exitConfirm?.choice ?? '';

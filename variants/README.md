@@ -52,6 +52,7 @@ interpreted. The file name is the id: `classic.json` must declare `"id":
 | `difficulty`    | The presets on offer. Omitted means one per rank the rules declare                            |
 | `autoplay`      | The personas the cabinet may play itself as. Omitted means no autoplay                        |
 | `stages`        | An order for the combat stages, stated after every pack. Omitted means the packs' own         |
+| `lives`         | Fighters a game starts with: one of the counts its rules offer. Omitted means their default   |
 | `derivedFrom`   | The game this one was made from. Provenance only: the loader never resolves it                |
 
 ## Difficulty presets choose a rank, and nothing else
@@ -148,13 +149,31 @@ order fails the build rather than quietly offering a ladder that does not climb.
 What each axis _does_ is [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md#7-autoplay)
 §7.
 
+## A starting count selects, as a preset does
+
+`lives` is the one number a variant states, and it states it the way a preset
+states a rank: as a choice among what the rules already list. The counts on offer
+are the rules' `lives.default` and every one of `lives.options` — the cabinet's own
+starting-ship setting, `2` to `5` for Classic — and any other count is refused,
+naming the document and the field:
+
+```json
+"lives": 5
+```
+
+A count selects which extra-life thresholds are in force as well as the reserve,
+because the arcade offers a different set to a cabinet started on more ships — so a
+game on five is a different run and not just a longer one. A player's choice on a
+game's `SHIPS` row is this field of their variation (`docs/ARCHITECTURE.md` §6).
+
 ## What a variant may not do
 
 **Override a rules field.** There is no mechanism for it, deliberately: rules are a
 whole document from a pack, because a variant that could nudge single numbers is a
 difficulty multiplier with a different name. A variant that wants different numbers
 names a pack with a `rules.json` that has them — which is exactly what
-`docs/ARCHITECTURE.md` §4.4 says a sibling game does.
+`docs/ARCHITECTURE.md` §4.4 says a sibling game does. `lives` is no exception: it
+can only name a count the rules already offer.
 
 ## A player's variation is one of these documents
 
@@ -162,7 +181,8 @@ Editing a shipped game in the pack manager or the stage-sequence editor and
 keeping the edit makes a new document: `deriveVariant` in
 `src/content/variants.ts` copies the shipped one — presets and personas included —
 under a fresh `id` (`classic-2`), the name the player spells, `derivedFrom` naming
-the shipped game, and the chosen `packs` and `stages`. It leaves out the shipped
+the shipped game, and the chosen `packs` and `stages` — or, from a game's own
+options card, the chosen `lives`. It leaves out the shipped
 game's `description`, `order` and `demonstration`, which describe that game rather
 than the copy.
 

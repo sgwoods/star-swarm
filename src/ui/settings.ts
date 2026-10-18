@@ -31,7 +31,9 @@
  * no per-game override in this shape any more: an edit to a shipped game is a
  * new variant document — a *variation* — kept here beside the others, and the
  * shipped game plays as it ships because nothing stored is ever composed over
- * it. A variation is the player's sandbox and is edited in place.
+ * it. A variation is the player's sandbox and is edited in place. That includes a
+ * game's starting ships: a game's own options card (`./options.ts`) writes them as
+ * the `lives` of a variation's document, and there is no ships setting here.
  *
  * Persistence is {@link KeyedStorage} from `./storage.ts` — the same interface
  * the high-score table uses, for the same reason: blocked or unavailable browser

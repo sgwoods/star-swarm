@@ -1,7 +1,7 @@
 /**
  * The game-state machine (docs/DESIGN.md section 4, "Game flow").
  *
- * One explicit machine rather than flags spread through the loop. There are sixteen
+ * One explicit machine rather than flags spread through the loop. There are seventeen
  * phases and every transition is named here:
  *
  * ```
@@ -33,6 +33,11 @@
  *   settings ──L/R on IMPORT─▶ import ─a game that loads─▶ name ──kept──▶ settings
  *                                 ▲                                │ cancelled
  *                                 └────────────────────────────────┘
+ *
+ *   attract ──U/D──▶ options ──keep or cancel──▶ attract
+ *                      options ──keep, on a shipped game──▶ name ──kept──▶ attract
+ *                         ▲                                  │ cancelled
+ *                         └──────────────────────────────────┘
  *
  *   playing ──pause──▶ paused ──pause──▶ playing
  *      │                  │  ▲
@@ -75,6 +80,11 @@
  *   another as text (`./exchange.ts`). The text itself sits in a box `src/main.ts`
  *   puts on the page; the flow holds the card and never touches the box. An import
  *   is judged as every variation is, and kept through `name` like a new game.
+ * - **`options`** is a game's own card (`./options.ts`), opened from that game's
+ *   attract screen rather than from the settings, because it is about the game on
+ *   screen and nothing else. It edits the same document the pack and stage cards
+ *   do, and is kept the same way — through `name` over a shipped game, in place
+ *   over a variation — but it closes back onto attract, where it was opened.
  *
  * The two after them are the pause and the way out, and they are phases for the
  * third time for the same reason — a boolean `paused` beside `phase` is "playing,
@@ -130,15 +140,21 @@
 
 import type { Persona } from '../content/personas.js';
 import { personaOf } from '../content/personas.js';
-import { combatStageNumber } from '../content/rules.js';
+import {
+  combatStageNumber,
+  resolveExtraLifeAward,
+  startingLivesOffered,
+} from '../content/rules.js';
 import type { Rules } from '../content/schema.js';
 import type { StageSource } from '../content/stages.js';
 import {
   deriveVariant,
   type DifficultyPreset,
   listsOf,
+  livesOf,
   rankFor,
   type VariantDocument,
+  withLives,
   withPacks,
   withStages,
 } from '../content/variants.js';
@@ -180,6 +196,7 @@ import {
   type StageEditor,
   type Verdict,
 } from './packs.js';
+import { createOptionsCard, type OptionsCard } from './options.js';
 import { createExitConfirm, type ExitConfirm } from './pause.js';
 import { countEvents, EMPTY_STATS, type ResultRow, resultRows, type RunStats } from './results.js';
 import {
@@ -217,6 +234,7 @@ export type GamePhase =
   | 'delete'
   | 'export'
   | 'import'
+  | 'options'
   | 'playing'
   | 'paused'
   | 'exit-confirm'
@@ -242,6 +260,12 @@ export interface FlowVariant {
   /** The combat stages' order when a player stated one, else `undefined`. */
   readonly stages?: readonly string[] | undefined;
   readonly rules: Rules;
+  /**
+   * Fighters every game of it starts with: its document's `lives`, or the rules'
+   * own default. Passed to every world the flow creates, because it selects the
+   * extra-life thresholds as well as the reserve count.
+   */
+  readonly lives: number;
   readonly presets: readonly DifficultyPreset[];
   readonly defaultPreset: DifficultyPreset;
   /**
@@ -322,12 +346,6 @@ interface FlowCommon {
   readonly demo?: AttractDemo;
   /** Replaces the rows the end-of-game results screen shows. */
   readonly resultRowsFor?: (stats: RunStats) => readonly ResultRow[];
-  /**
-   * Fighters a game starts with, from the cabinet settings. Passed to every
-   * world the flow creates, because it selects the extra-life thresholds as well
-   * as the reserve count. Omitted means the rules' own default.
-   */
-  readonly lives?: number;
   /**
    * Called when the active variant changes, with the one now in force.
    *
@@ -450,6 +468,8 @@ export interface GameFlow {
   readonly exportCard: ExportCard | undefined;
   /** The import card, present only during `import`. */
   readonly importCard: ImportCard | undefined;
+  /** A game's own options card, present only during `options`. */
+  readonly optionsCard: OptionsCard | undefined;
   /** The exit confirmation's cursor, present only during `exit-confirm`. */
   readonly exitConfirm: ExitConfirm | undefined;
   /** Rows the results screen shows for the run just played. */
@@ -485,6 +505,7 @@ function variantOfRules(rules: Rules, stages: StageSource | undefined): FlowVari
     // flow built from rules alone has no document behind it.
     personas: [],
     rules,
+    lives: rules.lives.default,
     presets: presets.length > 0 ? presets : [fallback],
     defaultPreset:
       presets.find((preset) => preset.rank === rules.difficulty.defaultRank) ??
@@ -492,6 +513,14 @@ function variantOfRules(rules: Rules, stages: StageSource | undefined): FlowVari
       fallback,
     stagesFor: () => stages ?? { stageFor: () => undefined },
   };
+}
+
+/**
+ * A document starting on `lives`: stated when it is not the rules' own default, and
+ * left unstated when it is, so a document says no more than it chose.
+ */
+function livesIn(document: VariantDocument, lives: number, rules: Rules): VariantDocument {
+  return withLives(document, lives === rules.lives.default ? undefined : lives);
 }
 
 /** Whether two stage orders are the same: both the packs' own, or the same ids in order. */
@@ -507,7 +536,6 @@ function sameOrder(a: readonly string[] | undefined, b: readonly string[] | unde
  */
 export function createGameFlow(options: FlowOptions): GameFlow {
   const { seed = 'star-swarm', resultRowsFor = resultRows } = options;
-  const livesOption = options.lives === undefined ? {} : { lives: options.lives };
   const timings: FlowTimings = { ...DEFAULT_TIMINGS, ...options.timings };
   const highScores = options.highScores ?? createHighScoreBoard();
 
@@ -635,10 +663,10 @@ export function createGameFlow(options: FlowOptions): GameFlow {
 
   /**
    * The demo is the real game, so it has to be *this* game: the active variant's
-   * rules, at the rank now in force, flown by that variant's own personas — its
-   * `defaultPersona` first — or by the script when it declares none
-   * (`./attract.ts`). Which personas exist is read from the variant and nowhere
-   * else, so nothing here names one.
+   * rules, at the rank now in force and on its own starting count, flown by that
+   * variant's own personas — its `defaultPersona` first — or by the script when it
+   * declares none (`./attract.ts`). Which personas exist is read from the variant
+   * and nowhere else, so nothing here names one.
    */
   let demoRank: string | undefined;
   const buildDemo = (): AttractDemo => {
@@ -649,6 +677,7 @@ export function createGameFlow(options: FlowOptions): GameFlow {
         rules: variant.rules,
         seed: `${seed}:attract`,
         rank: demoRank,
+        lives: variant.lives,
         personas: variant.personas,
         first: variant.defaultPersona,
         ...stageOption(),
@@ -694,8 +723,9 @@ export function createGameFlow(options: FlowOptions): GameFlow {
   let confirm: ExitConfirm | undefined;
   let packEditor: PackEditor | undefined;
   let stageEditor: StageEditor | undefined;
+  let optionsCard: OptionsCard | undefined;
   /**
-   * The document the open pack or stage card edits: the chosen variation's own,
+   * The document the open pack, stage or options card edits: the chosen variation's own,
    * or — over a shipped game — a new variation derived from it, with an id no
    * game has, which keeping will name. `reference` is the shipped game's own
    * document in that second case, and what a draft equal to it is judged as.
@@ -716,6 +746,11 @@ export function createGameFlow(options: FlowOptions): GameFlow {
   let importing: ImportCard | undefined;
   /** The settings row the open card came from, which the cursor goes back to. */
   let openedFrom: EditorCard | undefined;
+  /**
+   * Where the open cards close back to: the settings screen that opened them, or
+   * the attract screen a game's options card was opened from.
+   */
+  let cardsHome: 'settings' | 'attract' = 'settings';
   /** Where the settings screen returns to. */
   let settingsFrom: GamePhase = 'attract';
   /** More than one game on the list: whether the list is a screen at all. */
@@ -809,36 +844,44 @@ export function createGameFlow(options: FlowOptions): GameFlow {
       .map((entry) => entry.name);
 
   /**
-   * Open the pack manager or the stage-sequence editor over the chosen game.
+   * The document a card over the chosen game edits, and the shipped document it
+   * was derived from when there is one.
    *
    * Over a variation the cards edit its stored document — not what is in force:
    * when it will not load, the card is where the player sees why and mends it,
    * a missing pack being a row of its own. Over a shipped game they edit a new
    * variation derived from it, which only exists if it is kept and named.
    */
+  const editTarget = (
+    use: PackComposer<FlowVariant>,
+  ):
+    | { readonly document: VariantDocument; readonly reference: VariantDocument | undefined }
+    | undefined => {
+    const chosen = chosenEntry();
+    if (chosen.document !== undefined) return { document: chosen.document, reference: undefined };
+    const reference = use.documentOf(chosen.id);
+    if (reference === undefined) return undefined;
+    const own = listsOf(reference);
+    const document = deriveVariant(reference, {
+      id: freshVariationId(chosen.id, [
+        ...shippedIds,
+        ...settingsValue().variations.map((stored) => stored.id),
+      ]),
+      name: freshVariationName(chosen.name, namesBut(undefined)),
+      from: chosen.id,
+      packs: own.packs,
+      stages: own.stages,
+    });
+    return { document, reference };
+  };
+
+  /** Open the pack manager or the stage-sequence editor over the chosen game. */
   const openEditor = (card: 'packs' | 'stages'): void => {
     if (composer === undefined) return;
-    const chosen = chosenEntry();
-    let document: VariantDocument;
-    let reference: VariantDocument | undefined;
-    if (chosen.document !== undefined) {
-      document = chosen.document;
-    } else {
-      reference = composer.documentOf(chosen.id);
-      if (reference === undefined) return;
-      const own = listsOf(reference);
-      document = deriveVariant(reference, {
-        id: freshVariationId(chosen.id, [
-          ...shippedIds,
-          ...settingsValue().variations.map((stored) => stored.id),
-        ]),
-        name: freshVariationName(chosen.name, namesBut(undefined)),
-        from: chosen.id,
-        packs: own.packs,
-        stages: own.stages,
-      });
-    }
-    editing = { document, reference };
+    const target = editTarget(composer);
+    if (target === undefined) return;
+    editing = target;
+    const { document, reference } = target;
     const { packs, stages } = listsOf(document);
     // A draft that is the shipped game's own lists is the shipped game: what the
     // gate flew, unjudged, and nothing to keep.
@@ -874,11 +917,43 @@ export function createGameFlow(options: FlowOptions): GameFlow {
   };
 
   /**
+   * Open a game's own options over the chosen game, from its attract screen.
+   *
+   * The same document the pack and stage cards edit — the chosen variation's, or
+   * over a shipped game a new variation derived from it — and judged the same way,
+   * so a count the rules do not offer is refused on the card. The rules that number
+   * the counts are the ones in force, as on the stage card.
+   */
+  const openOptions = (): void => {
+    if (composer === undefined) return;
+    const target = editTarget(composer);
+    if (target === undefined) return;
+    editing = target;
+    cardsHome = 'attract';
+    const { document, reference } = target;
+    const rules = variant.rules;
+    const own = livesOf(document) ?? rules.lives.default;
+    optionsCard = createOptionsCard({
+      name: chosenEntry().name,
+      offered: startingLivesOffered(rules),
+      own,
+      bonusOf: (lives) => resolveExtraLifeAward(rules, lives),
+      makesNew: reference !== undefined,
+      // The game's own count is the game as it is: over a shipped one, its own
+      // document — what the gate flew, unjudged.
+      judge: (lives) =>
+        composer.compose(lives === own ? (reference ?? document) : livesIn(document, lives, rules))
+          .verdict,
+    });
+    enter('options');
+  };
+
+  /**
    * A card kept a changed document. Over a variation it is written in place; over
    * a shipped game it is a new game, so the naming card comes first and nothing
    * is written until a name is kept.
    */
-  const keepEdit = (document: VariantDocument, from: 'packs' | 'stages'): void => {
+  const keepEdit = (document: VariantDocument, from: 'packs' | 'stages' | 'options'): void => {
     const chosen = chosenEntry();
     if (chosen.document !== undefined) {
       const id = chosen.document.id;
@@ -900,18 +975,25 @@ export function createGameFlow(options: FlowOptions): GameFlow {
   };
 
   /**
-   * Close every card the settings screen opened, and go back to it — with the
-   * cursor on the row that opened the card. By id, not by place: keeping a new
-   * game adds its `NAME` and `DELETE` rows above that row.
+   * Close every open card and go back to the screen that opened them: the settings
+   * — with the cursor on the row that opened the card, by id rather than by place,
+   * because keeping a new game adds its `NAME` and `DELETE` rows above that row — or
+   * the attract screen a game's options card was opened from.
    */
   const closeEditors = (): void => {
     packEditor = undefined;
     stageEditor = undefined;
+    optionsCard = undefined;
     editing = undefined;
     naming = undefined;
     deleting = undefined;
     exporting = undefined;
     importing = undefined;
+    if (cardsHome === 'attract') {
+      cardsHome = 'settings';
+      enter('attract');
+      return;
+    }
     enter('settings');
     if (openedFrom !== undefined) settingsMenu?.focus(openedFrom);
   };
@@ -1038,8 +1120,8 @@ export function createGameFlow(options: FlowOptions): GameFlow {
       seed: `${seed}:game-${String(games)}`,
       rules: variant.rules,
       rank: rankOf(),
+      lives: variant.lives,
       ...stageOption(),
-      ...livesOption,
     });
     game = world;
     stats = { ...EMPTY_STATS, stage: world.stage };
@@ -1126,8 +1208,10 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     // A hand reaching for the menu button gets the step to itself. Without this the
     // `start` autoplay pushes in attract arrived on the same frame and won, because
     // the attract case reads `start` first — so the one button that stops a watch
-    // session could not be pressed while one was running.
+    // session could not be pressed while one was running. The keys that open a
+    // game's options from attract get the same, for the same reason.
     if (isDown(human, 'menu')) return human;
+    if (phase === 'attract' && (isDown(human, 'up') || isDown(human, 'down'))) return human;
 
     switch (phase) {
       case 'playing': {
@@ -1170,6 +1254,7 @@ export function createGameFlow(options: FlowOptions): GameFlow {
         : {
             open: (card: EditorCard) => {
               openedFrom = card;
+              cardsHome = 'settings';
               if (card === 'packs' || card === 'stages') openEditor(card);
               else if (card === 'name') openRename();
               else if (card === 'export') openExport();
@@ -1247,6 +1332,7 @@ export function createGameFlow(options: FlowOptions): GameFlow {
   /** Is the demo what is on screen? In attract, and on the menus and cards over it. */
   const onDemo = (): boolean =>
     phase === 'attract' ||
+    phase === 'options' ||
     phase === 'settings' ||
     phase === 'packs' ||
     phase === 'stages' ||
@@ -1342,6 +1428,9 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     },
     get importCard(): ImportCard | undefined {
       return phase === 'import' ? importing : undefined;
+    },
+    get optionsCard(): OptionsCard | undefined {
+      return phase === 'options' ? optionsCard : undefined;
     },
     get exitConfirm(): ExitConfirm | undefined {
       return phase === 'exit-confirm' ? confirm : undefined;
@@ -1594,16 +1683,55 @@ export function createGameFlow(options: FlowOptions): GameFlow {
         case 'attract': {
           // The demo world takes its input from its own pilot or the script, never
           // from the player; the only things the player's frame can do here are
-          // start a game and go back. Back is up to the game list — or, with one
-          // game and so no list, straight to the settings, its one useful row.
+          // start a game, open this game's options and go back. Back is up to the
+          // game list — or, with one game and so no list, straight to the
+          // settings, its one useful row. Up and down open the options because they
+          // are the two keys a game never reads: the fighter only moves sideways.
           if (wasPressed(previous, frame, 'start')) {
             events = startGame();
           } else if (wasPressed(previous, frame, 'menu')) {
             if (hasGameList()) openVariantSelect();
             else openSettings('attract');
+          } else if (wasPressed(previous, frame, 'up') || wasPressed(previous, frame, 'down')) {
+            openOptions();
+            events = demo.advance();
           } else {
             events = demo.advance();
           }
+          break;
+        }
+
+        case 'options': {
+          const card = optionsCard;
+          const edit = editing;
+          if (card === undefined || edit === undefined) {
+            closeEditors();
+            break;
+          }
+          const press = cardPress(previous, frame);
+          if (press.up) card.previous();
+          if (press.down) card.next();
+          if (press.left) card.adjust(-1);
+          else if (press.right) card.adjust(1);
+          if (press.back) {
+            // Cancelled: the draft goes, and nothing was written.
+            closeEditors();
+            break;
+          }
+          if (press.accept) {
+            const kept = card.keep();
+            // Refused: the card stays up and its verdict says why.
+            if (kept.kept) {
+              // The count the game already starts on: nothing changed, so nothing is made.
+              if (kept.lives === undefined) {
+                closeEditors();
+                break;
+              }
+              keepEdit(livesIn(edit.document, kept.lives, variant.rules), 'options');
+              break;
+            }
+          }
+          events = demo.advance();
           break;
         }
 

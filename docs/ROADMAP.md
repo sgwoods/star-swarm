@@ -64,6 +64,17 @@ variation now leaves the browser it was made in as the variant document it is, a
 comes back in on another machine refused for exactly what any variant is refused
 for ([`docs/ARCHITECTURE.md`](ARCHITECTURE.md#carrying-a-variation-to-another-machine)).
 
+- **Later: more of a game's own options, once two decisions are the captain's.**
+  The card a game's attract screen opens
+  ([`docs/ARCHITECTURE.md`](ARCHITECTURE.md#a-games-own-options)) will grow a real
+  audio-theme choice once a pack can declare a second theme for one game, which is
+  content-model work before it is a card. Anything beyond starting ships waits on
+  the captain rather than on code: **which values a player may change at all** —
+  a scoring value would change what a score means — and
+  **whether a game altered that way still carries the reference game's name** on a
+  score or on a shared variation, since a score earned on free ships and tripled
+  points is not comparable to one earned as shipped. Neither will be decided by
+  whoever builds the next row.
 - **Later: a place to find other players' games.** Text carried by hand is the
   whole of sharing until there is somewhere to keep games that is not one browser —
   a shared store, which needs a server this project does not have. It will be a
