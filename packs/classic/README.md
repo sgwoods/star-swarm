@@ -107,7 +107,9 @@ rather than a sprite of its own name, because that is what it is.
   difference between a 32 px explosion and the 16 px fighter whose anchor the
   event reports. The renderer names none of this.
 - **`sounds/`** and the `sounds` map in `pack.json` — the Classic SFX set, and
-  which simulation event plays each one.
+  which simulation event plays each one. `themes` in `pack.json` offers it as
+  `ARCADE`, the default, beside `DUSK`, an alternative set in `sounds/dusk/` a
+  player can choose on the game's options card.
 
 `tests/unit/classic-pack.test.ts` checks these against the reference, so the
 plan, the reference and the data are three legs of the same stool: change one

@@ -147,16 +147,19 @@ import {
 } from '../content/rules.js';
 import type { Rules } from '../content/schema.js';
 import type { StageSource } from '../content/stages.js';
+import type { ThemeChoice } from '../content/themes.js';
 import {
   deriveVariant,
   type DifficultyPreset,
   listsOf,
   livesOf,
   rankFor,
+  themeOf,
   type VariantDocument,
   withLives,
   withPacks,
   withStages,
+  withTheme,
 } from '../content/variants.js';
 import {
   type Action,
@@ -196,7 +199,7 @@ import {
   type StageEditor,
   type Verdict,
 } from './packs.js';
-import { createOptionsCard, type OptionsCard } from './options.js';
+import { createOptionsCard, type OptionsCard, type OptionsDraft } from './options.js';
 import { createExitConfirm, type ExitConfirm } from './pause.js';
 import { countEvents, EMPTY_STATS, type ResultRow, resultRows, type RunStats } from './results.js';
 import {
@@ -266,6 +269,14 @@ export interface FlowVariant {
    * extra-life thresholds as well as the reserve count.
    */
   readonly lives: number;
+  /**
+   * The audio theme its games play, and the themes its packs declare. Absent or
+   * empty for a game with one sound — most of them. What the `AUDIO` row on the
+   * game's own options card steps through.
+   */
+  readonly theme?: string | undefined;
+  readonly defaultTheme?: string | undefined;
+  readonly themes?: readonly ThemeChoice[];
   readonly presets: readonly DifficultyPreset[];
   readonly defaultPreset: DifficultyPreset;
   /**
@@ -521,6 +532,20 @@ function variantOfRules(rules: Rules, stages: StageSource | undefined): FlowVari
  */
 function livesIn(document: VariantDocument, lives: number, rules: Rules): VariantDocument {
   return withLives(document, lives === rules.lives.default ? undefined : lives);
+}
+
+/**
+ * A document as the options card drafted it: its count by {@link livesIn}, and its
+ * theme stated when it is not the packs' default and left unstated when it is.
+ */
+function draftIn(
+  document: VariantDocument,
+  draft: OptionsDraft,
+  rules: Rules,
+  defaultTheme: string | undefined,
+): VariantDocument {
+  const theme = draft.theme === defaultTheme ? undefined : draft.theme;
+  return withTheme(livesIn(document, draft.lives, rules), theme);
 }
 
 /** Whether two stage orders are the same: both the packs' own, or the same ids in order. */
@@ -933,17 +958,24 @@ export function createGameFlow(options: FlowOptions): GameFlow {
     const { document, reference } = target;
     const rules = variant.rules;
     const own = livesOf(document) ?? rules.lives.default;
+    const { defaultTheme, themes = [] } = variant;
+    const ownTheme = themeOf(document) ?? defaultTheme;
     optionsCard = createOptionsCard({
       name: chosenEntry().name,
       offered: startingLivesOffered(rules),
       own,
       bonusOf: (lives) => resolveExtraLifeAward(rules, lives),
+      themes,
+      theme: ownTheme,
       makesNew: reference !== undefined,
-      // The game's own count is the game as it is: over a shipped one, its own
-      // document — what the gate flew, unjudged.
-      judge: (lives) =>
-        composer.compose(lives === own ? (reference ?? document) : livesIn(document, lives, rules))
-          .verdict,
+      // The game's own count and theme are the game as it is: over a shipped one,
+      // its own document — what the gate flew, unjudged.
+      judge: (draft) =>
+        composer.compose(
+          draft.lives === own && draft.theme === ownTheme
+            ? (reference ?? document)
+            : draftIn(document, draft, rules, defaultTheme),
+        ).verdict,
     });
     enter('options');
   };
@@ -1722,12 +1754,20 @@ export function createGameFlow(options: FlowOptions): GameFlow {
             const kept = card.keep();
             // Refused: the card stays up and its verdict says why.
             if (kept.kept) {
-              // The count the game already starts on: nothing changed, so nothing is made.
-              if (kept.lives === undefined) {
+              // The count and theme the game already has: nothing changed, so nothing is made.
+              if (kept.lives === undefined && kept.theme === undefined) {
                 closeEditors();
                 break;
               }
-              keepEdit(livesIn(edit.document, kept.lives, variant.rules), 'options');
+              keepEdit(
+                draftIn(
+                  edit.document,
+                  { lives: card.lives, theme: card.theme },
+                  variant.rules,
+                  variant.defaultTheme,
+                ),
+                'options',
+              );
               break;
             }
           }

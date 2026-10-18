@@ -1,0 +1,7 @@
+{
+  "id": "grit-spit",
+  "wave": "sawtooth",
+  "freq": [330, 110],
+  "envelope": [0.003, 0.03, 0.08],
+  "volume": 0.18
+}

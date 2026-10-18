@@ -29,7 +29,8 @@
  *   whole data tables instead. A variant that wants different numbers ships a
  *   pack with a `rules.json` that has them. The one number a variant states,
  *   `lives`, is a selection in exactly that sense: it must be one of the counts
- *   the rules already offer, as a preset's rank must be one they declare.
+ *   the rules already offer, as a preset's rank must be one they declare. Its
+ *   audio `theme` is one in the same sense: a theme its packs declare.
  */
 
 import { z } from 'zod';
@@ -42,6 +43,7 @@ import { type ContentRegistry, createRegistry } from './registry.js';
 import { startingLivesOffered } from './rules.js';
 import { idSchema, type Rules } from './schema.js';
 import { createStageSource, type StageSource } from './stages.js';
+import { type ThemeChoice, themeIn, themesOf } from './themes.js';
 
 /* -------------------------------------------------------------------------- */
 /* The document                                                                */
@@ -140,6 +142,16 @@ export const variantSchema = z.strictObject({
    */
   lives: z.number().int().positive().optional(),
   /**
+   * The audio theme a game plays. Omitted means its packs' `defaultTheme`, or
+   * their only sound when they declare no themes.
+   *
+   * A selection like `lives`: it must name a theme the composed packs declare
+   * (`themes` in the pack manifest), so a player chooses among sounds a pack
+   * ships and never states one of their own. A player's choice on a game's
+   * `AUDIO` row is this field of their variation.
+   */
+  theme: idSchema.optional(),
+  /**
    * The game this one was made from, when a player made it by editing another.
    *
    * **Provenance, never a reference.** The loader does not resolve it and nothing
@@ -203,6 +215,15 @@ export interface ResolvedVariant {
    * default. Always one of `startingLivesOffered(rules)`.
    */
   readonly lives: number;
+  /**
+   * The audio theme a game plays: the document's `theme`, or its packs' default.
+   * `undefined` when the packs declare no themes and the game has one sound.
+   */
+  readonly theme: string | undefined;
+  /** The theme its packs play when a document names none. `undefined` with no themes. */
+  readonly defaultTheme: string | undefined;
+  /** The themes its packs offer, in the order a player steps through them. Often empty. */
+  readonly themes: readonly ThemeChoice[];
   /** Those packs, composed. */
   readonly registry: ContentRegistry;
   /** The rules in force. Present by construction: a variant without them fails to load. */
@@ -560,6 +581,21 @@ function resolveDocument(
     bad = true;
   }
 
+  // A theme is checked the way a starting count is: against what the composed
+  // packs declare, never as a value of its own.
+  const themes = themesOf(registry.manifest);
+  if (variant.theme !== undefined && !themes.some((theme) => theme.id === variant.theme)) {
+    errors.push({
+      pack: VARIANTS_GROUP,
+      file,
+      field: 'theme',
+      message:
+        `"${variant.theme}" is not an audio theme its packs declare ` +
+        `(${themes.map((theme) => theme.id).join(', ') || 'they declare none'})`,
+    });
+    bad = true;
+  }
+
   if (bad || defaultPreset === undefined) return { errors };
 
   return {
@@ -575,6 +611,9 @@ function resolveDocument(
       stages,
       derivedFrom: variant.derivedFrom,
       lives,
+      theme: themeIn(registry.manifest, variant.theme),
+      defaultTheme: registry.manifest.defaultTheme,
+      themes,
       registry,
       rules,
       presets,
@@ -740,6 +779,17 @@ export function livesOf(document: VariantDocument): number | undefined {
 export function withLives(document: VariantDocument, lives: number | undefined): VariantDocument {
   const { lives: _dropped, ...rest } = document;
   return lives === undefined ? rest : { ...rest, lives };
+}
+
+/** The audio theme a document names, read leniently: a string, else `undefined`. */
+export function themeOf(document: VariantDocument): string | undefined {
+  return typeof document.theme === 'string' ? document.theme : undefined;
+}
+
+/** The same document with its audio theme replaced, or removed for `undefined`. */
+export function withTheme(document: VariantDocument, theme: string | undefined): VariantDocument {
+  const { theme: _dropped, ...rest } = document;
+  return theme === undefined ? rest : { ...rest, theme };
 }
 
 export interface DeriveOptions {

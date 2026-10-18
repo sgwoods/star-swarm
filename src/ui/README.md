@@ -209,10 +209,12 @@ manager and the stage-sequence editor, Milestone 3's exit check:
   a game's attract screen opens it, headed with that game's name, and it is a
   third draft card over the same document the pack and stage cards edit: `SHIPS`
   steps through the starting counts the game's rules offer and says which bonus
-  ships each one selects, and `AUDIO` says that only one theme exists rather than
-  offering a choice it cannot honour. Keeping a changed count over a shipped game
-  goes through the naming card like any edit, so the shipped game still starts on
-  its own count; `ESC` goes back to attract.
+  ships each one selects, and `AUDIO` steps through the audio themes the game's
+  packs declare — or, where they declare fewer than two, says that only one
+  theme exists rather than offering a choice it cannot honour. Keeping a changed
+  count or theme over a shipped game goes through the naming card like any edit,
+  so the shipped game still starts on its own count and sounds as it shipped;
+  `ENTER` keeps and `ESC` goes back to attract.
 - **`settings.ts` reads the shape before this one, once.** A version 1 document's
   per-game overrides become variations of those games on the first read, and
   version 2 is written straight back; its own header documents the stored shape.

@@ -299,6 +299,31 @@
     { "event": "fighter-rescued", "sound": "rescue" },
     { "event": "challenge-group-cleared", "sound": "challenge-bonus" }
   ],
+  "themes": {
+    "arcade": { "name": "ARCADE", "description": "THE GAME AS IT SHIPPED" },
+    "dusk": {
+      "name": "DUSK",
+      "description": "LOW SOFT SINE VOICES",
+      "sounds": {
+        "fire": "dusk-fire",
+        "enemy-fire": "dusk-enemy-fire",
+        "enemy-hit": "dusk-enemy-hit",
+        "player-death": "dusk-player-death",
+        "dive": "dusk-dive",
+        "capture-beam": "dusk-capture-beam",
+        "extra-life": "dusk-extra-life",
+        "challenge-bonus": "dusk-challenge-bonus",
+        "game-over": "dusk-game-over",
+        "game-start": "dusk-game-start",
+        "stage-start": "dusk-stage-start",
+        "captured": "dusk-captured",
+        "rescue": "dusk-rescue",
+        "challenge-results": "dusk-challenge-results",
+        "challenge-perfect": "dusk-challenge-perfect"
+      }
+    }
+  },
+  "defaultTheme": "arcade",
   "effects": {
     "player-hit": { "sprite": "explosion-player", "offsetX": -8, "offsetY": -8 },
     "dual-half-lost": { "sprite": "explosion-player", "offsetX": -8, "offsetY": -8 }

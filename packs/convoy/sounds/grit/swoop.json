@@ -1,0 +1,11 @@
+{
+  "id": "grit-swoop",
+  "wave": "sawtooth",
+  "freq": [260, 70],
+  "vibrato": {
+    "rate": 11,
+    "depth": 0.15
+  },
+  "envelope": [0.02, 0.25, 0.15],
+  "volume": 0.18
+}

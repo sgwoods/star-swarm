@@ -30,9 +30,12 @@ Nothing did. `tests/sim/convoy.test.ts` holds the engine to not naming it.
   <!-- check:count convoy.stages 1 convoy.difficultyRows 6 -->
 - Fourteen paths: one entry per column, three dives and the return.
   <!-- check:count convoy.paths 14 -->
-- Nine sprites and nine sounds, all original: the four aliens, the fighter, two
-  explosions and the two flags the stage count is drawn in.
-  <!-- check:count convoy.sprites 9 convoy.sounds 9 -->
+- Nine sprites and eighteen sounds, all original. The sprites are the four
+  aliens, the fighter, two explosions and the two flags the stage count is drawn
+  in. The sounds are two audio themes of nine: `CONVOY`, the default and the game
+  as it first shipped, and `GRIT` in `sounds/grit/`, which a player can choose on
+  the game's options card.
+  <!-- check:count convoy.sprites 9 convoy.sounds 18 -->
 
 ## How each behaviour of the lineage is said
 

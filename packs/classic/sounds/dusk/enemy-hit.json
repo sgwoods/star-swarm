@@ -1,0 +1,7 @@
+{
+  "id": "dusk-enemy-hit",
+  "wave": "noise",
+  "freq": [900, 120],
+  "envelope": [0.004, 0.08, 0.3],
+  "volume": 0.4
+}

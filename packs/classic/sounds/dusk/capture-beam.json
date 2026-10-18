@@ -1,0 +1,11 @@
+{
+  "id": "dusk-capture-beam",
+  "wave": "sine",
+  "freq": [110, 660],
+  "vibrato": {
+    "rate": 9,
+    "depth": 0.2
+  },
+  "envelope": [0.15, 0.7, 0.3],
+  "volume": 0.34
+}

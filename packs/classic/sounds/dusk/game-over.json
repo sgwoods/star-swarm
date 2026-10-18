@@ -1,0 +1,49 @@
+{
+  "id": "dusk-game-over",
+  "wave": "sine",
+  "envelope": [0.06, 0.5, 0.44],
+  "volume": 0.34,
+  "sequence": [
+    {
+      "freq": 293.66,
+      "duration": 0.3
+    },
+    {
+      "freq": 261.63,
+      "duration": 0.3
+    },
+    {
+      "freq": 233.08,
+      "duration": 0.3
+    },
+    {
+      "freq": 220,
+      "duration": 0.9
+    }
+  ],
+  "parts": [
+    {
+      "wave": "triangle",
+      "envelope": [0.05, 0.6, 0.35],
+      "volume": 0.4,
+      "sequence": [
+        {
+          "freq": 73.42,
+          "duration": 0.3
+        },
+        {
+          "freq": 130.81,
+          "duration": 0.3
+        },
+        {
+          "freq": 116.54,
+          "duration": 0.3
+        },
+        {
+          "freq": 110,
+          "duration": 0.9
+        }
+      ]
+    }
+  ]
+}

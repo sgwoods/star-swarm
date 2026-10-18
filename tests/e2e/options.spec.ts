@@ -58,11 +58,11 @@ test('a game’s options are reached from its attract screen, and Esc goes back'
   await tap(page, 'ArrowDown');
   await phase(page, 'options');
   expect(await page.evaluate(() => window.starSwarm?.optionsHeading)).toBe('STAR SWARM OPTIONS');
-  expect(await optionsRows(page)).toEqual(['SHIPS=3', 'AUDIO=OWN']);
+  expect(await optionsRows(page)).toEqual(['SHIPS=3', 'AUDIO=ARCADE']);
 
   // A draft thrown away is nothing written.
   await tap(page, 'ArrowRight');
-  expect(await optionsRows(page)).toEqual(['SHIPS=4', 'AUDIO=OWN']);
+  expect(await optionsRows(page)).toEqual(['SHIPS=4', 'AUDIO=ARCADE']);
   await tap(page, 'Escape');
   await phase(page, 'attract');
   expect(await page.evaluate(() => window.starSwarm?.settings.variations.length)).toBe(0);
@@ -77,7 +77,7 @@ test('five ships on CLASSIC is a game of the player’s own, and CLASSIC still s
   await phase(page, 'options');
   await tap(page, 'ArrowRight');
   await tap(page, 'ArrowRight');
-  expect(await optionsRows(page)).toEqual(['SHIPS=5', 'AUDIO=OWN']);
+  expect(await optionsRows(page)).toEqual(['SHIPS=5', 'AUDIO=ARCADE']);
   expect(await page.evaluate(() => window.starSwarm?.optionsVerdict[0])).toBe('LOADS AND BUILDS');
   await tap(page, 'Enter');
   await phase(page, 'name');
@@ -110,4 +110,35 @@ test('five ships on CLASSIC is a game of the player’s own, and CLASSIC still s
   await tap(page, 'Enter');
   await phase(page, 'playing');
   expect(await page.evaluate(() => window.starSwarm?.startingLives)).toBe(3);
+});
+
+test('DUSK on CLASSIC is a game of the player’s own that plays its sounds, and CLASSIC still plays its own', async ({
+  page,
+}) => {
+  await reachAttract(page);
+  expect(await page.evaluate(() => window.starSwarm?.soundFor('shot-fired'))).toBe('fire');
+  await tap(page, 'ArrowDown');
+  await phase(page, 'options');
+  await tap(page, 'ArrowDown');
+  expect(await page.evaluate(() => window.starSwarm?.optionsRow)).toBe('audio');
+  await tap(page, 'ArrowRight');
+  expect(await optionsRows(page)).toEqual(['SHIPS=3', 'AUDIO=DUSK']);
+  await tap(page, 'Enter');
+  await phase(page, 'name');
+  await spell(page, 'DUSK');
+  await phase(page, 'attract');
+
+  // The theme reaches the effect channel the game plays through.
+  expect(await page.evaluate(() => window.starSwarm?.game)).toBe('classic-2');
+  expect(await page.evaluate(() => window.starSwarm?.soundFor('shot-fired'))).toBe('dusk-fire');
+  const stored = await page.evaluate(() => window.starSwarm?.settings.variations ?? []);
+  expect(stored[0]).toMatchObject({ id: 'classic-2', derivedFrom: 'classic', theme: 'dusk' });
+
+  // CLASSIC, chosen again from the game list, sounds as shipped.
+  await tap(page, 'Escape');
+  await phase(page, 'variant-select');
+  await walkListTo(page, 'classic');
+  await tap(page, 'Enter');
+  await phase(page, 'attract');
+  expect(await page.evaluate(() => window.starSwarm?.soundFor('shot-fired'))).toBe('fire');
 });

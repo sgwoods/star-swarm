@@ -66,15 +66,23 @@ for ([`docs/ARCHITECTURE.md`](ARCHITECTURE.md#carrying-a-variation-to-another-ma
 
 - **Later: more of a game's own options, once two decisions are the captain's.**
   The card a game's attract screen opens
-  ([`docs/ARCHITECTURE.md`](ARCHITECTURE.md#a-games-own-options)) will grow a real
-  audio-theme choice once a pack can declare a second theme for one game, which is
-  content-model work before it is a card. Anything beyond starting ships waits on
-  the captain rather than on code: **which values a player may change at all** —
+  ([`docs/ARCHITECTURE.md`](ARCHITECTURE.md#a-games-own-options)) will offer
+  anything beyond starting ships and audio themes only once the captain has decided
+  two things, rather than on code: **which values a player may change at all** —
   a scoring value would change what a score means — and
   **whether a game altered that way still carries the reference game's name** on a
   score or on a shared variation, since a score earned on free ships and tripled
   points is not comparable to one earned as shipped. Neither will be decided by
   whoever builds the next row.
+- **Later: more of what a game sounds like, each a decision of its own.** Audio
+  themes will stay effect-and-jingle substitutions until the captain asks for more
+  than that. Four things are deliberately left for later rather than folded into
+  them: music tracks that play under a game, as opposed to the short jingles a
+  theme can already replace; sampled audio of any kind, which would be a second
+  audio pipeline beside the synth; a player customising single sounds, which
+  would be a value of their own rather than a choice among declared ones; and
+  sharing a theme between players, which waits on the same shared store as
+  sharing a game.
 - **Later: a place to find other players' games.** Text carried by hand is the
   whole of sharing until there is somewhere to keep games that is not one browser —
   a shared store, which needs a server this project does not have. It will be a

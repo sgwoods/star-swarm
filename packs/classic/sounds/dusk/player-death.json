@@ -1,0 +1,26 @@
+{
+  "id": "dusk-player-death",
+  "wave": "triangle",
+  "vibrato": {
+    "rate": 5,
+    "depth": 0.12
+  },
+  "envelope": [0.02, 0.6, 0.38],
+  "volume": 0.44,
+  "sequence": [
+    {
+      "freq": [392, 196],
+      "duration": 0.4
+    },
+    {
+      "freq": [294, 110],
+      "duration": 0.5
+    },
+    {
+      "freq": [400, 60],
+      "duration": 0.7,
+      "wave": "noise",
+      "volume": 0.35
+    }
+  ]
+}

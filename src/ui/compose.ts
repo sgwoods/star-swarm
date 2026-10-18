@@ -82,6 +82,7 @@ export const VERDICT_TEXT = Object.freeze({
   isChallenge: 'IS A CHALLENGE STAGE',
   shippedId: 'A SHIPPED GAME HAS ITS ID',
   livesNotOffered: 'ITS RULES DO NOT OFFER IT',
+  themeNotDeclared: 'ITS PACKS DO NOT HAVE IT',
   badDocument: 'IT IS NOT A GAME DOCUMENT',
   clearsStages: 'CLEARS YOUR STAGE ORDER',
   fleet: 'ITS FLEET WILL NOT BUILD',
@@ -144,6 +145,9 @@ function refusalOf(errors: readonly ContentError[]): Verdict {
   } else if (field === 'lives') {
     // The count first, as the loader states it: a number is the document's.
     details = [`SHIPS ${/^\d+/.exec(message)?.[0] ?? ''}`, VERDICT_TEXT.livesNotOffered];
+  } else if (field === 'theme') {
+    // The id on a line of its own, as a pack's is: an id is a document's.
+    details = [`AUDIO ${quoted(message)}`, VERDICT_TEXT.themeNotDeclared];
   } else if (field === 'id' && /shipped/.test(message)) {
     details = [`ID ${quoted(message)}`, VERDICT_TEXT.shippedId];
   } else {

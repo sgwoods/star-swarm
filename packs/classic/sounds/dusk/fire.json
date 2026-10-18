@@ -1,0 +1,7 @@
+{
+  "id": "dusk-fire",
+  "wave": "sine",
+  "freq": [330, 990],
+  "envelope": [0.004, 0.025, 0.09],
+  "volume": 0.32
+}

@@ -142,7 +142,8 @@ content directories, one document per file, plus two root documents:
 
 ```
 packs/<id>/
-  pack.json    id, name, palette, roles, formations, sounds, effects, badges, stage sequence
+  pack.json    id, name, palette, roles, formations, sounds, music, themes, effects,
+               badges, stage sequence
   rules.json   optional — the whole section 6 rules layer
   aliens/  paths/  stages/  sprites/  sounds/
 ```
@@ -189,6 +190,17 @@ and a new jingle cuts the last. Two consequences a generator gets wrong:
 - **One event, one channel.** An event bound in both `sounds` and `music` plays an
   effect over its own jingle. An overlay that states `music` replaces the whole
   list, because a per-entry merge of a priority order means nothing.
+
+**Audio themes.** A manifest may declare `themes` — theme id → `{ name,
+description?, sounds }` — and must then name one as its `defaultTheme`. A theme's
+`sounds` maps a sound id to the sound id it plays **in that one's place**, and
+both must be sounds the same pack ships. It substitutes documents and nothing
+else: the `sounds` bindings and `music` cues are the same in every theme, so a
+theme cannot make an event silent or a silent event sound, and a sound no binding
+or cue reaches is not made audible by being substituted. A pack's default should
+substitute nothing, so the game sounds as its own documents say until a player
+chooses otherwise; a variant's `theme` is that choice, and must name a declared
+theme. `packs/classic/` and `packs/convoy/` each declare a second one.
 
 **Path.** Twelve segment types, and the contract splits in two.
 <!-- check:count schema.pathSegments 12 -->
@@ -323,8 +335,8 @@ formation inherits both motions with no new code — and why §7.2 matters.
 ## 6. What a layered pack may and may not do
 
 `variants/<id>.json` layers packs in order and later wins. The registry composes
-the manifests field by field: `roles`, `formations`, `sounds` and `effects` merge
-per key, the palette is a union, and `stageBadges` and **each half of
+the manifests field by field: `roles`, `formations`, `sounds`, `effects` and
+`themes` merge per key, the last stated `defaultTheme` wins, the palette is a union, and `stageBadges` and **each half of
 `stageSequence` on its own** are replaced by the last pack to state a non-empty
 one. Rules are the whole document from the last pack that ships one, less any
 rank's own sequence for a half a later pack states.
