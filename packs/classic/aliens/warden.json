@@ -6,5 +6,17 @@
   "hitSprites": ["warden-hit"],
   "score": { "base": 150 },
   "fire": { "pattern": "aimed", "shotsPerDive": 2, "cooldownFrames": 40 },
-  "dive": { "paths": ["dive-warden"], "weight": 1 }
+  "dive": {
+    "paths": ["dive-warden"],
+    "weight": 1,
+    "escorts": {
+      "roles": ["wing"],
+      "max": 2,
+      "offsets": [
+        { "column": -1, "row": 1 },
+        { "column": 0, "row": 1 },
+        { "column": 1, "row": 1 }
+      ]
+    }
+  }
 }

@@ -206,9 +206,9 @@ the end.
   `max_colors=48`, as for `m3-spore-storm.gif`.
 - `capture-dual-fighter.gif` — the first clip `npm run capture` made, and the
   only one in this directory that a command regenerates whole: the
-  `dual-fighter` golden from step 2,600, where a beam already holds the fighter,
-  to its last step at 5,400 — the captive parked, the rescue, the dual fighter
-  playing on into stage 21. Every sixth step at 10 fps, 467 frames, at the
+  `dual-fighter` golden from step 3,800 to step 6,600 — a beam taking the
+  fighter, the captive parked, the rescue, and the dual fighter playing on
+  through the rest of stage 20. Every sixth step at 10 fps, 467 frames, at the
   logical 224x288 and a 256-colour palette, made by the command in the section
   below and checked by it pixel for pixel against the backbuffer.
 - `arch-lab.gif` — the `/lab` previewer: an entry path playing, then scrubbed
@@ -252,7 +252,7 @@ playfield clip.
 A run that exists as a replay — a golden in `tests/sim/golden/`, or a
 `.replay.json` log — is rendered by a command rather than recorded:
 
-    npm run capture -- --replay dual-fighter --from 2600 --to 5400 --fps 10 \
+    npm run capture -- --replay dual-fighter --from 3800 --to 6600 --fps 10 \
       --out docs/media/capture-dual-fighter.gif
 
 It plays the log through the real simulation and the real renderer in a headless

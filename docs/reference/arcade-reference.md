@@ -599,6 +599,25 @@ comment “Called once for each of boss + 1 or 2 wingmen”; [SW] _Gameplay_, �
 Butterflies will also accompany a Boss Galaga as an escort when the Boss Galaga is not attempting to
 use a tractor beam”.
 
+**Which butterflies, confirmed.** Each boss draws from a window of **three adjacent butterflies in the
+top butterfly row: the one in its own column and one on either side.** The candidates are six objects,
+listed right to left, `d_1D2C_wingmen` = `$4A $52 $5A $58 $50 $48` ([LIST] main `$1D32`), whose home
+positions are row `$18` at columns 14, 12, 10, 8, 6 and 4 ([ASM] `task_man.s`,
+`db_obj_home_posn_rc`) — the top butterfly row less its two outermost slots. The launcher shifts a
+"standing by" bit for each into a 6-bit mask ([LIST] main `$1C36`–`$1C4C`) and gives each boss the
+three bits under it, `c AND 7`, rotating the mask one place per boss ([LIST] main `$1C55`–`$1C63`), so
+the boss at column 6 sees columns 4, 6 and 8 and the boss at column 12 sees 10, 12 and 14.
+`c_1D03` ([LIST] main `$1D09`–`$1D18`) then takes the **leftmost** available one first, then the
+next: with all three standing by, the left and centre butterflies go. A butterfly already chosen as
+the transform's parent counts as not standing by ([LIST] main `$1C40`–`$1C44`).
+
+**Which boss, confirmed.** The launcher prefers a boss that can take company. It makes three passes
+over the four bosses: the first launches the first one with at least two of its three wingmen
+standing by (`c AND 7` is 3, 5, 6 or 7), the second the first with at least one, and only the third
+takes any boss standing by, solo ([LIST] main `$1C4E`–`$1C82`). A boss with escorts available is
+therefore chosen over one without. The diver limit is checked once, before the launch ([LIST] main
+`$1BBA`–`$1BC2`), and a boss and its wingmen leave together whatever that count then becomes.
+
 ### Transforming enemies
 
 | Claim               | Design plan says                      | Verified value                                                                                                                                                                                                                                                               | Confidence | Source                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |

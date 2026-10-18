@@ -88,15 +88,13 @@ flies with it, and `src/sim/groups.ts` keeps the group
 2. which members are still in flight when the leader dies;
 3. whether the whole group was destroyed with none escaping.
 
-This is not specific to this game. It is general to both lineages. Classic already
-declares its escort table — a diving captor worth 400, 800 or 1,600 for no, one or
-two escorts — but its launcher never sends escorts, so 800 and 1,600 cannot be
-reached in Star Swarm today, and `src/sim/enemies.ts` says as much where it
-describes `escortBonus`. Declaring escorts would not only let this game's flagship
-dive with them; it would complete the first game too.
+This is not specific to this game. It is general to both lineages. Classic
+declares both halves — an escort table, a diving boss worth 400, 800 or 1,600 for
+no, one or two escorts, and a `warden` that names the wings it takes — so in Star
+Swarm a boss already dives with its escorts and pays for them.
 
 Nothing is wrong here. Declaring escorts changes how this game plays, so it is a
-change of its own and the captain's decision, as it is for Classic, and
+change of its own and the captain's decision, as it was for Classic, and
 `docs/ARCHITECTURE.md` §5 records it as not here yet.
 
 **Everything else in this lineage is expressible, and the game is otherwise

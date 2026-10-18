@@ -352,20 +352,28 @@ describe('the fighter lost while a beam is out', () => {
     expect(eventsOfType(events, 'player-ready')).toHaveLength(1);
   });
 
-  it('never announces a fighter ready while a beam is over the playfield', () => {
+  it('never announces a fighter ready under a beam that is already out', () => {
     // The invariant the whole fix is: a replacement fighter arrives at one fixed
     // column, so arriving underneath an open beam means being taken on the frame
     // it appears, with no frame in which to move. Played out over a long run with
     // the fighter shot down again and again, so it is the *rule* that is asserted
     // and not one arrangement of it.
+    //
+    // What is held off is a beam that is *already* out. A captor may still reach
+    // beam position on the very step a fighter arrives — the respawn is resolved
+    // before the channel steps — and that beam opens unextended, wherever its
+    // captor aimed, so the fighter has the whole extension to move out from under
+    // it, exactly as a fighter that never died would. Escorted sorties make that
+    // coincidence common on this seed; it is reachable without them too.
     const world = armedWorld({ rules: beamOutlastsRespawn(), seed: 'ready-under-beam' });
     let arrivals = 0;
     for (let frame = 0; frame < 4_000; frame += 1) {
+      const beamWasOut = beamIsOut(world.capture);
       const events = stepWorld(world, EMPTY_FRAME);
-      for (const event of events) {
-        if (event.type !== 'player-ready') continue;
+      if (eventsOfType(events, 'player-ready').length > 0) {
         arrivals += 1;
-        expect(beamIsOut(world.capture)).toBe(false);
+        expect(beamWasOut).toBe(false);
+        expect(eventsOfType(events, 'player-captured')).toHaveLength(0);
       }
       // Shoot the fighter down whenever it is up, so the run is a stream of
       // arrivals rather than one.
@@ -511,15 +519,15 @@ describe('exactly one captured fighter, ever', () => {
   });
 
   it('R9 — a capture attempt arrives solo, so its kill is worth the solo 400', () => {
-    // R9 is "it arrives solo — never with escorts". Classic's warden names no
-    // escorts, so *every* captor is solo and the arcade's 800 and 1,600 are
-    // unreachable in Classic — recorded in `docs/ARCHITECTURE.md` section 5 rather
-    // than papered over here. That a leader which does name escorts still makes
-    // its capture attempt alone is `tests/unit/groups.test.ts`.
+    // R9 is "it arrives solo — never with escorts". Classic's warden names
+    // escorts, and its capture attempt still goes alone: the arcade's tractor-beam
+    // boss "will skip escort selection". The general rule is
+    // `tests/unit/groups.test.ts`; the escorted 800 and 1,600 are
+    // `tests/sim/classic-escorts.test.ts`.
     //
-    // What is assertable is the consequence, and it is the one a flat score table
-    // gets wrong: the captor carries the escort record its stage start installed,
-    // so shooting it mid-attempt pays 300 + 100 and not 300, 800 or 1,600.
+    // What is assertable here is the consequence, and it is the one a flat score
+    // table gets wrong: the captor carries the solo escort record, so shooting it
+    // mid-attempt pays 300 + 100 and not 300, 800 or 1,600.
     const world = armedWorld({ seed: 'solo-captor' });
     runToPhase(world, ['beam']);
     const captor = world.fleet.enemies.find((enemy) => enemy.id === world.capture.captorId);

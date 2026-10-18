@@ -50,10 +50,10 @@ Galaxian-lineage game, as a pack, a `rules.json` and a variant document and
 nothing else. What it **found** rather than built is the one thing that answer
 stops short of — a sortie group, enemies that fly together and are scored as a
 group, which the second lineage's escorted flagship needs and the first game's
-escorted captor needs as well. The engine has one now, inert until a pack names
-escorts ([§4.4](ARCHITECTURE.md#44-where-a-second-game-plugs-in)). Whether either
-game names them is a question for the captain rather than a task, so it is not
-scheduled here.
+escorted captor needs as well. The engine has one now, and Classic's bosses fly
+with their escorts ([§4.4](ARCHITECTURE.md#44-where-a-second-game-plugs-in)).
+Whether the second game's flagship names its own is a question for the captain
+rather than a task, so it is not scheduled here.
 
 The pack manager and the stage-sequence editor have landed, and moved to
 [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#the-pack-manager-and-the-stage-sequence-editor)

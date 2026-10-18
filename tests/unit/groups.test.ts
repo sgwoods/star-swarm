@@ -25,7 +25,7 @@ import {
 } from '../../src/sim/groups.js';
 import { createWorld, fingerprintWorld, stepWorld, type World } from '../../src/sim/world.js';
 import { classicPack, classicRules, classicStages, minimalRules } from '../helpers/rules.js';
-import { installedPacks } from '../helpers/variants.js';
+import { installedPack, installedPacks } from '../helpers/variants.js';
 
 /**
  * Sortie groups — `src/sim/groups.ts`, launched by `src/sim/dive.ts`.
@@ -39,12 +39,14 @@ import { installedPacks } from '../helpers/variants.js';
  *    the leader, latched; the escorts still flying with it when it dies; the
  *    whole group destroyed with none escaping. None of them reads the order of
  *    kills, because neither arcade lineage does.
- * 3. **Inert unless a pack declares one.** No shipped pack does, so no shipped
- *    game forms a group, and a world that forms none fingerprints exactly as it
- *    did before groups existed — which is why every golden replay is unchanged.
+ * 3. **Inert unless a pack declares one.** A game whose aliens name no escorts
+ *    forms no group, and its world fingerprints exactly as it did before groups
+ *    existed. Classic's warden names them, and `tests/sim/classic-escorts.test.ts`
+ *    is where the shipped pack's own values are proved.
  *
  * The fixture is the shipped Classic content with one edit: the `warden` names
- * the two `wing`s diagonally below it as its escorts. The `wing` and `drone` are
+ * the two `wing`s diagonally below it as its escorts, in place of the three-wide
+ * window the shipped warden looks in, so which two go is fixed. The `wing` and `drone` are
  * taken out of the dive lottery, so every launch is a warden's and every wing
  * that moves is an escort. The capture channel is off unless a test turns it on,
  * so a warden launch is never a capture attempt by accident.
@@ -543,22 +545,29 @@ describe('declaring escorts', () => {
 /* -------------------------------------------------------------------------- */
 
 describe('without a declaration, nothing', () => {
-  it('ships no alien that names escorts, so switching a game on is its own change', () => {
-    // Classic's 800 and 1,600 become reachable the day its warden names escorts,
-    // which changes how Classic plays and rewrites its golden replays. That is
-    // deliberately a separate change from the capability, and this is what says
-    // so when it comes.
+  it('names escorts on Classic’s warden alone, so each game’s escorts are its own change', () => {
+    // Classic's 800 and 1,600 became reachable the day its warden named escorts,
+    // which changed how Classic plays and rewrote its golden replays. Any other
+    // game naming them is the same kind of change, and this is what says so when
+    // it comes.
     for (const [id, pack] of installedPacks()) {
       for (const alien of pack.aliens.values()) {
-        expect([id, alien.id, alien.dive?.escorts]).toEqual([id, alien.id, undefined]);
+        const named = alien.dive?.escorts !== undefined;
+        expect([id, alien.id, named]).toEqual([
+          id,
+          alien.id,
+          id === 'classic' && alien.id === 'warden',
+        ]);
       }
     }
   });
 
-  it('forms no group in a Classic game, and leaves the fingerprint as it was', () => {
+  it('forms no group in a game that names no escorts, and leaves the fingerprint as it was', () => {
+    const convoy = installedPack('convoy');
+    if (convoy.rules === undefined) throw new Error('packs/convoy has no rules.json');
     const world = armedWorld(
-      { ...shipped, lives: { ...shipped.lives, default: 400 } },
-      classicStages(),
+      { ...convoy.rules, lives: { ...convoy.rules.lives, default: 400 } },
+      createStageSource(createRegistry([convoy])),
     );
     let dived = 0;
     for (let frame = 0; frame < 3_000; frame += 1) {

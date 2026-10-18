@@ -30,8 +30,8 @@
  * forms a group, and every other entry point here is a lookup that finds nothing
  * in a world with none. So a world whose pack declares no escorts behaves as it
  * did before groups existed, and {@link groupFingerprint} says nothing at all for
- * it — the guarantee that every golden replay recorded before groups existed
- * still reproduces byte for byte.
+ * it — which is what let the capability land without a recorded replay changing,
+ * before Classic's warden named its escorts.
  *
  * A sortie is the one way a group is born so far. The record does not know how
  * it was born, which is what lets a group from an entry wave, a split or a
