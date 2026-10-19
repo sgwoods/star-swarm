@@ -52,17 +52,21 @@ function heard(
 }
 
 describe('the shipped sound is the default, exactly', () => {
-  it('hands every shipped game its registry’s own sound map, the same object', () => {
+  // "No theme chosen" is the packs' default, read off the variant rather than off
+  // what its document states: a shipped document may choose a theme as it may
+  // choose a count (docs/ARCHITECTURE.md §4.5), and a game that does is a game
+  // with that theme, not a broken default.
+  it('hands every shipped game its registry’s own sound map with no theme chosen, the same object', () => {
     for (const variant of shippedVariants()) {
-      expect(themedSounds(variant.registry, variant.theme), variant.id).toBe(
+      expect(themedSounds(variant.registry, variant.defaultTheme), variant.id).toBe(
         variant.registry.sounds,
       );
     }
   });
 
-  it('plays the very same sound documents for every event, theme or no theme', () => {
+  it('plays the very same sound documents for every event in the default theme as with none', () => {
     for (const variant of shippedVariants()) {
-      const themed = heard(themedSounds(variant.registry, variant.theme), variant);
+      const themed = heard(themedSounds(variant.registry, variant.defaultTheme), variant);
       const unthemed = heard(variant.registry.sounds, variant);
       expect(themed.length, variant.id).toBeGreaterThan(0);
       themed.forEach((sound, index) => expect(sound, variant.id).toBe(unthemed[index]));
@@ -186,8 +190,10 @@ describe('a variant choosing a theme', () => {
     const remix = shippedVariants().find((variant) => variant.packs.length > 1);
     expect(remix).toBeDefined();
     if (remix === undefined) return;
+    // What composition carries is the offer and its default; the theme a document
+    // then chooses from that offer is its own business.
     expect(remix.themes.map((theme) => theme.id)).toEqual(['arcade', 'dusk']);
-    expect(remix.theme).toBe('arcade');
+    expect(remix.defaultTheme).toBe('arcade');
   });
 });
 
