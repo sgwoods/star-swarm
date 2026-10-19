@@ -53,6 +53,7 @@ interpreted. The file name is the id: `classic.json` must declare `"id":
 | `autoplay`      | The personas the cabinet may play itself as. Omitted means no autoplay                        |
 | `stages`        | An order for the combat stages, stated after every pack. Omitted means the packs' own         |
 | `lives`         | Fighters a game starts with: one of the counts its rules offer. Omitted means their default   |
+| `theme`         | The audio theme a game plays: one its packs declare. Omitted means their default theme        |
 | `derivedFrom`   | The game this one was made from. Provenance only: the loader never resolves it                |
 
 ## Difficulty presets choose a rank, and nothing else
@@ -182,7 +183,7 @@ keeping the edit makes a new document: `deriveVariant` in
 `src/content/variants.ts` copies the shipped one — presets and personas included —
 under a fresh `id` (`classic-2`), the name the player spells, `derivedFrom` naming
 the shipped game, and the chosen `packs` and `stages` — or, from a game's own
-options card, the chosen `lives`. It leaves out the shipped
+options card, the chosen `lives` and `theme`. It leaves out the shipped
 game's `description`, `order` and `demonstration`, which describe that game rather
 than the copy.
 
