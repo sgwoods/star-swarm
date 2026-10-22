@@ -1796,9 +1796,11 @@ hands its map to the effect and music channels when a variant comes into force.
 
 **The shipped sound is the default, exactly.** Each declaring pack's default
 substitutes nothing, and with no theme chosen `themedSounds` returns the
-registry's own sound map — the same object — so every shipped game hands the
-audio layer what it did before themes existed. `tests/unit/audio-themes.test.ts`
-holds every shipped game to that, event by event.
+registry's own sound map — the same object — so a game that chooses no theme hands
+the audio layer what it did before themes existed. `tests/unit/audio-themes.test.ts`
+holds every shipped game's default to that, event by event; a shipped document that
+chooses a theme ([§4.5](#45-variants-the-games-this-build-offers)) plays that theme
+instead, as a player's variation does.
 
 Two packs declare a second theme. **Classic** offers `ARCADE`, its own sounds, and
 `DUSK` (`packs/classic/sounds/dusk/`): sine and triangle voices only, about an
