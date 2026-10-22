@@ -51,7 +51,8 @@ documents like every other pack here.
 game from the second lineage: its own roles, formation, art, sound and
 `rules.json`, named alone by its variant. Every other pack here is an overlay on
 Classic and runs Classic's rules; this one shows a game that does not. Its README
-names the one thing that game needed that no pack can say yet.
+names the one thing that game needed that it does not declare yet: a sortie
+group, which the platform can now say.
 
 `npm run validate-packs` schema-checks then reference-checks every pack, then every
 variant, and must pass in CI; a pack that fails validation never loads. It succeeds

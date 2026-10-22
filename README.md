@@ -3,6 +3,9 @@
 A 1981-arcade-style formation shooter that plays like the classic, plus a content
 system that lets you prompt new aliens, stages and movement paths into existence.
 
+**Play it in a browser: <https://sgwoods.github.io/star-swarm/>** — the build
+published from `main`.
+
 ![Entry waves, formation and the fighter shooting](docs/media/arch-gameplay.gif)
 
 ## Getting started
@@ -13,8 +16,9 @@ npm run dev            # http://localhost:5173
 ```
 
 Press **Enter** to start, **←/→** to move, **Space** to fire. **P** pauses, and
-**X** leaves the game after asking. The game boots into attract mode, so press
-start before the arrows do anything.
+**X** leaves the game after asking. The game boots into the game list, so it
+takes two presses of **Enter** to play: one picks a game and opens its attract
+screen, and the second starts it. The arrows do not fly the fighter until then.
 
 Every menu is worked the same way: **↑/↓** move between rows, **←/→** change the
 row you are on, **Enter** takes it and **Esc** goes back — on every screen. From
@@ -44,8 +48,12 @@ and the floor is Vitest's and ESLint's rather than the game's. CI runs Node 24.
 | `npm run build`          | Typecheck, then build to `dist/`            |
 | `npm run lint`           | ESLint and Prettier                         |
 | `npm test`               | Vitest: unit and headless simulation suites |
-| `npm run test:e2e`       | Playwright smoke test                       |
+| `npm run test:e2e`       | Playwright: the game in a real browser      |
 | `npm run validate-packs` | Validate everything under `packs/`          |
+
+`npm run test:e2e` needs a browser that `npm install` does not fetch. On a new
+machine, run `npx playwright install chromium` once first, or every test fails
+to launch.
 
 CI runs all of these on every push and pull request, and a push to `main` that
 passes them publishes the built game to GitHub Pages — so the hosted build is
@@ -77,6 +85,10 @@ what an author has to do to make a claim checkable.
 
 **So: what plays today?** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — it is
 the only document that answers that, and the only one under test.
+
+## Licence
+
+MIT — see [`LICENSE`](LICENSE).
 
 ## Ground rules
 
