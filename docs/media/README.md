@@ -222,7 +222,14 @@ the end.
   below and checked by it pixel for pixel against the backbuffer.
 - `arch-lab.gif` — the `/lab` previewer: an entry path playing, then scrubbed
   frame by frame with the readout following, then the same path mirrored, then a
-  dive path flown from the slot marker.
+  dive path flown from the slot marker. Recorded when paths were all `/lab`
+  showed, so the panel beside it has no game picker and no tabs.
+- `lab-aliens.png`, `lab-stages.png` and `lab-sounds.png` — the other three
+  `/lab` views over the Classic game at its ARCADE preset: the warden with its
+  own dive highlighted and its capture dive beside it, flown from slot 0; stage 1
+  stepped to frame 360, with waves 1 and 2 still flying in and their rows lit; and
+  `dusk-stage-start` playing from the DUSK theme's audition, the playhead on its
+  plan.
 - `classic-music.mp4` — the Classic jingles, for listening rather than watching:
   `game-start`, `stage-start`, `captured`, `rescue`, `challenge-results` and
   `challenge-perfect` in turn, each under a title card naming the cue that plays
@@ -254,7 +261,9 @@ playfield: they are recorded at the page size and kept there, with no `scale`
 filter (`path-lab.gif` at 760x572; `arch-lab.gif` at 900x660, a viewport big
 enough for the preview canvas to take a 2x scale). `arch-lab.gif` uses `fps=8`
 and `max_colors=32` to keep a frame that large down to roughly the size of a
-playfield clip.
+playfield clip. The three `/lab` stills are page screenshots at 1200x760, with
+the panel scrolled to the part each one is about, reduced to 64 colours with the
+same `palettegen` and `paletteuse=dither=none` pair.
 
 ### From a replay, with one command
 
