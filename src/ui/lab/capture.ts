@@ -10,33 +10,22 @@
  * Fast-forward is stepping with the drawing switched off, so reaching step 2,600
  * costs processor time rather than forty-three seconds of play.
  *
- * What is drawn is what `src/main.ts` draws during play, in the same order and
- * from the same modules: the starfield (advanced once per step, as a 60 Hz
- * display advances it), `drawScene`, the pack's one-shot effects, and the HUD.
- * Three things are left out on purpose, because they belong to the front end
- * rather than to the run: the build stamp (a property of the checkout, not the
- * replay), the flow's cards (a replay is a world, not a session), and a stored
- * high-score table (the HUD's high score is the run's own score).
+ * The run itself — the world, and the starfield, `drawScene`, the pack's one-shot
+ * effects and the HUD that draw it — is `./game-run.ts`, the same one the record
+ * page (`./record.ts`) plays a person through. That is why a log recorded there
+ * renders here frame for frame.
  *
  * **Dev build only**, exactly as `/lab` is: `capture.html` is not one of the
  * build's inputs and nothing on the game's graph imports this directory —
  * `tests/unit/lab-dev-only.test.ts` checks both. The game never records.
  */
 
-import { bundledPackSource } from '../../content/bundle.js';
-import { createRegistry, loadPack, type LoadedPack } from '../../content/index.js';
 import type { Rules } from '../../content/schema.js';
-import { createStageSource } from '../../content/stages.js';
 import { createLoop, STEP_MS } from '../../engine/loop.js';
 import { createReplaySource, type Replay } from '../../engine/replay.js';
-import { createRng } from '../../engine/rng.js';
-import { createDisplay, LOGICAL_HEIGHT, LOGICAL_WIDTH } from '../../render/canvas.js';
-import { createEffects } from '../../render/effects.js';
-import { drawScene } from '../../render/scene.js';
-import { createSpriteSheet } from '../../render/sprites.js';
-import { createStarfield } from '../../render/starfield.js';
-import { createWorld, fingerprintWorld, stepWorld } from '../../sim/world.js';
-import { drawHud } from '../hud.js';
+import { createDisplay } from '../../render/canvas.js';
+import { fingerprintWorld } from '../../sim/world.js';
+import { createGameRun } from './game-run.js';
 
 /** What the command hands the page: one run, fully described. */
 export interface CaptureRequest {
@@ -73,26 +62,15 @@ declare global {
   }
 }
 
-function loadPacks(names: readonly string[]): LoadedPack[] {
-  return names.map((name) => {
-    const source = bundledPackSource(name);
-    if (source === undefined) throw new Error(`no pack named "${name}" under packs/`);
-    const result = loadPack(source);
-    if (!result.ok)
-      throw new Error(`pack "${name}" does not load: ${JSON.stringify(result.errors)}`);
-    return result.pack;
-  });
-}
-
 function open(request: CaptureRequest): CaptureSession {
-  const { replay, rules, stage } = request;
-  const registry = createRegistry(loadPacks(request.packs));
-  const world = createWorld({
+  const { replay, rules, packs, stage } = request;
+  const run = createGameRun({
     seed: replay.seed,
     rules,
-    stages: createStageSource(registry),
+    packs,
     ...(stage !== undefined && { stage }),
   });
+  const { world } = run;
   const input = createReplaySource(replay);
 
   const container = document.getElementById('capture');
@@ -100,46 +78,16 @@ function open(request: CaptureRequest): CaptureSession {
   const display = createDisplay({ container, maxScale: 1 });
   const { ctx, backbuffer } = display;
 
-  // The same derivations `applyVariant` in `src/main.ts` makes, once.
-  const sheet = createSpriteSheet({
-    sprites: registry.sprites.values(),
-    palette: registry.manifest.palette,
-  });
-  const effects = createEffects({
-    bindings: registry.manifest.effects,
-    sprites: registry.sprites,
-  });
-  const starfield = createStarfield(createRng(`${String(replay.seed)}:stars`));
-
   let draw = false;
   let fingerprint: string | undefined;
 
   const loop = createLoop({
     update() {
-      effects.advance();
-      const events = stepWorld(world, input.sample());
-      starfield.handle(events);
-      effects.handle(events);
+      run.step(input.sample());
       if (world.step === replay.steps) fingerprint = fingerprintWorld(world);
     },
     render() {
-      // Advanced on every step whether or not it is drawn, so a clip that starts
-      // at step 2,600 shows the field a player at 60 Hz would have seen there.
-      starfield.advance();
-      if (!draw) return;
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-      starfield.draw(ctx);
-      drawScene(ctx, world, { sheet });
-      effects.draw(ctx, sheet);
-      drawHud(ctx, {
-        score: world.score,
-        highScore: world.score,
-        lives: world.lives.reserve,
-        stage: world.stage,
-        badges: registry.manifest.stageBadges,
-        sheet,
-      });
+      if (draw) run.draw(ctx);
     },
     requestFrame: () => 0,
     cancelFrame: () => {},

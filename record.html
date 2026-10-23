@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Star Swarm — record</title>
+    <!--
+      The record page that `npm run record` serves (scripts/record.ts).
+
+      Dev build only, on the `/lab` pattern: Vite builds the entry points it is
+      given, and it is given `index.html` alone, so nothing under `src/ui/lab/`
+      reaches a production bundle and nothing here is on the game's code path.
+    -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #000;
+        overflow: hidden;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+      }
+      /* The canvas fills this; the letterbox bars are drawn, not CSS. */
+      #record {
+        flex: 1;
+        min-height: 0;
+      }
+      #status {
+        padding: 6px 12px;
+        color: #c8c8c8;
+        font:
+          13px/1.4 ui-monospace,
+          Menlo,
+          monospace;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="record"></div>
+    <div id="status"></div>
+    <script type="module" src="/src/ui/lab/record.ts"></script>
+  </body>
+</html>

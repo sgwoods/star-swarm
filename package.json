@@ -19,7 +19,8 @@
     "test:e2e": "playwright test",
     "validate-packs": "tsx scripts/validate-packs.ts",
     "sprite-sheet": "tsx scripts/sprite-contact-sheet.ts",
-    "capture": "tsx scripts/capture.ts"
+    "capture": "tsx scripts/capture.ts",
+    "record": "tsx scripts/record.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

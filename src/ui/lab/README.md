@@ -36,12 +36,19 @@ rules layer cannot express, it says so in the pack manager's own words
   bindings and themes it reads, and drawing one sound's plan.
 - `capture.ts` — the page `npm run capture` drives, a separate entry
   (`capture.html`); see `docs/ARCHITECTURE.md` §4.3.
+- `record.ts` and `recording.ts` — the page `npm run record` serves, a separate
+  entry (`record.html`), and the decisions it takes once a step: when a run
+  starts, holds and ends, and which frames the log keeps.
+- `game-run.ts` — the run both of those pages build, the world and what draws
+  it, so a log recorded on one is a log the other renders frame for frame.
 
-The facts modules and `stage-run.ts` touch no DOM, so the Node tests read them
-directly: `tests/unit/lab-content.test.ts` holds the alien and sound facts to the
-registry's documents and the rules' own resolvers, and
+The facts modules, `stage-run.ts` and `recording.ts` touch no DOM, so the Node
+tests read them directly: `tests/unit/lab-content.test.ts` holds the alien and
+sound facts to the registry's documents and the rules' own resolvers,
 `tests/sim/lab-stages.test.ts` holds the stage run to the `stage-entry` golden,
-bit for bit. `tests/e2e/lab.spec.ts` opens every view of every game in a browser.
+bit for bit, and `tests/unit/recording.test.ts` drives a recording against a real
+world. `tests/e2e/lab.spec.ts` opens every view of every game in a browser, and
+`tests/e2e/record.spec.ts` records a run and renders it back on the capture page.
 
 ## Keys
 
@@ -63,9 +70,10 @@ page, comes back to the same item.
 
 ## Dev build only
 
-`lab.html` at the repository root is the entry document, and Vite is never told
-to build it — its only input is `index.html`, and nothing on that graph imports
-this directory — so none of this reaches a production bundle or the game's code
+`lab.html` at the repository root is the entry document, and `capture.html` and
+`record.html` beside it are the other two pages'. Vite is never told to build any
+of them — its only input is `index.html`, and nothing on that graph imports this
+directory — so none of this reaches a production bundle or the game's code
 path. `vite.config.ts` maps the `/lab` URL onto `lab.html` from a plugin
 declaring `apply: 'serve'`. `tests/unit/lab-dev-only.test.ts` checks all of it.
 

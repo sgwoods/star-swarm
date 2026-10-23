@@ -24,3 +24,7 @@ tests/sim/golden/
 # harnesses and video frames. Neither Prettier nor ESLint reads git excludes, so
 # both need telling, or `npm run lint` fails locally on files that never reach CI.
 .scratch/
+
+# A log `npm run record` wrote, kept beside the clip `npm run capture` renders
+# from it. Byte for byte what the command wrote, for the goldens' reason.
+docs/media/*.replay.json

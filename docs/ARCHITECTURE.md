@@ -125,6 +125,7 @@ end on Node 25.9.0, where the whole check suite below passes.
 | `npm run validate-packs` | Schema-, reference- and playability-check `packs/` and `variants/`          |
 | `npm run sprite-sheet`   | Render a pack's art to `docs/media/classic-sprite-sheet.png`                |
 | `npm run capture`        | Render a replay to a GIF or MP4 through the real game (see [§4.3](#43-lab)) |
+| `npm run record`         | Record a live run's inputs to a replay log (see [§4.3](#43-lab))            |
 
 CI runs lint, typecheck, both test suites, pack validation, the build and the
 Playwright smoke test on every push and pull request.
@@ -803,9 +804,11 @@ declaring `apply: 'serve'`. `tests/unit/lab-dev-only.test.ts` checks all three.
 
 #### Rendering a replay to a clip
 
-The lab directory holds a second page, `capture.html` with
-`src/ui/lab/capture.ts` behind it, and `npm run capture` (`scripts/capture.ts`)
-is the command that drives it:
+The lab directory holds two more pages, each its own entry document on the same
+footing as `lab.html`: `capture.html`, with `src/ui/lab/capture.ts` behind it, and
+`record.html`, with `src/ui/lab/record.ts` (see
+[Recording a live run](#recording-a-live-run) below). `npm run capture`
+(`scripts/capture.ts`) is the command that drives the first:
 
     npm run capture -- --replay dual-fighter --from 3800 --to 6600 --fps 10
 
@@ -814,16 +817,20 @@ is the command that drives it:
 The command starts its own dev server on a free port, opens the page in headless
 Chromium, and hands it one run: a golden's log with the seed, cabinet and starting
 stage `GOLDENS` in `scripts/record-replay.ts` records for it — or a `.replay.json`
-path, which plays on the shipped Classic rules from `--stage`. The page builds the
-world, the sprite sheet, the effects and the starfield the way `src/main.ts` does,
-and then **steps** rather than waits: each call is exactly one `createLoop`
-advance of one step's time, every step is taken, and only the steps that become
-frames are drawn — `--fps 10` is every sixth. A frame is the 224x288 backbuffer,
-saved as a numbered PNG under `.scratch/capture/`, and `ffmpeg` makes the clip.
-What is drawn is the game's own render pass less the front end: the starfield,
-`drawScene`, the pack's effects and the HUD, without the build stamp, the flow's
-cards or a stored high-score table, because a replay is a world rather than a
-session.
+path, which plays on the shipped Classic rules from `--stage`. The run is built by
+`src/ui/lab/game-run.ts`, the one function both clip pages build a run with: the
+world, the sprite sheet, the effects and the starfield as `src/main.ts` builds
+them, with the world's opening events handed to the starfield and the effects the
+way the flow hands them over when a game starts — so a run that starts on stage 20
+scrolls at stage 20's rate from its first frame. The page then **steps** rather
+than waits: each call is exactly one `createLoop` advance of one step's time,
+every step is taken, and only the steps that become frames are drawn — `--fps 10`
+is every sixth. A frame is the 224x288 backbuffer, saved as a numbered PNG under
+`.scratch/capture/`, and `ffmpeg` makes the clip. What is drawn is the game's own
+render pass less the front end: the starfield, advanced once per step as a 60 Hz
+display advances it, `drawScene`, the pack's effects and the HUD, without the
+build stamp, the flow's cards or a stored high-score table, because a replay is a
+world rather than a session.
 
 Three properties follow, and the command checks the two it can:
 
@@ -831,12 +838,20 @@ Three properties follow, and the command checks the two it can:
   the log and compares `fingerprintWorld` with the golden's recorded final state,
   so a capture that played something else fails instead of rendering it.
 - **The clip is the backbuffer.** A GIF is decoded again and compared with the
-  frames, scaled the same way, byte for byte. `flags=neighbor` and `dither=none`
-  are what make that hold, and the comparison is what shows it: on the clip above,
-  `flags=bilinear` changes about four million of 120 million pixels at `--scale 2`,
-  `dither=bayer` about fifty million, and a 64-colour palette 14,000 — the beam and
-  the explosions are drawn with blending, so the clip holds 244 colours, which is
-  why the palette defaults to 256. An MP4 is not checked: H.264 subsamples colour.
+  frames, scaled the same way, byte for byte. Three things make that hold.
+  `flags=neighbor` and `dither=none` are two, and the comparison is what shows
+  they matter: on the clip above, `flags=bilinear` changes about four million of
+  120 million pixels at `--scale 2`, `dither=bayer` about fifty million, and a
+  64-colour palette about 16,000 — the beam and the explosions are drawn with
+  blending, so the clip holds 249 colours. The third is the palette, which is the
+  frames' own colours exactly: one for the clip when they fit `--colors` (256
+  unless told otherwise), or one per frame, which a GIF allows, when the clip holds
+  more and no one frame does. `ffmpeg`'s `palettegen` builds its palette in a
+  perceptual space and can fold two colours a step apart into one — it turned a
+  fading ember's `#020505` into `#020405` in the first recorded run, with 34
+  colours on screen — so it is used only when a single frame holds more colours
+  than a palette, and the check then fails saying how many. An MP4 is not
+  checked: H.264 subsamples colour.
 - **Time is a choice, not a measurement.** No clock is read, so a slow machine
   renders the same clip more slowly. The 467 frames above, from a run of 7,400
   steps, took about two seconds end to end on an arm64 Mac.
@@ -844,10 +859,85 @@ Three properties follow, and the command checks the two it can:
 `ffmpeg` is an external tool rather than a dependency; without it on the `PATH`
 the command stops and says so. The capture page is kept out of the bundle the way
 the lab is — it is not a build input and nothing on the game's graph imports it,
-which `tests/unit/lab-dev-only.test.ts` checks for both pages — and it needs no
-route of its own, because the dev server serves a root document by its own name.
-Nothing in the game records: there is no trigger for it anywhere under `src/`
-outside this page.
+which `tests/unit/lab-dev-only.test.ts` checks for all three pages — and it needs
+no route of its own, because the dev server serves a root document by its own
+name.
+
+#### Recording a live run
+
+`npm run record` (`scripts/record.ts`) is the other half: it turns a run somebody
+plays into a log the command above renders.
+
+    npm run record                   # serve record.html and open it
+    npm run record -- --stage 3      # every run starts on stage 3
+
+![A run of stage 1 played on the record page, rendered from its committed log](media/record-last-fighter.gif)
+
+The command starts a dev server of its own on a free port and opens the record
+page in the browser. `ENTER` starts a run, `P` holds it and `X` ends it, and a game
+over ends it too. The page plays at 60 Hz on the real `createLoop`, from the
+keyboard and with the sound the pack binds, and puts `recordInput` from
+`src/engine/replay.ts` — the wrapper the goldens are recorded with — between the
+keyboard and the world (`src/ui/lab/recording.ts`). The rules it keeps are the
+flow's: the frame carrying `start` begins the run and the world is first stepped
+on the next; a held run records nothing; and the frame carrying `exit` is stepped
+and the run stops after it. Each run takes the next game index and is seeded from
+it, `record:game-<n>`, the shape `startGame` gives a game's seed, so the log needs
+nothing beside it to come back.
+
+When a run ends, the page seals the log with `fingerprintWorld` and posts it to
+the command, which **plays it again in Node** to that fingerprint before writing
+it under `.scratch/record/` and printing the `npm run capture` line that renders
+it. A run that does not replay is refused, on the page and in the terminal, and
+nothing is written. The clip above is a run of stage 1 played on the page with
+real key presses — by a script standing in for a person — that loses two
+fighters, and is held and ended at step 1,521 with a captor's beam open over the
+last one: the moment somebody would stop to keep. Its log is the 2.8 KiB
+`docs/media/record-last-fighter.replay.json`, which the clip is regenerated from
+with no other input:
+
+    npm run capture -- --replay docs/media/record-last-fighter.replay.json \
+      --out docs/media/record-last-fighter.gif
+
+**What the page plays is what the capture page builds back, and nothing else**:
+the shipped Classic pack on its own rules (`LOG_PACKS`), from the rules' first
+stage or `--stage`, built by the same `src/ui/lab/game-run.ts`. That is the whole
+of the guarantee that a recording renders, and `tests/e2e/record.spec.ts` holds it
+end to end. It plays the page with real key presses, holds and lets go mid-run and
+ends with `X`, then requires the log to replay in Node to the sealed state, the
+capture page to land on it too, and the capture page's frame at each step the test
+photographed during play to be the record page's own frame, pixel for pixel. The
+cost is reach. The front end is not on the page — no selector and no cards, so a
+challenge stage runs straight on into the next — and neither is a choice of game,
+difficulty or fighter count, because a log names none of them; the stage a run
+started on is the one thing outside the log, and it travels in the capture line
+as `--stage`.
+
+Off by default means four things, and each is held:
+
+- **Nothing records unless something asks.** The recorder exists on the record
+  page and nowhere else. `src/main.ts` constructs none, armed or not, so a session
+  of the game samples its keyboard exactly as it did before the page existed.
+- **No idle cost, because there is no idle path.** On the record page the cost is
+  one wrapper sampled once per step; in the game it is nothing, because the game
+  has no wrapper to skip.
+- **No files unless a command wrote one.** A log is written by `npm run record`
+  when a run ends and replays, frames by `npm run capture`, both under `.scratch/`,
+  which is git-, Prettier- and ESLint-ignored. The page opened from a plain
+  `npm run dev` records into memory and says it kept nothing: the route it posts
+  to exists only on the record command's server.
+- **Nothing in the shipped bundle.** `tests/unit/lab-dev-only.test.ts` builds the
+  bundle from the real config and looks: `index.html` is its only page and only
+  entry, no module under `src/ui/lab/` and neither command is in it, and
+  `src/engine/replay.ts` — which ships, because attract mode plays a log for a
+  game with no personas — ships without `recordInput`. A player downloads not one
+  byte of the recorder.
+
+How long a recording can be is the log's question rather than the page's: input
+barely changes between steps and the log is run-length encoded, so the run above
+is 2.8 KiB against 516 KiB for its clip. The limit is the GIF — past a minute or
+so it stops being something to attach to a pull request — and an `--out` ending
+`.mp4` makes the longer clip.
 
 ### 4.4 Where a second game plugs in
 

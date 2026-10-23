@@ -104,10 +104,21 @@ thing that exists is described; so have `/lab`'s previews of aliens, stages and
 sounds ([`docs/ARCHITECTURE.md`](ARCHITECTURE.md#43-lab)). What the milestone
 still owes:
 
-- **Ship: the rest of GIF capture for pull requests.** The first half of capture
-  has landed, and the half still to come — recording a live run so it can be
-  rendered the same way — is set out in
-  [Capturing gameplay video](#capturing-gameplay-video) below.
+- **Ship: the clips of play in `docs/media/`, from committed logs.** Both halves
+  of capture have landed and moved to
+  [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#recording-a-live-run): `npm run record`
+  turns a run somebody plays into a log, and `npm run capture` turns a log into a
+  clip. What is left of [Capturing gameplay video](#capturing-gameplay-video) is
+  its exit check: each clip of play that was made before the two commands existed
+  will be played again on the record page and committed beside its log.
+- **Ship, once the captain decides it: a log that names the game it was played
+  on.** A log will go on playing on the shipped Classic rules until then, because
+  the plan held that a seed and the inputs are all a run needs — which is true of
+  one game and not of a list of them. A forged pack's preview clip, which is this
+  milestone's own exit check, becomes a command only when a log can say which
+  variant it was played on and which difficulty chose its rank. That is state the
+  plan deliberately did not capture, so adding it is a decision before it is a
+  task.
 
 One thing the forge **found** rather than built: the rules layer couples a pack to
 numbers it cannot change — which roles may attack at all, how wide a formation has
@@ -121,24 +132,19 @@ this roadmap will let a pack change them, because rules stay a whole document, a
 whether one ever should is a question for the captain rather than a task.
 
 _Exit check:_ one sentence becomes a validated, playable pack with a preview clip
-attached to its own pull request — met for `packs/deep-sea/`, and the remaining
-work above is what makes the clip a command rather than a recipe.
+attached to its own pull request — met for `packs/deep-sea/`; the second item
+above is what will make that clip a command rather than a recipe.
 
 ### Capturing gameplay video
 
-The captain asked for a plan before anything is built, and this is it: what
+The captain asked for a plan before anything was built, and this was it: what
 recording gameplay would be, what it would cost, and what it would deliberately
-not do. It is scheduled here rather than in
-[`docs/IDEAS.md`](IDEAS.md) because it has an order and an exit check — the
-milestone above already commits to "GIF capture for pull requests", and
-[`docs/media/README.md`](media/README.md) already names this milestone as the
-owner. The layer contract settles the rest: a plan is future tense, and
-`tests/unit/docs-accuracy.test.ts` admits exactly one roadmap document, so there
-is no second file this could live in without becoming a state document and being
-held to describing something that exists.
-
-**The default is off.** Everything below is opt-in, and the sections say
-concretely what that will mean.
+not do. Both of its phases have landed and moved to
+[`docs/ARCHITECTURE.md`](ARCHITECTURE.md#43-lab), which is where a thing that
+exists is described — including what "off by default" came to mean and how each
+part of it is held. What stays here is what the plan still owes: its exit check,
+the two things nobody has measured, and the reasons the alternatives were turned
+down, which are why the built thing has the shape it has.
 
 #### What already exists
 
@@ -175,78 +181,23 @@ a new command would have to earn its place by fixing:
   more, added to the repository for every visual change. Audio is not in the
   recipe at all.
 
-#### What would be built, in two phases
+#### The two phases, and what was left out
 
-**Phase 1 — render a replay, offline — has landed** and moved to
-[`docs/ARCHITECTURE.md`](ARCHITECTURE.md#43-lab), which is where a thing that
-exists is described: `npm run capture` renders a golden or a log through the real
-simulation and the real renderer, a step at a time, and checks its GIF against the
-backbuffer pixel for pixel. What it left for later is below.
+**Phase 1 — render a replay, offline — and phase 2 — record the inputs of a live
+run — have both landed**, and
+[`docs/ARCHITECTURE.md`](ARCHITECTURE.md#rendering-a-replay-to-a-clip) describes
+them. Two things the plan named were left out on purpose, and stay out until
+somebody schedules them:
 
-**Phase 2 — record the inputs of a live run.** `recordInput` in
-[`src/engine/replay.ts`](../src/engine/replay.ts) already wraps an input source
-so that every frame the simulation sees is also logged, run-length encoded; it is
-what the goldens are recorded with, and its run-length log is the format attract
-mode plays back for a game that declares no autoplay personas. Wiring an
-opt-in version of it into a browser session would make a human's run into a
-`(seed, input log)` pair that phase 1 can then render at leisure. The seed is
-already derived rather than ambient — each game seeds from the session root and
-its index — so nothing else has to be captured for the run to come back.
-
-**Not scheduled: pixels from the hosted site.** That would mean recording code in
-the shipped bundle, which is the one thing this plan refuses; see the rejected
-alternatives below.
-
-#### What "off by default" will mean, concretely
-
-- **Nothing records unless something asks.** Phase 2's recorder will not be
-  constructed unless asked for, so an ordinary session will sample the same
-  unwrapped input source it samples today.
-- **No idle cost, because there is no idle path.** Phase 2 will add one wrapper
-  around the input source when it is on, which is the per-step cost the golden
-  recorder already pays headlessly, and zero when it is off.
-- **No files unless a command wrote one.** Frames will land in `/.scratch/`,
-  which is git-, Prettier- and ESLint-ignored precisely for video frames. Only a
-  finished clip is ever committed, and only when a document links it.
-- **Nothing in the shipped bundle.** Whatever phase 2 adds to a session will
-  stay out of the build the way the capture page and `/lab` are, held there by
-  `tests/unit/lab-dev-only.test.ts`. A player who never records will download not
-  one byte of it.
-
-#### The questions a reader will have
-
-- **What is captured?** The logical 224x288 backbuffer: the renderer's own
-  pixels, before any scaling, so the sprites are the sprites. Not the whole page
-  — the `/lab` clips are the case that wants a page, and the existing recipe
-  already carves that exception out. Separately and more
-  importantly, phase 2 captures the _simulation's_ state, as the input log that
-  reproduces it.
-- **Where does it go?** Frames to `/.scratch/`, finished clip to `docs/media/`
-  when a document links it and to the pull request when nothing does. A log worth
-  keeping is small enough to commit beside the goldens.
-- **How long can a recording be?** For a log, effectively unbounded. Input
-  barely changes between steps and the log is run-length encoded, so a
-  three-minute run is a few kilobytes and a ten-minute one is not a different
-  problem — the goldens in `tests/sim/golden/` are the demonstration, and the
-  ratio against a clip of the same run is three orders of magnitude. For video
-  the limit is the format rather than the pipeline: a playfield GIF of half a
-  minute runs to a megabyte or more, so past roughly a minute a GIF stops being
-  something to attach to a pull request. Anything longer wants `webm` or `mp4`,
-  which the same `ffmpeg` step already emits.
-- **Does it work on the hosted site?** No, and on purpose. The recorder is a dev
-  route, and the hosted build will contain no capture code. If phase 2's opt-in
-  ever ships to the bundle, what the hosted site could yield is a _log_, rendered
-  locally afterwards.
-- **Is audio included?** Not in phase 1. It is worth stating why it is close to
-  free later: `buildSoundPlan` in [`src/audio/synth.ts`](../src/audio/synth.ts)
-  is pure and `playPlan` takes a structural subset of Web Audio, so an
-  `OfflineAudioContext` may satisfy it directly — which would make the audio
-  track deterministic and faster than real time to render. That is plausible and
-  unverified; see below.
-- **What does it cost in frame rate while recording?** Phase 1: nothing, because
-  nothing is real time. The render may run slower or faster than the game and the
-  run is the same run either way. Phase 2: one input-source wrapper per step,
-  which must be measured before it ships to a bundle a player downloads.
+- **Pixels from the hosted site.** That would mean recording code in the shipped
+  bundle, which is the one thing this plan refuses; see the rejected alternatives
+  below. If an opt-in recorder ever ships, what the hosted site could yield is a
+  _log_, rendered locally afterwards.
+- **Sound in a clip.** It is worth stating why it would be close to free:
+  `buildSoundPlan` in [`src/audio/synth.ts`](../src/audio/synth.ts) is pure and
+  `playPlan` takes a structural subset of Web Audio, so an `OfflineAudioContext`
+  may satisfy it directly — which would make the audio track deterministic and
+  faster than real time to render. That is plausible and unverified; see below.
 
 #### What is not known, and what would settle it
 
@@ -291,7 +242,12 @@ allows.
 
 _Exit check:_ a clean checkout regenerates any clip in `docs/media/` from a
 committed log with one command and no hand-typed filter chain, and the bundle a
-player downloads is unchanged by the whole feature.
+player downloads is unchanged by the whole feature. As written, "any clip" takes
+in the clips of the front end — the selector, the menus, the cards and attract
+mode — and those are a session rather than a run, which neither command will
+render: a log is one world's inputs, and the front end is the flow around it.
+Meeting that part needs either a check narrowed to clips of play or a renderer of
+a whole session, and which of the two is the captain's call.
 
 ## After that: Milestone 5+ — keep expanding
 
