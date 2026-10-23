@@ -26,7 +26,11 @@ jobs:
     timeout-minutes: 20
 
     steps:
+      # Two commits deep, so a pull request's merge commit can be diffed against
+      # the branch it merges into: that diff is what the shelf step below reads.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - uses: actions/setup-node@v4
         with:
@@ -36,6 +40,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # A shelf submission from outside the project is one variation under shelf/
+      # and nothing else (scripts/shelf-submission.ts, CONTRIBUTING.md). Before
+      # lint, because it is the cheapest refusal and the one a submitter most
+      # needs to read first. The association is GitHub's, passed through the
+      # environment rather than pasted into the script.
+      - name: 'Shelf: a submission changes only shelf/'
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          AUTHOR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
+        run: git diff --name-status HEAD^1 HEAD | npx tsx scripts/shelf-submission.ts "$AUTHOR_ASSOCIATION"
+
       # Lint before anything else: it is what enforces the sim/render boundary
       # from docs/DESIGN.md section 9, so a violation should fail fast.
       - name: Lint
@@ -43,6 +58,15 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      # Every pack, every game in variants/ and every entry on the shelf, flown.
+      # This is the step that refuses a shelf entry that does not load, names
+      # something this build does not have, or does not play — and it runs before
+      # the tests because the unit suite imports the bundled content, so a shelf
+      # file that is not even JSON would otherwise fail there first, under a name
+      # `CONTRIBUTING.md` does not send a submitter to.
+      - name: Validate content packs and the shelf
+        run: npm run validate-packs
 
       # The unit project carries `docs-accuracy`, which holds every document in
       # the tree to the code it describes. A pull request that falsifies a
@@ -52,9 +76,6 @@ jobs:
 
       - name: Headless simulation tests
         run: npm run test:sim
-
-      - name: Validate content packs
-        run: npm run validate-packs
 
       - name: Build
         run: npx vite build

@@ -55,6 +55,7 @@ interpreted. The file name is the id: `classic.json` must declare `"id":
 | `lives`         | Fighters a game starts with: one of the counts its rules offer. Omitted means their default   |
 | `theme`         | The audio theme a game plays: one its packs declare. Omitted means their default theme        |
 | `derivedFrom`   | The game this one was made from. Provenance only: the loader never resolves it                |
+| `author`        | Who made it, as the shelf credits it. Provenance only, like `derivedFrom`                     |
 
 ## Difficulty presets choose a rank, and nothing else
 
@@ -184,8 +185,8 @@ keeping the edit makes a new document: `deriveVariant` in
 under a fresh `id` (`classic-2`), the name the player spells, `derivedFrom` naming
 the shipped game, and the chosen `packs` and `stages` — or, from a game's own
 options card, the chosen `lives` and `theme`. It leaves out the shipped
-game's `description`, `order` and `demonstration`, which describe that game rather
-than the copy.
+game's `description`, `order`, `demonstration` and `author`, which describe that
+game rather than the copy.
 
 ```json
 {
@@ -213,6 +214,15 @@ an exported variation is, and refused if its `id` is a shipped game's. An import
 passes what a document here passes, and is refused the same way with the reason on
 the card — a pack this build does not install among them. `docs/ARCHITECTURE.md`
 §6 has the whole account.
+
+## Other players' variations are on the shelf, not here
+
+A variation somebody else made, submitted by pull request and curated, is a
+document of exactly this shape in [`shelf/`](../shelf/README.md) rather than here:
+this directory is the reference games, and the shelf is the games made from them.
+A shelf entry adds an `author`, may take no id or name a game here has, and is
+judged by the same loader and flown by the same gate.
+[`CONTRIBUTING.md`](../CONTRIBUTING.md) is how one gets there.
 
 ## Adding one
 

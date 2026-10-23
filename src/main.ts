@@ -20,7 +20,11 @@
  */
 
 import { createMusic, createSfx, createSynth, type Music, type Sfx } from './audio/index.js';
-import { bundledPackSources, bundledVariantSources } from './content/bundle.js';
+import {
+  bundledPackSources,
+  bundledShelfSources,
+  bundledVariantSources,
+} from './content/bundle.js';
 import type { ContentError, LoadedPack } from './content/index.js';
 import {
   ContentValidationError,
@@ -66,6 +70,7 @@ import {
   SETTINGS_STORAGE_KEY,
   type Settings,
 } from './ui/settings.js';
+import { gameAsked, loadShelf } from './ui/shelf.js';
 import { createWebStorage } from './ui/storage.js';
 import { drawDeleteConfirm, drawNameEntry } from './ui/variations.js';
 import { drawExportCard, drawImportCard } from './ui/exchange.js';
@@ -109,19 +114,38 @@ if (packErrors.length > 0) throw new ContentValidationError(packErrors);
 const variantSources = bundledVariantSources();
 const loaded = loadVariants(variantSources, packs);
 if (!loaded.ok) throw new ContentValidationError(loaded.errors);
-const variants = loaded.variants;
-const firstVariant = variants[0];
+const references = loaded.variants;
+const firstVariant = references[0];
 if (firstVariant === undefined) {
   throw new Error('no variants are bundled: variants/ holds no document, so there is no game');
 }
+
+// The shelf: variations other players made, curated into `shelf/` and bundled
+// like the reference games (`src/ui/shelf.ts`). Listed after them, read-only like
+// them, each with a high-score table of its own. Unlike them, an entry that does
+// not load is left off rather than refusing the page: the gate in CI flies every
+// entry before it reaches `main`, so this is unreachable on the published site —
+// and a reference game must never be lost to somebody else's file if it is not.
+const shelfSources = bundledShelfSources();
+const shelf = loadShelf(shelfSources, packs, references);
+if (shelf.errors.length > 0) console.error(new ContentValidationError(shelf.errors).message);
+const variants: readonly ResolvedVariant[] = [
+  ...references,
+  ...shelf.entries.map((entry) => entry.variant),
+];
 
 // What resolves a player's variation, and judges a draft on the pack manager's
 // cards: the same variant loader as above, over one document at a time, and the
 // structural half of the validator's playability pass (`src/ui/compose.ts`). It
 // is also the one answer to "which resolved variant is the flow running?" — by
 // identity, so a variant nobody here loaded or composed can never have a sprite
-// sheet built for it.
-const composer = createComposer({ sources: variantSources, packs, variants });
+// sheet built for it. A shelf entry is one of its bases, as a reference game is:
+// its id is reserved, and an edit to it makes a new variation of the player's.
+const composer = createComposer({
+  sources: [...variantSources, ...shelfSources],
+  packs,
+  variants,
+});
 
 /**
  * The variant in force. Assigned only by {@link applyVariant}, which the flow
@@ -158,7 +182,7 @@ const highScores = createHighScoreBook({
 // copied from its document, and writes the new shape straight back
 // (`src/ui/settings.ts`).
 const upgrade: LegacyBase[] = [];
-for (const shipped of variants) {
+for (const shipped of references) {
   const document = composer.documentOf(shipped.id);
   if (document !== undefined) upgrade.push({ id: shipped.id, name: shipped.name, document });
 }
@@ -166,6 +190,19 @@ const settings = createSettingsStore({
   storage: createWebStorage({ key: SETTINGS_STORAGE_KEY }),
   upgrade,
 });
+
+// A link that names a game — the shelf page's `PLAY`, `./?game=<id>` — chooses it,
+// exactly as the selector would: the flow boots on the chosen game with the
+// cursor on it. Then the address forgets it, so a refresh after choosing another
+// game does not choose this one again.
+const asked = gameAsked(window.location.search, [
+  ...variants.map((game) => game.id),
+  ...settings.value.variations.map((variation) => variation.id),
+]);
+if (asked !== undefined) {
+  settings.update({ variant: asked });
+  window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+}
 
 /**
  * Is a newer build being served? Polled once a minute of *simulation* time, so a
@@ -687,6 +724,13 @@ declare global {
       readonly variantName: string;
       readonly variants: readonly string[];
       /**
+       * The shelf entries on the list, by id, in list order — and why any entry
+       * the page was built with was left off, as `shelf/<file> · field: reason`.
+       * The second is empty on any build the gate passed.
+       */
+      readonly shelf: readonly string[];
+      readonly shelfRefused: readonly string[];
+      /**
        * The game chosen and its name — a shipped id, or a variation's — and every
        * game on the list as `id=name`, the player's variations last.
        * `tests/e2e/variations.spec.ts` holds a made, renamed and deleted variation
@@ -895,7 +939,15 @@ window.starSwarm = {
     return flow.variant.name;
   },
   get variants(): readonly string[] {
-    return flow.variants.map((entry) => entry.id);
+    return references.map((entry) => entry.id);
+  },
+  get shelf(): readonly string[] {
+    return shelf.entries.map((entry) => entry.variant.id);
+  },
+  get shelfRefused(): readonly string[] {
+    return shelf.errors.map(
+      (error) => `shelf/${error.file} · ${error.field ?? ''}: ${error.message}`,
+    );
   },
   get game(): string {
     return flow.game.id;

@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+
 import { defineConfig, type Plugin } from 'vite';
 
 import { buildIdentity, buildIdentityJson } from './scripts/build-identity.js';
@@ -77,13 +79,25 @@ function labRoute(): Plugin {
   };
 }
 
+/**
+ * The pages a build publishes, and nothing else: the game, and the shelf of other
+ * players' variations beside it (`shelf.html`, `src/ui/shelf-page.ts`). `lab.html`
+ * and `capture.html` are root documents too, and are left out on purpose — Vite
+ * builds the inputs it is given, so a page not named here never ships.
+ * `tests/unit/lab-dev-only.test.ts` holds this list.
+ */
+const PAGES = {
+  index: resolve(import.meta.dirname, 'index.html'),
+  shelf: resolve(import.meta.dirname, 'shelf.html'),
+};
+
 export default defineConfig({
   // Relative base so a built bundle also works when served from a subpath
   // (e.g. GitHub Pages), which section 12 lists as a later candidate.
   base: './',
   plugins: [buildIdentityRoute(), labRoute()],
   server: { port: 5173, strictPort: true },
-  build: { target: 'es2022', sourcemap: true },
+  build: { target: 'es2022', sourcemap: true, rolldownOptions: { input: PAGES } },
 });
 
-export { buildIdentityRoute, labRoute };
+export { buildIdentityRoute, labRoute, PAGES };

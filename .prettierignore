@@ -28,3 +28,8 @@ tests/sim/golden/
 # A log `npm run record` wrote, kept beside the clip `npm run capture` renders
 # from it. Byte for byte what the command wrote, for the goldens' reason.
 docs/media/*.replay.json
+
+# A shelf entry is a player's export as the game wrote it (`src/ui/exchange.ts`),
+# pasted into a pull request by somebody who has never run Prettier. Formatting it
+# would fail the very submission `CONTRIBUTING.md` walks them through.
+shelf/*.json

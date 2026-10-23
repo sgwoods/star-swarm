@@ -38,7 +38,7 @@ import { join, resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { readPackSource, readVariantSources } from '../../src/content/fs.js';
+import { readPackSource, readShelfSources, readVariantSources } from '../../src/content/fs.js';
 import { loadPackOrThrow, packSourceFromRecord } from '../../src/content/loader.js';
 import {
   alienSchema,
@@ -114,7 +114,7 @@ function* strings(value: unknown, path = ''): Generator<readonly [string, string
   }
 }
 
-/** Every pack document and every variant document, as parsed JSON. */
+/** Every pack document, variant document and shelf entry, as parsed JSON. */
 function everyDocument(): ReadonlyArray<{ readonly where: string; readonly value: unknown }> {
   const out: Array<{ where: string; value: unknown }> = [];
   const packsRoot = resolve(REPO_ROOT, 'packs');
@@ -133,6 +133,15 @@ function everyDocument(): ReadonlyArray<{ readonly where: string; readonly value
   const { sources, errors } = readVariantSources(resolve(REPO_ROOT, 'variants'));
   if (errors.length > 0) throw new Error(`variants/: ${JSON.stringify(errors)}`);
   for (const source of sources) out.push({ where: `variants/${source.file}`, value: source.value });
+  // The shelf is other people's variations, submitted by pull request: the one
+  // place in the tree a document arrives from outside the project, so the rule
+  // that no prompt can argue its way past is one no submission can either.
+  // A file there that is not JSON is the gate's to refuse, by name, in the step
+  // `CONTRIBUTING.md` points a submitter at; it has no strings to scan here.
+  const shelf = readShelfSources(resolve(REPO_ROOT, 'shelf'));
+  for (const source of shelf.sources) {
+    out.push({ where: `shelf/${source.file}`, value: source.value });
+  }
   return out;
 }
 

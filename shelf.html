@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Star Swarm — the shelf</title>
+    <!--
+      The shelf: variations other players made, curated into `shelf/` and
+      published with the game. Built beside `index.html` (`vite.config.ts`), and
+      filled by `src/ui/shelf-page.ts` from the same loaders the game runs.
+    -->
+    <style>
+      :root {
+        color-scheme: dark;
+        --ink: #e8e8f0;
+        --note: #b9c9ff;
+        --dim: #7d8aa8;
+        --heading: #ff2b2b;
+        --cursor: #ffd400;
+        --accept: #5cff8a;
+        --line: #26263a;
+        --plate: #0b0b14;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: #000;
+        color: var(--ink);
+        font:
+          15px/1.55 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          Consolas,
+          monospace;
+      }
+      .page {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 24px 16px 48px;
+        box-sizing: border-box;
+      }
+      a {
+        color: var(--cursor);
+      }
+      .back {
+        font-size: 13px;
+        text-decoration: none;
+      }
+      h1 {
+        margin: 16px 0 8px;
+        color: var(--heading);
+        font-size: 28px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      .lede {
+        color: var(--note);
+        margin: 0 0 12px;
+      }
+      .how {
+        margin: 0 0 24px;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: var(--plate);
+      }
+      .how p {
+        margin: 0;
+      }
+      .how p + p {
+        margin-top: 6px;
+        color: var(--dim);
+        font-size: 13px;
+      }
+      #shelf {
+        display: grid;
+        gap: 16px;
+      }
+      .entry {
+        min-width: 0;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: var(--plate);
+        overflow-wrap: anywhere;
+      }
+      .entry h2 {
+        margin: 0;
+        color: var(--cursor);
+        font-size: 20px;
+        letter-spacing: 0.08em;
+      }
+      .credit {
+        margin: 4px 0 0;
+        color: var(--dim);
+        font-size: 13px;
+      }
+      .description {
+        margin: 10px 0 0;
+      }
+      .entry h3 {
+        margin: 14px 0 4px;
+        color: var(--heading);
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      .entry ul {
+        margin: 0;
+        padding-left: 20px;
+        color: var(--note);
+      }
+      .play {
+        display: inline-block;
+        margin-top: 14px;
+        padding: 6px 14px;
+        border: 1px solid var(--accept);
+        border-radius: 3px;
+        color: var(--accept);
+        text-decoration: none;
+        font-weight: bold;
+      }
+      .play:hover,
+      .play:focus-visible {
+        background: var(--accept);
+        color: #000;
+      }
+      .empty {
+        margin: 0;
+        padding: 16px;
+        border: 1px dashed var(--line);
+        border-radius: 4px;
+        color: var(--dim);
+      }
+      footer {
+        margin-top: 32px;
+        color: var(--dim);
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <a class="back" href="./">&larr; Star Swarm</a>
+      <h1>The shelf</h1>
+      <p class="lede">
+        Variations of Star Swarm's games that other players made, chosen to keep. Each one is the
+        same game with something changed — the ships it starts with, its sound, its packs or its
+        stages — and says who made it.
+      </p>
+      <div class="how">
+        <p>
+          <strong>Play</strong> opens the game with that variation chosen: press Enter to take it,
+          and Enter again to play. On this page Tab reaches each Play and Enter takes it; Esc goes
+          back to the game.
+        </p>
+        <p>
+          Made one you like?
+          <a href="https://github.com/sgwoods/star-swarm/blob/main/CONTRIBUTING.md"
+            >Put it on the shelf</a
+          >: export it from the game and open a pull request adding that one file.
+        </p>
+      </div>
+      <main id="shelf" aria-busy="true" aria-label="Variations on the shelf"></main>
+      <footer>
+        Every variation here was flown by the game's own playability check before it was published:
+        it loads, every stage builds and stays on screen, and the game's autoplay personas finish
+        it. The reference games are never changed by one.
+      </footer>
+    </div>
+    <script type="module" src="/src/ui/shelf-page.ts"></script>
+  </body>
+</html>

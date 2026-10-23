@@ -2,7 +2,7 @@
  * `npm run validate-packs` — the gate from `docs/DESIGN.md` sections 8.2 and 11.
  * A pack that fails validation never loads, and CI runs this on every push.
  *
- * Five passes, reported per file:
+ * Six passes, reported per file:
  *
  *   1. **Layout** — content lives in the section 9 directories, a pack that has
  *      content has a `pack.json`, and no JSON is loose.
@@ -14,21 +14,30 @@
  *      rules to run on, every difficulty preset must name a rank those rules
  *      declare, and every autoplay persona must have its own id and be the one a
  *      `defaultPersona` names.
- *   5. **Playability** — the playability checks of section 8 step 2, which start
- *      the headless simulation: every stage every variant plays is flown, its
- *      entry, its dives and its bullets checked, and autoplay personas fly it to
- *      the end. `./playability.ts` holds the checks and the protocol they run on.
+ *   5. **The shelf** — every `shelf/*.json`, a variation another player made,
+ *      through the same variant passes as pass 4 and then the shelf's own rules
+ *      (`src/ui/shelf.ts`): no reference game's id or name, an `author`, a game it
+ *      was made from that this build offers, and something it changes.
+ *   6. **Playability** — the playability checks of section 8 step 2, which start
+ *      the headless simulation: every stage every variant and every shelf entry
+ *      plays is flown, its entry, its dives and its bullets checked, and autoplay
+ *      personas fly it to the end. `./playability.ts` holds the checks and the
+ *      protocol they run on.
  *
- * Passes 2 and 3 are `loadPack` itself and pass 4 is `loadVariants`, so the script
- * and the game agree by construction rather than by two implementations staying in
- * step. Pass 5 flies the variants pass 4 resolved, through the same `createWorld`
- * the game runs.
+ * Passes 2 and 3 are `loadPack` itself, pass 4 is `loadVariants` and pass 5 is
+ * `loadShelf`, so the script and the game agree by construction rather than by two
+ * implementations staying in step. Pass 6 flies what passes 4 and 5 resolved,
+ * through the same `createWorld` the game runs — which is what makes this the gate
+ * a submission to the shelf meets before anybody reads it: one that does not load,
+ * names something that does not exist, or does not play fails here, in CI, on its
+ * own pull request.
  *
  * Succeeds on an empty or absent `packs/` tree, and on a pack whose content
  * directories are still empty. The variants root is `variants/` beside the packs
  * root, or `process.argv[3]`; an absent one is not a failure either, because a
  * tree with no games is not a *malformed* tree — it is `src/main.ts` that refuses
- * to boot on one, and it says so.
+ * to boot on one, and it says so. The shelf root is `shelf/` beside the packs
+ * root, or `process.argv[4]`, and an absent or empty one is an empty shelf.
  */
 
 import { readdirSync, statSync } from 'node:fs';
@@ -36,12 +45,18 @@ import { basename, join, relative, resolve } from 'node:path';
 
 import type { ContentError } from '../src/content/errors.js';
 import { formatContentErrors } from '../src/content/errors.js';
-import { listPackDirs, readPackSource, readVariantSources } from '../src/content/fs.js';
+import {
+  listPackDirs,
+  readPackSource,
+  readShelfSources,
+  readVariantSources,
+} from '../src/content/fs.js';
 import type { LoadedPack } from '../src/content/loader.js';
 import { loadPack } from '../src/content/loader.js';
 import { CONTENT_DIRS } from '../src/content/schema.js';
 import type { ResolvedVariant } from '../src/content/variants.js';
 import { loadVariants } from '../src/content/variants.js';
+import { changeText, loadShelf } from '../src/ui/shelf.js';
 import { asContentErrors, checkPlayability } from './playability.js';
 
 /** Files that are bookkeeping rather than content. */
@@ -52,6 +67,7 @@ const ROOT_FILES = new Set(['pack.json', 'rules.json']);
 
 const PACKS_ROOT = resolve(process.argv[2] ?? 'packs');
 const VARIANTS_ROOT = resolve(process.argv[3] ?? join(PACKS_ROOT, '..', 'variants'));
+const SHELF_ROOT = resolve(process.argv[4] ?? join(PACKS_ROOT, '..', 'shelf'));
 
 /** Every pack that loaded, keyed by id, for the variant pass to resolve against. */
 const loadedPacks = new Map<string, LoadedPack>();
@@ -187,6 +203,40 @@ function validateVariants(): void {
   }
 }
 
+/** Every shelf entry that passed its own rules, for the playability pass to fly. */
+const shelfVariants: ResolvedVariant[] = [];
+
+/**
+ * Pass 5: the shelf — variations other players made, one variant document each.
+ *
+ * After the variants, because an entry is judged against them: its id and name
+ * may be no reference game's, and the game it was made from has to be one of
+ * them or another entry. A shelf that cannot be judged because the variants
+ * failed is said to be unjudged rather than passed.
+ */
+function validateShelf(): void {
+  const { sources, errors } = readShelfSources(SHELF_ROOT);
+  problems.push(...errors);
+  if (sources.length === 0) {
+    if (errors.length === 0) notes.push('shelf: empty');
+    return;
+  }
+  if (resolvedVariants.length === 0) {
+    notes.push('shelf: not judged, because no game in variants/ loaded to judge it against');
+    return;
+  }
+
+  const result = loadShelf(sources, loadedPacks, resolvedVariants);
+  problems.push(...result.errors);
+  for (const { variant, from, changes } of result.entries) {
+    shelfVariants.push(variant);
+    const said = changes.map((change) => changeText(change, variant, from)).join('; ');
+    notes.push(
+      `shelf/${variant.file}: OK — "${variant.name}" by ${variant.author ?? ''}, from ${from.id}: ${said}`,
+    );
+  }
+}
+
 function main(): void {
   if (!isDirectory(PACKS_ROOT)) {
     console.log(
@@ -206,10 +256,12 @@ function main(): void {
   for (const packDir of packDirs) validatePack(packDir);
 
   validateVariants();
+  validateShelf();
 
-  // Pass 5. Only over variants that resolved, so a malformed pack is reported as
-  // malformed rather than as unplayable.
-  const playability = checkPlayability(resolvedVariants);
+  // Pass 6. Only over variants and entries that resolved, so a malformed pack is
+  // reported as malformed rather than as unplayable. One call, so that an entry
+  // declaring no personas borrows from the reference game sharing its rules.
+  const playability = checkPlayability([...resolvedVariants, ...shelfVariants]);
   notes.push(...playability.notes.map((note) => `playability ${note}`));
   problems.push(...asContentErrors(playability.findings));
 

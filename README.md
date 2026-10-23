@@ -4,7 +4,10 @@ A 1981-arcade-style formation shooter that plays like the classic, plus a conten
 system that lets you prompt new aliens, stages and movement paths into existence.
 
 **Play it in a browser: <https://sgwoods.github.io/star-swarm/>** — the build
-published from `main`.
+published from `main`. Beside it is **the shelf**,
+<https://sgwoods.github.io/star-swarm/shelf.html>: variations of the games that
+other players made, each playable from there. Made one of your own?
+[`CONTRIBUTING.md`](CONTRIBUTING.md) is how to put it on the shelf, step by step.
 
 ![Entry waves, formation and the fighter shooting](docs/media/arch-gameplay.gif)
 
@@ -49,7 +52,7 @@ and the floor is Vitest's and ESLint's rather than the game's. CI runs Node 24.
 | `npm run lint`           | ESLint and Prettier                         |
 | `npm test`               | Vitest: unit and headless simulation suites |
 | `npm run test:e2e`       | Playwright: the game in a real browser      |
-| `npm run validate-packs` | Validate everything under `packs/`          |
+| `npm run validate-packs` | Validate `packs/`, `variants/` and `shelf/` |
 
 `npm run test:e2e` needs a browser that `npm install` does not fetch. On a new
 machine, run `npx playwright install chromium` once first, or every test fails

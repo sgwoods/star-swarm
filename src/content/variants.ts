@@ -161,6 +161,14 @@ export const variantSchema = z.strictObject({
    * from and which game to fall back to when this one will not load.
    */
   derivedFrom: idSchema.optional(),
+  /**
+   * Who made the game, as the shelf says it (`shelf/`, `src/ui/shelf.ts`).
+   *
+   * **Provenance, like `derivedFrom`.** Nothing about how the game plays is read
+   * from it, and the loader checks only that it is text. A copy made from a game
+   * does not inherit it (`deriveVariant`): the copy is its maker's.
+   */
+  author: z.string().min(1).optional(),
 });
 
 export type Variant = z.infer<typeof variantSchema>;
@@ -181,6 +189,14 @@ export interface VariantSource {
  */
 export const VARIANTS_GROUP = 'variants';
 
+/**
+ * The group a shelf entry's errors carry: `shelf/<id>.json`, where a variation
+ * somebody else made is kept (`src/ui/shelf.ts`). The documents are variant
+ * documents like any other and are loaded by the same two passes; only the
+ * directory a failure sends the author to differs.
+ */
+export const SHELF_GROUP = 'shelf';
+
 /* -------------------------------------------------------------------------- */
 /* Resolution                                                                  */
 /* -------------------------------------------------------------------------- */
@@ -200,6 +216,12 @@ export interface ResolvedVariant {
   readonly demonstration: boolean;
   /** The document it came from, for diagnostics. */
   readonly file: string;
+  /**
+   * The directory that document is in — {@link VARIANTS_GROUP} for a game this
+   * build ships, {@link SHELF_GROUP} for a variation on the shelf — so that a
+   * failure found later, by the playability pass, names the file it found.
+   */
+  readonly group: string;
   /** The pack ids it layers, in order. What the settings menu shows. */
   readonly packs: readonly string[];
   /**
@@ -210,6 +232,8 @@ export interface ResolvedVariant {
   readonly stages: readonly string[] | undefined;
   /** The game this one was made from, when it was made by editing one. Provenance only. */
   readonly derivedFrom: string | undefined;
+  /** Who made it, when the document says. Provenance only, like `derivedFrom`. */
+  readonly author: string | undefined;
   /**
    * Fighters a game starts with: the document's `lives`, or the rules' own
    * default. Always one of `startingLivesOffered(rules)`.
@@ -332,7 +356,16 @@ export interface VariantChoice {
   readonly stages?: readonly string[] | undefined;
 }
 
-export interface ResolveOptions {
+export interface LoadOptions {
+  /**
+   * The directory the documents are in, for errors: {@link VARIANTS_GROUP} unless
+   * stated. A shelf entry is loaded under {@link SHELF_GROUP}, so a failure reads
+   * `shelf/<id>.json` — where the author has to go — and not `variants/`.
+   */
+  readonly group?: string;
+}
+
+export interface ResolveOptions extends LoadOptions {
   /**
    * Ids the document may not take, because a game this build ships already has
    * them. A player's variation is resolved on its own rather than beside every
@@ -348,11 +381,15 @@ export type VariantResolveResult =
 
 interface ParsedDocument {
   readonly file: string;
+  readonly group: string;
   readonly variant: Variant;
 }
 
 /** Pass 1: every document against the schema, its file name, and each other. */
-function parseDocuments(sources: readonly VariantSource[]): {
+function parseDocuments(
+  sources: readonly VariantSource[],
+  group: string,
+): {
   readonly errors: ContentError[];
   readonly parsed: ParsedDocument[];
 } {
@@ -362,14 +399,14 @@ function parseDocuments(sources: readonly VariantSource[]): {
   for (const source of [...sources].sort((a, b) => a.file.localeCompare(b.file))) {
     const result = variantSchema.safeParse(source.value);
     if (!result.success) {
-      errors.push(...fromZodError(VARIANTS_GROUP, source.file, result.error));
+      errors.push(...fromZodError(group, source.file, result.error));
       continue;
     }
     const variant = result.data;
     const expected = source.file.replace(/\.json$/, '');
     if (variant.id !== expected) {
       errors.push({
-        pack: VARIANTS_GROUP,
+        pack: group,
         file: source.file,
         field: 'id',
         message: `"id" is "${variant.id}" but the document is ${source.file}`,
@@ -379,7 +416,7 @@ function parseDocuments(sources: readonly VariantSource[]): {
     const already = seen.get(variant.id);
     if (already !== undefined) {
       errors.push({
-        pack: VARIANTS_GROUP,
+        pack: group,
         file: source.file,
         field: 'id',
         message: `duplicate variant id "${variant.id}"; already defined in ${already}`,
@@ -387,7 +424,7 @@ function parseDocuments(sources: readonly VariantSource[]): {
       continue;
     }
     seen.set(variant.id, source.file);
-    parsed.push({ file: source.file, variant });
+    parsed.push({ file: source.file, group, variant });
   }
   return { errors, parsed };
 }
@@ -397,7 +434,7 @@ function parseDocuments(sources: readonly VariantSource[]): {
  * its presets and its personas. Errors or a variant, never both.
  */
 function resolveDocument(
-  { file, variant }: ParsedDocument,
+  { file, group, variant }: ParsedDocument,
   packs: ReadonlyMap<string, LoadedPack>,
 ): { readonly errors: readonly ContentError[]; readonly variant?: ResolvedVariant } {
   const errors: ContentError[] = [];
@@ -408,7 +445,7 @@ function resolveDocument(
     const pack = packs.get(id);
     if (pack === undefined) {
       errors.push({
-        pack: VARIANTS_GROUP,
+        pack: group,
         file,
         field: `packs[${String(index)}]`,
         message: `no pack with id "${id}" is installed`,
@@ -418,7 +455,7 @@ function resolveDocument(
     }
     if (layered.some((other) => other.id === id)) {
       errors.push({
-        pack: VARIANTS_GROUP,
+        pack: group,
         file,
         field: `packs[${String(index)}]`,
         message: `pack "${id}" is listed twice; a pack layers once`,
@@ -439,7 +476,7 @@ function resolveDocument(
   const rules = registry.rules;
   if (rules === undefined) {
     errors.push({
-      pack: VARIANTS_GROUP,
+      pack: group,
       file,
       field: 'packs',
       message:
@@ -452,7 +489,7 @@ function resolveDocument(
   if (stages !== undefined) {
     if (stages.length === 0) {
       errors.push({
-        pack: VARIANTS_GROUP,
+        pack: group,
         file,
         field: 'stages',
         message: 'an empty stage order plays nothing',
@@ -463,14 +500,14 @@ function resolveDocument(
       const field = `stages[${String(index)}]`;
       if (stage === undefined) {
         errors.push({
-          pack: VARIANTS_GROUP,
+          pack: group,
           file,
           field,
           message: `no stage "${id}" is in ${variant.packs.join(' + ')}`,
         });
       } else if (stage.kind === 'challenge') {
         errors.push({
-          pack: VARIANTS_GROUP,
+          pack: group,
           file,
           field,
           message:
@@ -486,7 +523,7 @@ function resolveDocument(
   const presets = declared.length > 0 ? declared : presetsForRules(rules);
   if (presets.length === 0) {
     errors.push({
-      pack: VARIANTS_GROUP,
+      pack: group,
       file,
       field: 'difficulty.presets',
       message: 'no presets are declared and the rules declare no ranks to derive them from',
@@ -500,7 +537,7 @@ function resolveDocument(
     const at = `difficulty.presets[${String(index)}]`;
     if (presetIds.has(preset.id)) {
       errors.push({
-        pack: VARIANTS_GROUP,
+        pack: group,
         file,
         field: `${at}.id`,
         message: `duplicate preset id "${preset.id}"`,
@@ -510,7 +547,7 @@ function resolveDocument(
     presetIds.add(preset.id);
     if (!Object.prototype.hasOwnProperty.call(rules.difficulty.ranks, preset.rank)) {
       errors.push({
-        pack: VARIANTS_GROUP,
+        pack: group,
         file,
         field: `${at}.rank`,
         message:
@@ -524,7 +561,7 @@ function resolveDocument(
   const defaultPreset = defaultPresetOf(presets, rules, variant.difficulty.defaultPreset);
   if (defaultPreset === undefined) {
     errors.push({
-      pack: VARIANTS_GROUP,
+      pack: group,
       file,
       field: 'difficulty.defaultPreset',
       message: `"${variant.difficulty.defaultPreset ?? ''}" names no preset in this variant`,
@@ -541,7 +578,7 @@ function resolveDocument(
   personas.forEach((persona, index) => {
     if (personaIds.has(persona.id)) {
       errors.push({
-        pack: VARIANTS_GROUP,
+        pack: group,
         file,
         field: `autoplay.personas[${String(index)}].id`,
         message: `duplicate persona id "${persona.id}"`,
@@ -555,7 +592,7 @@ function resolveDocument(
   const defaultPersona = defaultPersonaOf(personas, declaredDefaultPersona);
   if (declaredDefaultPersona !== undefined && defaultPersona === undefined) {
     errors.push({
-      pack: VARIANTS_GROUP,
+      pack: group,
       file,
       field: 'autoplay.defaultPersona',
       message:
@@ -571,7 +608,7 @@ function resolveDocument(
   const lives = variant.lives ?? rules.lives.default;
   if (!offered.includes(lives)) {
     errors.push({
-      pack: VARIANTS_GROUP,
+      pack: group,
       file,
       field: 'lives',
       message:
@@ -586,7 +623,7 @@ function resolveDocument(
   const themes = themesOf(registry.manifest);
   if (variant.theme !== undefined && !themes.some((theme) => theme.id === variant.theme)) {
     errors.push({
-      pack: VARIANTS_GROUP,
+      pack: group,
       file,
       field: 'theme',
       message:
@@ -607,9 +644,11 @@ function resolveDocument(
       order: variant.order,
       demonstration: variant.demonstration,
       file,
+      group,
       packs: variant.packs,
       stages,
       derivedFrom: variant.derivedFrom,
+      author: variant.author,
       lives,
       theme: themeIn(registry.manifest, variant.theme),
       defaultTheme: registry.manifest.defaultTheme,
@@ -638,8 +677,9 @@ function resolveDocument(
 export function loadVariants(
   sources: readonly VariantSource[],
   packs: ReadonlyMap<string, LoadedPack>,
+  options: LoadOptions = {},
 ): VariantLoadResult {
-  const { errors, parsed } = parseDocuments(sources);
+  const { errors, parsed } = parseDocuments(sources, options.group ?? VARIANTS_GROUP);
   const resolved: ResolvedVariant[] = [];
   for (const document of parsed) {
     const result = resolveDocument(document, packs);
@@ -671,7 +711,7 @@ export function resolveVariant(
   choice: VariantChoice = {},
   options: ResolveOptions = {},
 ): VariantResolveResult {
-  const { errors, parsed } = parseDocuments([source]);
+  const { errors, parsed } = parseDocuments([source], options.group ?? VARIANTS_GROUP);
   const document = parsed[0];
   if (errors.length > 0 || document === undefined) return { ok: false, errors };
   const taken = options.reserved ?? [];
@@ -680,7 +720,7 @@ export function resolveVariant(
       ok: false,
       errors: [
         {
-          pack: VARIANTS_GROUP,
+          pack: document.group,
           file: document.file,
           field: 'id',
           message: `duplicate variant id "${document.variant.id}"; a shipped game already has it`,
@@ -693,7 +733,7 @@ export function resolveVariant(
       ok: false,
       errors: [
         {
-          pack: VARIANTS_GROUP,
+          pack: document.group,
           file: document.file,
           field: 'packs',
           message: 'an empty pack list layers nothing',
@@ -703,6 +743,7 @@ export function resolveVariant(
   }
   const chosen: ParsedDocument = {
     file: document.file,
+    group: document.group,
     variant: {
       ...document.variant,
       ...(choice.packs === undefined ? {} : { packs: [...choice.packs] }),
@@ -813,9 +854,10 @@ export interface DeriveOptions {
  * whole document that loads on its own, passes exactly the checks any variant
  * passes, and could be dropped into `variants/` as it is. Four fields are the
  * new game's own: the `id` and `name` it is given, `derivedFrom` naming the base,
- * and the pack list and stage order the player chose. Three are not copied,
+ * and the pack list and stage order the player chose. Four are not copied,
  * because each is a claim about the base rather than about the copy: its
- * `description`, its selector `order` and its `demonstration` mark.
+ * `description`, its selector `order`, its `demonstration` mark and its `author`
+ * — a copy of a shelf entry is the player's, not the shelf entry's maker's.
  *
  * `base` is the base's document as JSON holds it, or `undefined` when the base is
  * not in this build — a settings document can outlive the game it was written
@@ -830,6 +872,7 @@ export function deriveVariant(
     description: _description,
     order: _order,
     demonstration: _demonstration,
+    author: _author,
     stages: _stages,
     ...kept
   } = base ?? {};

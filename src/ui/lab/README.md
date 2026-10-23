@@ -72,8 +72,8 @@ page, comes back to the same item.
 
 `lab.html` at the repository root is the entry document, and `capture.html` and
 `record.html` beside it are the other two pages'. Vite is never told to build any
-of them — its only input is `index.html`, and nothing on that graph imports this
-directory — so none of this reaches a production bundle or the game's code
+of them — its only inputs are `index.html` and `shelf.html`, and nothing on either
+graph imports this directory — so none of this reaches a production bundle or the game's code
 path. `vite.config.ts` maps the `/lab` URL onto `lab.html` from a plugin
 declaring `apply: 'serve'`. `tests/unit/lab-dev-only.test.ts` checks all of it.
 

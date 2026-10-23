@@ -4,7 +4,7 @@ import { join, relative, resolve } from 'node:path';
 import type { Rolldown } from 'vite';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { labRoute } from '../../vite.config.js';
+import config, { labRoute, PAGES } from '../../vite.config.js';
 
 /**
  * `/lab` is a **dev-build route** (`docs/DESIGN.md` section 8 step 3, and the
@@ -65,13 +65,31 @@ describe('the lab never reaches the production bundle', () => {
     ['capture.html', '/src/ui/lab/capture.ts'],
     ['record.html', '/src/ui/lab/record.ts'],
   ])('%s is its own entry document, which the build is never given', (document, entry) => {
-    // It exists at the root so the dev server can serve it; Vite's only build
-    // input is `index.html`, so a root HTML file it is not told about is simply
-    // not built.
+    // It exists at the root so the dev server can serve it; Vite's build inputs
+    // are the game and the shelf page alone, so a root HTML file it is not told
+    // about is simply not built.
     const html = readFileSync(join(REPO_ROOT, document), 'utf8');
     expect(html).toMatch(entry);
+    expect(Object.values(PAGES).map((page) => relative(REPO_ROOT, page))).not.toContain(document);
+  });
+
+  it('builds the game and the shelf page, and no other page', () => {
+    const inputs = (config as { build?: { rolldownOptions?: { input?: unknown } } }).build
+      ?.rolldownOptions?.input;
+    expect(inputs).toBe(PAGES);
+    expect(Object.values(PAGES).map((page) => relative(REPO_ROOT, page))).toEqual([
+      'index.html',
+      'shelf.html',
+    ]);
     const viteConfig = readFileSync(join(REPO_ROOT, 'vite.config.ts'), 'utf8');
     expect(viteConfig).not.toMatch(/rollupOptions/);
+  });
+
+  it('is not reachable from the shelf page either', () => {
+    const html = readFileSync(join(REPO_ROOT, 'shelf.html'), 'utf8');
+    // `aria-label` is on it, so the word alone is not the test: the paths are.
+    expect(html).not.toMatch(/ui\/lab\/|lab\.html|capture|record\.html/i);
+    expect(html).toMatch('/src/ui/shelf-page.ts');
   });
 
   it('serves the route from a plugin that only exists while developing', () => {
@@ -98,11 +116,15 @@ describe('the bundle, built', () => {
     files = files.sort();
   });
 
-  it('is index.html and what it reaches, and no other page', () => {
-    expect(chunks.map((chunk) => relative(REPO_ROOT, chunk.facadeModuleId ?? ''))).toEqual([
-      'index.html',
-    ]);
-    expect(files.filter((file) => file.endsWith('.html'))).toEqual(['index.html']);
+  it('is index.html, shelf.html and what they reach, and no other page', () => {
+    expect(
+      chunks
+        .map((chunk) => chunk.facadeModuleId)
+        .filter((id): id is string => id !== null)
+        .map((id) => relative(REPO_ROOT, id))
+        .sort(),
+    ).toEqual(['index.html', 'shelf.html']);
+    expect(files.filter((file) => file.endsWith('.html'))).toEqual(['index.html', 'shelf.html']);
   });
 
   it('holds no module of the lab, the capture page or the record page', () => {

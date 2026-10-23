@@ -82,6 +82,12 @@ export interface MenuGame {
   readonly demonstration: boolean;
   /** True for a game the player made: editable, renamable, deletable. */
   readonly variation: boolean;
+  /**
+   * True for a variation on the shelf (`./shelf.ts`): another player's, published
+   * with the build and read-only like a shipped game, marked so it is never taken
+   * for one. Absent means false.
+   */
+  readonly shelf?: boolean;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -314,13 +320,17 @@ export function createSettingsMenu(options: SettingsMenuOptions): SettingsMenu {
     // Only when there is a choice: a one-variant cabinet must not grow a row
     // whose only value is the game the player is already looking at.
     if (games().length > 1) {
+      // A shelf entry's description is who made it, which is what tells it from
+      // the reference games around it.
       const note = game.variation
         ? setAside === undefined
           ? game.description
           : MENU_TEXT.setAside
-        : game.demonstration
-          ? 'DEMONSTRATION'
-          : undefined;
+        : game.shelf === true
+          ? game.description
+          : game.demonstration
+            ? 'DEMONSTRATION'
+            : undefined;
       rows.push({
         id: 'game',
         label: 'GAME',
@@ -567,9 +577,17 @@ export const MENU_BLINK_STEPS = 20;
 export const MENU_TEXT = Object.freeze({
   selectHeading: 'SELECT GAME',
   selectLegend: '* DEMONSTRATION ONLY',
-  /** The legend when the list holds the player's own games, and when it holds both. */
+  /**
+   * Each mark's word when the list carries more than one kind, joined two spaces
+   * apart: `* DEMONSTRATION  + YOURS`, and with the shelf as well the short form
+   * `* DEMO  = SHELF  + YOURS`, so all three fit the card.
+   */
+  selectDemonstration: '* DEMONSTRATION',
+  selectDemo: '* DEMO',
   selectYours: '+ YOURS',
-  selectBoth: '* DEMONSTRATION  + YOURS',
+  /** What marks a shelf entry's row (`./shelf.ts`) — a shelf, drawn — and its legend. */
+  shelfMark: '=',
+  selectShelf: '= SHELF',
   /** The row under the games that opens the settings, and the line under it. */
   selectSettings: 'SETTINGS',
   selectSettingsNote: 'SOUND, CONTROLS AND MORE',
@@ -676,14 +694,27 @@ export const SETTINGS_CARD_TOP = CARD_TOP - 40;
 export interface SelectMarks {
   readonly demonstrations: boolean;
   readonly variations: boolean;
+  /** Shelf entries (`./shelf.ts`): other players' variations. Absent means none. */
+  readonly shelf?: boolean;
 }
 
-/** The legend for whichever marks the list carries, or `undefined` for none. */
-function legendOf(marks: SelectMarks): string | undefined {
-  if (marks.demonstrations && marks.variations) return MENU_TEXT.selectBoth;
-  if (marks.demonstrations) return MENU_TEXT.selectLegend;
-  if (marks.variations) return MENU_TEXT.selectYours;
-  return undefined;
+/** Characters across the selector card, inside its padding: what a legend must fit. */
+const SELECT_CELLS = 24;
+
+/**
+ * The legend for whichever marks the list carries, or `undefined` for none: each
+ * mark's word, joined, in the order the kinds of game are listed — shipped, shelf,
+ * yours — and the short form of the demonstration's when the long one will not fit.
+ */
+export function legendOf(marks: SelectMarks): string | undefined {
+  const others = [
+    ...(marks.shelf === true ? [MENU_TEXT.selectShelf] : []),
+    ...(marks.variations ? [MENU_TEXT.selectYours] : []),
+  ];
+  if (!marks.demonstrations) return others.length === 0 ? undefined : others.join('  ');
+  if (others.length === 0) return MENU_TEXT.selectLegend;
+  const long = [MENU_TEXT.selectDemonstration, ...others].join('  ');
+  return long.length <= SELECT_CELLS ? long : [MENU_TEXT.selectDemo, ...others].join('  ');
 }
 
 /**
@@ -741,13 +772,15 @@ export function windowOf<T>(
 /** A selector row's text: the name, and the mark that says what kind of game it is. */
 export function selectRowText(game: MenuGame): string {
   if (game.variation) return `${game.name} +`;
+  if (game.shelf === true) return `${game.name} ${MENU_TEXT.shelfMark}`;
   return game.demonstration ? `${game.name} *` : game.name;
 }
 
 /**
  * Every row of the selector, in order: each game's {@link selectRowText}, then
- * `SETTINGS`. A demonstration and a player's own game are each marked on their own
- * row, not only in a legend: neither may read like part of the shipped line-up.
+ * `SETTINGS`. A demonstration, a shelf entry and a player's own game are each
+ * marked on their own row, not only in a legend: none may read like part of the
+ * shipped line-up.
  */
 export function selectRows(menu: VariantMenu): readonly string[] {
   return [...menu.variants.map(selectRowText), MENU_TEXT.selectSettings];
@@ -817,6 +850,7 @@ export function drawVariantSelect(
   const marks: SelectMarks = {
     demonstrations: menu.variants.some((variant) => variant.demonstration),
     variations: menu.variants.some((variant) => variant.variation),
+    shelf: menu.variants.some((variant) => variant.shelf === true),
   };
   // The chosen game's note, the legend if any, and the two control lines.
   const lines = variantSelectLines(marks);
