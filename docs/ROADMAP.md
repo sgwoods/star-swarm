@@ -100,12 +100,13 @@ well, by a pack, a `rules.json` and a variant and no engine change.
 
 The skill, the guide it reads and the first forged pack have landed, so they have
 moved to [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#46-the-forge), which is where a
-thing that exists is described. What the milestone still owes:
+thing that exists is described; so have `/lab`'s previews of aliens, stages and
+sounds ([`docs/ARCHITECTURE.md`](ARCHITECTURE.md#43-lab)). What the milestone
+still owes:
 
-- **Ship: `/lab` for aliens, stages and sounds**, plus the rest of GIF capture
-  for pull requests. `/lab` previews movement paths today and nothing else; the
-  first half of capture has landed, and the half still to come — recording a live
-  run so it can be rendered the same way — is set out in
+- **Ship: the rest of GIF capture for pull requests.** The first half of capture
+  has landed, and the half still to come — recording a live run so it can be
+  rendered the same way — is set out in
   [Capturing gameplay video](#capturing-gameplay-video) below.
 
 One thing the forge **found** rather than built: the rules layer couples a pack to

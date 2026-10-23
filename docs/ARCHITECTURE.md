@@ -677,7 +677,7 @@ flowchart LR
     gate["npm run validate-packs<br/>the CI gate"]
     reg["content/registry.ts<br/>packs layered; a later pack wins"]
     game["The game<br/>main.ts → flow → world"]
-    lab["/lab previewer<br/>one path, scrubbed and mirrored"]
+    lab["/lab previewer<br/>one game's paths, aliens,<br/>stages and sounds"]
 
     author --> docs
     docs -- "CLI and tests" --> fs
@@ -723,13 +723,67 @@ are verified and its Δy bounds are not.
 ### 4.3 `/lab`
 
 `/lab` is where a human checks one piece of content in isolation before it goes
-anywhere near a stage. Today it previews movement paths: every path in the loaded
-packs, one drawn at a time, with a scrubber, a live readout of position, heading
-and speed at the current frame, a mirror toggle, and click-to-place markers for
-the formation slot and the player. Aliens, sprites, sounds and stages join it in
-Milestone 4.
+anywhere near a game. It previews one game at a time — any game the build offers,
+at any of its difficulty presets — in four views:
 
-![The /lab previewer: scrubbing a path frame by frame, then mirroring it](media/arch-lab.gif)
+- **Paths**: every movement path the game holds, one drawn at a time, with a
+  scrubber, a live readout of position, heading and speed at the current frame, a
+  mirror toggle, and click-to-place markers for the formation slot and the player.
+- **Aliens**: the alien's sprite and hit sprites frame by frame; every dive it can
+  be launched on — its own, and the rules' capture dive when its role captures —
+  flown from a real formation slot of its role and mirrored as the attack director
+  mirrors it, with the alien's own sprite flying the one highlighted; its
+  abilities with their parameters; what the rules give its role, from the launch
+  rate on every stage of the rank to the captor's dive and the escort bonus; and
+  the stages that send it, at the stage numbers they play as.
+- **Stages**: the stage document run by the simulation with the controls
+  untouched, drawn by the game's own scene renderer, with every formation slot
+  marked so the formation can be seen filling and the flight path of every enemy
+  still flying in. It steps a frame at a time in either direction, jumps to the
+  next launch or to the frame the formation settles, and lists each wave as the
+  document states it and as the run launched it, the aliens it sends and the
+  events raised up to the frame.
+- **Sounds**: every sound document, played on its own through the game's synth
+  and drawn as the plan the synth builds for it — each voice's pitch with its
+  vibrato, and its level; where the game binds it, cues it or swaps it; and each
+  audio theme the game's packs declare, auditioned event by event or all in turn.
+
+![The alien view: the warden's own dive and its capture dive flown from slot 0](media/lab-aliens.png)
+
+![The stage view: stage 1 at frame 360, waves 1 and 2 still flying in](media/lab-stages.png)
+
+![The sound view: a DUSK jingle playing, the theme's bindings beside it](media/lab-sounds.png)
+
+**Everything shown is read from the game, never kept.** The lab loads the packs
+and the variants through the loaders `src/main.ts` runs, previews the game's
+composed registry, and draws, flies, steps and plays through the renderer, the
+path interpreter, the simulation and the synth the game uses, so it holds no
+content of its own and no rule of its own. Three tests hold it there:
+`tests/sim/lab-stages.test.ts` runs stage 1 of the shipped Classic game the way the
+stage view does, on the `stage-entry` golden's seed, and lands on the golden's
+recorded final state bit for bit; `tests/unit/lab-content.test.ts` holds an
+alien's facts to the registry's documents and the rules' own resolvers, and a
+theme's audition to `themedSounds`; and `tests/e2e/lab.spec.ts` opens every view
+of every game in a browser. Where a preview meets one of the couplings the pack
+manager reports ([§6](#the-pack-manager-and-the-stage-sequence-editor)), it reports
+it in the card's own words.
+
+The keys are the game's scheme: on a list `U/D` moves and the highlighted entry is
+shown, `ENTER` plays it from its start, and `ESC` goes back along the links one
+view opens into another — an alien to its dive path, a stage to an alien, a theme
+to the sound it swaps in — and at the top does nothing. The address bar carries
+the game, the difficulty, the view and the item, so a reload, including the one
+editing a pack document causes, comes back to the same place.
+
+Three things it does not do. **It shows no sprite on its own**: a sprite appears
+in the alien view as an alien's, so the fighter, the explosion and the badges have
+no view. **It runs a stage with nobody playing**: the fighter sits at its start
+column, so a stage that bombs during its entry takes it there, as it would take a
+player who did not move. And **it does not present a field the engine reads
+nothing from** — an alien's `sounds` and a stage's `diveRules` and `modifiers`
+(`docs/content-guide.md`) — as if it did anything.
+
+![The path view, before the other three joined it: scrubbing a path frame by frame, then mirroring it](media/arch-lab.gif)
 
 Two details the clip shows that matter more than they look:
 
