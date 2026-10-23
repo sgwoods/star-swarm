@@ -9,8 +9,8 @@ rather than edit:
     npm run sprite-sheet     # classic-sprite-sheet.png
 
 Most of the clips are screen recordings of the dev build;
-`capture-dual-fighter.gif` is rendered from a replay by a command, described at
-the end.
+`capture-dual-fighter.gif` and `record-last-fighter.gif` are rendered from a
+replay by a command, described at the end.
 
 - `m2-entry-waves.gif` — one unedited run of stage 1 with the controls untouched
   until the formation settles: the five entry waves, the sway, the hand-over to
@@ -213,13 +213,28 @@ the end.
   into stingers mid-dive, and stingers sit in the shells' slots for the rest of the
   stage, while echoes and glasses dive. Thirty seconds at `fps=15` and
   `max_colors=48`, as for `m3-spore-storm.gif`.
-- `capture-dual-fighter.gif` — the first clip `npm run capture` made, and the
-  only one in this directory that a command regenerates whole: the
+- `capture-dual-fighter.gif` — the first clip `npm run capture` made, and one of
+  the two in this directory that a command regenerates whole: the
   `dual-fighter` golden from step 3,800 to step 6,600 — a beam taking the
   fighter, the captive parked, the rescue, and the dual fighter playing on
   through the rest of stage 20. Every sixth step at 10 fps, 467 frames, at the
-  logical 224x288 and a 256-colour palette, made by the command in the section
-  below and checked by it pixel for pixel against the backbuffer.
+  logical 224x288 in a palette of its own 249 colours, made by the command in the
+  section below and checked by it pixel for pixel against the backbuffer. Made
+  again by the same command when the clip pages began handing a run's opening
+  `stage-started` to the starfield, which put stage 20's stars at stage 20's
+  scroll rate from the first frame rather than the slowest one.
+- `record-last-fighter.gif` and `record-last-fighter.replay.json` — a run
+  `npm run record` kept, and the log it kept, which the clip is rendered from with
+  nothing else: stage 1 of the shipped Classic game, played on the record page
+  with real key presses by a script standing in for a person. The entry waves
+  arriving under sweeps with the button held, the formation settling, two
+  fighters lost, and the run held and ended at step 1,521 with a captor's beam
+  open over the last one. Every sixth step at 10 fps, 254 frames, at the logical
+  224x288. The run holds 306 colours in all and never more than 120 at once, so
+  the GIF carries a palette per frame, and the command checked it pixel for pixel
+  against the backbuffer. The log is 2.8 KiB and replays only on the simulation
+  it was recorded on: a change that moves the game moves the run, and the capture
+  command then refuses the log rather than render something else.
 - `arch-lab.gif` — the `/lab` previewer: an entry path playing, then scrubbed
   frame by frame with the readout following, then the same path mirrored, then a
   dive path flown from the slot marker. Recorded when paths were all `/lab`
@@ -276,12 +291,19 @@ A run that exists as a replay — a golden in `tests/sim/golden/`, or a
 It plays the log through the real simulation and the real renderer in a headless
 page, stepping rather than waiting, and hands the numbered backbuffer frames to
 `ffmpeg` with the recipe above as flags: `--scale` is the `scale=…:flags=neighbor`
-step, `--colors` is `max_colors` (256 unless told otherwise), the dither is
-always `none`, and `--fps` chooses which steps become frames instead of
-resampling time. A `.gif` output is decoded again and compared with the frames
-pixel for pixel, and the command fails if anything was resampled or merged; a
-`.mp4` is not, because H.264 subsamples colour. `docs/ARCHITECTURE.md` §4.3 has
-the rest. The clips above were made before the command existed, from live play,
+step, the dither is always `none`, and `--fps` chooses which steps become frames
+instead of resampling time. The palette is the frames' own colours rather than
+`palettegen`'s, so `--colors` (256 unless told otherwise) is how many a palette
+may hold: one palette for the clip when its colours fit, one per frame when they
+do not and each frame's do. A `.gif` output is decoded again and compared with the
+frames pixel for pixel, and the command fails if anything was resampled or
+merged; a `.mp4` is not, because H.264 subsamples colour. `docs/ARCHITECTURE.md`
+§4.3 has the rest.
+
+A run somebody plays becomes such a log with `npm run record`, which serves the
+record page, checks each run that ends replays in Node, writes it under
+`.scratch/record/` and prints the capture line for it; `record-last-fighter.gif`
+was made that way. The clips above were made before the command existed, from live play,
 and stay the record of how each was made.
 
 **Note for anyone running the dev server in two checkouts at once.** Vite's
