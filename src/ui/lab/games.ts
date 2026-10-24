@@ -22,7 +22,11 @@ export type LabGames =
   | { readonly ok: true; readonly games: readonly ResolvedVariant[] }
   | { readonly ok: false; readonly errors: readonly ContentError[] };
 
-/** Every game this build offers, in the order the start-up selector lists them. */
+/**
+ * Every reference game this build ships, in the order the start-up selector lists
+ * them. The shelf's variations are not previewed: an entry selects among content
+ * these games already hold, so every document it plays is previewed here.
+ */
 export function loadLabGames(): LabGames {
   const packs = new Map<string, LoadedPack>();
   const errors: ContentError[] = [];

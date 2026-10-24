@@ -6,8 +6,9 @@
  * Used by `scripts/validate-packs.ts` and by tests. The browser gets its packs
  * through `packSourceFromRecord` over a bundled `import.meta.glob` instead.
  *
- * It reads `variants/` too ({@link readVariantSources}), for the same reason and
- * with the same twin in `./bundle.ts`.
+ * It reads `variants/` too ({@link readVariantSources}), and the shelf of other
+ * players' variations ({@link readShelfSources}), for the same reason and with
+ * the same twins in `./bundle.ts`.
  */
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -16,7 +17,7 @@ import { basename, join } from 'node:path';
 import type { ContentError } from './errors.js';
 import type { PackDocument, PackSource } from './loader.js';
 import { CONTENT_DIRS } from './schema.js';
-import { VARIANTS_GROUP, type VariantSource } from './variants.js';
+import { SHELF_GROUP, VARIANTS_GROUP, type VariantSource } from './variants.js';
 
 /** Files that are bookkeeping rather than content. */
 const IGNORED_FILES = new Set(['.gitkeep', '.DS_Store', 'README.md']);
@@ -132,7 +133,10 @@ export interface ReadVariantsResult {
  * reports and `src/main.ts` refuses to boot on — but it is not a *malformed*
  * tree, and this reader only reads.
  */
-export function readVariantSources(variantsRoot: string): ReadVariantsResult {
+export function readVariantSources(
+  variantsRoot: string,
+  group: string = VARIANTS_GROUP,
+): ReadVariantsResult {
   if (!isDirectory(variantsRoot)) return { sources: [], errors: [] };
 
   const sources: VariantSource[] = [];
@@ -146,7 +150,7 @@ export function readVariantSources(variantsRoot: string): ReadVariantsResult {
       text = readFileSync(path, 'utf8');
     } catch (error) {
       errors.push({
-        pack: VARIANTS_GROUP,
+        pack: group,
         file: name,
         message: `could not be read: ${error instanceof Error ? error.message : String(error)}`,
       });
@@ -156,7 +160,7 @@ export function readVariantSources(variantsRoot: string): ReadVariantsResult {
       sources.push({ file: name, value: JSON.parse(text) });
     } catch (error) {
       errors.push({
-        pack: VARIANTS_GROUP,
+        pack: group,
         file: name,
         message: `invalid JSON: ${error instanceof Error ? error.message : String(error)}`,
       });
@@ -164,4 +168,14 @@ export function readVariantSources(variantsRoot: string): ReadVariantsResult {
   }
 
   return { sources, errors };
+}
+
+/**
+ * Read every `shelf/*.json` — the variations other players made, one variant
+ * document each — exactly as {@link readVariantSources} reads `variants/`, with
+ * a failure filed under `shelf/`. Absent or empty is an empty shelf, not an
+ * error: nothing has been submitted yet.
+ */
+export function readShelfSources(shelfRoot: string): ReadVariantsResult {
+  return readVariantSources(shelfRoot, SHELF_GROUP);
 }

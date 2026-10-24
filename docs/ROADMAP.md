@@ -63,6 +63,11 @@ to it ([`docs/ARCHITECTURE.md`](ARCHITECTURE.md#a-players-variations)). A
 variation now leaves the browser it was made in as the variant document it is, and
 comes back in on another machine refused for exactly what any variant is refused
 for ([`docs/ARCHITECTURE.md`](ARCHITECTURE.md#carrying-a-variation-to-another-machine)).
+And other players' variations have a place: a curated shelf published with the
+game, a guide for submitting one, and a gate that flies every submission before
+anybody reads it ([`docs/ARCHITECTURE.md`](ARCHITECTURE.md#the-shelf-other-players-variations)).
+The captain chose a curated shelf over a shared store open to anyone, so the
+shelf is that place rather than a step towards one.
 
 - **Later: more of a game's own options, once two decisions are the captain's.**
   The card a game's attract screen opens
@@ -81,13 +86,14 @@ for ([`docs/ARCHITECTURE.md`](ARCHITECTURE.md#carrying-a-variation-to-another-ma
   theme can already replace; sampled audio of any kind, which would be a second
   audio pipeline beside the synth; a player customising single sounds, which
   would be a value of their own rather than a choice among declared ones; and
-  sharing a theme between players, which waits on the same shared store as
-  sharing a game.
-- **Later: a place to find other players' games.** Text carried by hand is the
-  whole of sharing until there is somewhere to keep games that is not one browser —
-  a shared store, which needs a server this project does not have. It will be a
-  decision about hosting before it is one about code, and every game it carries
-  will still arrive through the import card's judge.
+  sharing a theme between players, which is a pack's sounds rather than a choice
+  among them and so waits on the shelf taking more than variations.
+- **Later, and only if anyone comes: whole games on the shelf.** The shelf will
+  go on taking variations alone until somebody actually offers a game — a pack of
+  their own — and the captain decides to take one. That will be a question of what
+  a gate can prove about content it has never seen, since a pack can carry rules,
+  art and sound where a variation can only select among them, and it will not be
+  settled by whoever builds it.
 
 _Exit check:_ a player can change the rules from inside the game, a forged pack
 fails validation for being unplayable rather than merely malformed, and a pack

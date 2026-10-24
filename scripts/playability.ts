@@ -80,7 +80,6 @@ import { maxXFor, resolveStageId } from '../src/content/rules.js';
 import type { Rules, Stage } from '../src/content/schema.js';
 import type { StageSource } from '../src/content/stages.js';
 import type { ResolvedVariant } from '../src/content/variants.js';
-import { VARIANTS_GROUP } from '../src/content/variants.js';
 import type { EnemyBullet } from '../src/sim/shots.js';
 import { createFormation, isRightOfCentre, slotPosition } from '../src/sim/formation.js';
 import {
@@ -727,7 +726,7 @@ export function playRun(variant: ResolvedVariant, persona: Persona, seed: string
 function checkOrdered(variant: ResolvedVariant, pilots: Pilots): Finding[] {
   if (pilots.strong === pilots.mid) return [];
   const seeds = seedsFor(variant, 'run');
-  const blame = { pack: VARIANTS_GROUP, file: variant.file };
+  const blame = { pack: variant.group, file: variant.file };
   const mean = (persona: Persona): number | string => {
     let total = 0;
     for (const seed of seeds) {
@@ -815,7 +814,7 @@ export function checkPlayability(variants: readonly ResolvedVariant[]): Playabil
     if (pilots === undefined) {
       findings.push({
         check: 'personas',
-        pack: VARIANTS_GROUP,
+        pack: variant.group,
         file: variant.file,
         message: `${String(flights.length)} stage(s) to fly and no persona to fly them: declare autoplay.personas here, or run the rules document of a variant that does`,
       });

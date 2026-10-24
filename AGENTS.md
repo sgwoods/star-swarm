@@ -455,9 +455,10 @@ this card** (`X` opens the exit from the pause and cancels on the card that
 follows, and a line reading only "goes back" left that loop unreadable).
 
 `/lab` (`src/ui/lab/`, entry document `lab.html`) is a **dev-only** route, kept
-that way three ways at once: Vite's only build input is `index.html`, nothing on
-that graph imports the lab, and the URL is wired up by a plugin declaring
-`apply: 'serve'`. `tests/unit/lab-dev-only.test.ts` checks all three.
+that way three ways at once: Vite's only build inputs are `index.html` and
+`shelf.html`, nothing on either graph imports the lab, and the URL is wired up by
+a plugin declaring `apply: 'serve'`. `tests/unit/lab-dev-only.test.ts` checks all
+three.
 
 ## Rendering: rasterise once, and no colours in the renderer
 
@@ -582,8 +583,8 @@ Three consequences when working here:
   reach it and a `check:count` counter reading the module is what holds the state
   document to it instead.
 - The game boots into the **start-up selector** when more than one game is on
-  offer — the shipped variants and the player's variations — and into **attract
-  mode** otherwise, never into play: `src/ui/flow.ts` is the one state machine —
+  offer — the shipped variants, the shelf's and the player's variations — and
+  into **attract mode** otherwise, never into play: `src/ui/flow.ts` is the one state machine —
   variant-select, attract, settings, the pack and stage cards and the naming,
   delete, export and import cards it opens, a game's own options card, playing,
   paused, the exit confirmation, the between-stage challenge card, game over,

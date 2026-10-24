@@ -46,6 +46,16 @@ const VARIANT_FILES = import.meta.glob<unknown>('/variants/*.json', {
   import: 'default',
 });
 
+/**
+ * Every shelf entry — a variation another player made, kept in `shelf/` as a
+ * variant document — keyed by its path from the project root. A glob for the
+ * same reason as the variants: a submission is one file and nothing else.
+ */
+const SHELF_FILES = import.meta.glob<unknown>('/shelf/*.json', {
+  eager: true,
+  import: 'default',
+});
+
 const MANIFEST_FILE = 'pack.json';
 const RULES_FILE = 'rules.json';
 
@@ -114,8 +124,22 @@ export function bundledPackSource(name: string): PackSource | undefined {
  * and `tests/unit/bundled-packs.test.ts` holds the two to each other.
  */
 export function bundledVariantSources(): VariantSource[] {
+  return documentsOf(VARIANT_FILES);
+}
+
+/**
+ * Every bundled shelf entry, in file order. Nothing is validated yet — that is
+ * `loadShelf` in `src/ui/shelf.ts`. The filesystem twin is `readShelfSources` in
+ * `./fs.ts`, held to this one by the same test as the variants.
+ */
+export function bundledShelfSources(): VariantSource[] {
+  return documentsOf(SHELF_FILES);
+}
+
+/** One directory's documents out of a glob, named by file and in file order. */
+function documentsOf(files: Readonly<Record<string, unknown>>): VariantSource[] {
   const sources: VariantSource[] = [];
-  for (const [fullPath, value] of Object.entries(VARIANT_FILES)) {
+  for (const [fullPath, value] of Object.entries(files)) {
     const file = fullPath.split('/').pop();
     if (file === undefined || !file.endsWith('.json')) continue;
     sources.push({ file, value });

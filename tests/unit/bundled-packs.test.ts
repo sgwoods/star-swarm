@@ -2,8 +2,17 @@ import { basename, resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { bundledPackSources, bundledVariantSources } from '../../src/content/bundle.js';
-import { listPackDirs, readPackSource, readVariantSources } from '../../src/content/fs.js';
+import {
+  bundledPackSources,
+  bundledShelfSources,
+  bundledVariantSources,
+} from '../../src/content/bundle.js';
+import {
+  listPackDirs,
+  readPackSource,
+  readShelfSources,
+  readVariantSources,
+} from '../../src/content/fs.js';
 import { loadPack } from '../../src/content/loader.js';
 import type { LoadedPack, PackSource } from '../../src/content/loader.js';
 import { loadVariants } from '../../src/content/variants.js';
@@ -35,6 +44,7 @@ import { loadVariants } from '../../src/content/variants.js';
 
 const PACKS_ROOT = resolve(import.meta.dirname, '..', '..', 'packs');
 const VARIANTS_ROOT = resolve(import.meta.dirname, '..', '..', 'variants');
+const SHELF_ROOT = resolve(import.meta.dirname, '..', '..', 'shelf');
 
 /** Pack-relative paths of every content document, in a stable order. */
 function documentFiles(source: PackSource): string[] {
@@ -148,5 +158,31 @@ describe('the bundled variants and the variants on disk', () => {
       );
     }
     expect(result.variants.length).toBe(bundledVariants.length);
+  });
+});
+
+/**
+ * The shelf is read the same two ways — `readShelfSources` for the gate,
+ * `bundledShelfSources` for the game and the shelf page — and a shelf entry the
+ * gate flew but the bundle left out would be a submission accepted and never
+ * published. Whether the entries *load* is the gate's question
+ * (`npm run validate-packs`), and deliberately not asked here: the shelf's
+ * contents are the curator's, and change with every accepted submission.
+ */
+describe('the bundled shelf and the shelf on disk', () => {
+  const onDiskShelf = readShelfSources(SHELF_ROOT);
+  const bundledShelf = bundledShelfSources();
+
+  it('are the same set of documents', () => {
+    expect(bundledShelf.map((source) => source.file).sort()).toEqual(
+      onDiskShelf.sources.map((source) => source.file).sort(),
+    );
+  });
+
+  it('are the same documents, not just the same names', () => {
+    const byFile = new Map(bundledShelf.map((source) => [source.file, source.value]));
+    for (const source of onDiskShelf.sources) {
+      expect(byFile.get(source.file)).toEqual(source.value);
+    }
   });
 });

@@ -37,13 +37,17 @@ interface RunResult {
   readonly output: string;
 }
 
-function validate(packsRoot: string): RunResult {
+function validate(packsRoot: string, ...roots: readonly string[]): RunResult {
   try {
-    const output = execFileSync(process.execPath, ['--import', 'tsx', SCRIPT, packsRoot], {
-      cwd: REPO_ROOT,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const output = execFileSync(
+      process.execPath,
+      ['--import', 'tsx', SCRIPT, packsRoot, ...roots],
+      {
+        cwd: REPO_ROOT,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    );
     return { code: 0, output };
   } catch (error) {
     const err = error as { status?: number; stdout?: string; stderr?: string };
@@ -67,7 +71,15 @@ function linesUnder(output: string, file: string): string[] {
 describe('the shipped packs', () => {
   let result: RunResult;
   beforeAll(() => {
-    result = validate(join(REPO_ROOT, 'packs'));
+    // The packs and the games that ship, and an empty shelf: what is on the shelf
+    // is the curator's and changes with every accepted submission, and CI's own
+    // validation step is what flies it (`tests/sim/shelf-gate.test.ts` holds the
+    // shelf pass to its work on a tree made for the purpose).
+    result = validate(
+      join(REPO_ROOT, 'packs'),
+      join(REPO_ROOT, 'variants'),
+      join(REPO_ROOT, 'tests', 'fixtures', 'no-such-shelf'),
+    );
   }, TIMEOUT);
 
   it('pass, every stage of every variant flown', () => {

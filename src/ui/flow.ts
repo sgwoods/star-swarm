@@ -154,6 +154,7 @@ import {
   listsOf,
   livesOf,
   rankFor,
+  SHELF_GROUP,
   themeOf,
   type VariantDocument,
   withLives,
@@ -203,6 +204,7 @@ import {
 import { createOptionsCard, type OptionsCard, type OptionsDraft } from './options.js';
 import { createExitConfirm, type ExitConfirm } from './pause.js';
 import { countEvents, EMPTY_STATS, type ResultRow, resultRows, type RunStats } from './results.js';
+import { byLine } from './shelf.js';
 import {
   DEFAULT_SETTINGS,
   freshVariationId,
@@ -259,6 +261,14 @@ export interface FlowVariant {
   readonly name: string;
   readonly description?: string | undefined;
   readonly demonstration: boolean;
+  /**
+   * The directory its document came from: `shelf` for a variation another player
+   * made, which the list marks and credits (`./shelf.ts`); anything else, or
+   * nothing, for a game this build ships.
+   */
+  readonly group?: string;
+  /** Who made it, when its document says: what the list says under a shelf entry. */
+  readonly author?: string | undefined;
   /** The pack ids it layers, in order: the player's list when one is in force. */
   readonly packs: readonly string[];
   /** The combat stages' order when a player stated one, else `undefined`. */
@@ -591,17 +601,26 @@ export function createGameFlow(options: FlowOptions): GameFlow {
 
   const composer = options.composer;
 
-  /** Each shipped game's entry, built once: the list's first part never changes. */
-  const shippedEntries: readonly GameEntry[] = variants.map((shipped) => ({
-    id: shipped.id,
-    name: shipped.name,
-    description: shipped.description,
-    demonstration: shipped.demonstration,
-    variation: false,
-    shipped,
-    document: undefined,
-    derivedFrom: undefined,
-  }));
+  /**
+   * Each shipped game's entry, built once: the list's first part never changes.
+   * A shelf entry is one of them — bundled, never written, judged by the gate —
+   * and differs only in being marked and credited: under it the list says who
+   * made it, where a reference game says what it is.
+   */
+  const shippedEntries: readonly GameEntry[] = variants.map((shipped) => {
+    const shelf = shipped.group === SHELF_GROUP;
+    return {
+      id: shipped.id,
+      name: shipped.name,
+      description: shelf ? byLine(shipped.author ?? '') : shipped.description,
+      demonstration: shipped.demonstration,
+      variation: false,
+      shelf,
+      shipped,
+      document: undefined,
+      derivedFrom: undefined,
+    };
+  });
 
   /**
    * A variation's entry, built once per stored document and never by judging it.

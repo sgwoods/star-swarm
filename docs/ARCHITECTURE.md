@@ -53,6 +53,13 @@ the second lineage that layers over nothing
 ([§4.4](#44-where-a-second-game-plugs-in)).
 <!-- check:count variants.count 6 variants.demonstrations 1 -->
 
+**And variations other players made sit on a shelf beside them.** A shelf entry
+is a variant document like any of those, kept in [`shelf/`](../shelf/) rather than
+`variants/`, credited to whoever made it, listed on the game list after the games
+the build ships and on a page of its own, and judged by the same gate before it is
+published — curated through pull requests, with [`CONTRIBUTING.md`](../CONTRIBUTING.md)
+as the way in ([§6](#the-shelf-other-players-variations)).
+
 That split is the whole architecture, and it is enforced rather than trusted —
 see [§3](#3-the-layers).
 
@@ -113,19 +120,19 @@ end on Node 25.9.0, where the whole check suite below passes.
 
 ### The commands
 
-| Command                  | What it does                                                                |
-| ------------------------ | --------------------------------------------------------------------------- |
-| `npm run dev`            | Vite dev server, with the `/lab` route (see [§4.3](#43-lab))                |
-| `npm run build`          | Typecheck, then build to `dist/`                                            |
-| `npm run preview`        | Serve the built bundle                                                      |
-| `npm run lint`           | ESLint and Prettier                                                         |
-| `npm run typecheck`      | `tsc --noEmit`                                                              |
-| `npm test`               | Vitest: the `unit` and `sim` suites, both headless                          |
-| `npm run test:e2e`       | Playwright against the dev server                                           |
-| `npm run validate-packs` | Schema-, reference- and playability-check `packs/` and `variants/`          |
-| `npm run sprite-sheet`   | Render a pack's art to `docs/media/classic-sprite-sheet.png`                |
-| `npm run capture`        | Render a replay to a GIF or MP4 through the real game (see [§4.3](#43-lab)) |
-| `npm run record`         | Record a live run's inputs to a replay log (see [§4.3](#43-lab))            |
+| Command                  | What it does                                                                 |
+| ------------------------ | ---------------------------------------------------------------------------- |
+| `npm run dev`            | Vite dev server, with the `/lab` route (see [§4.3](#43-lab))                 |
+| `npm run build`          | Typecheck, then build to `dist/`                                             |
+| `npm run preview`        | Serve the built bundle                                                       |
+| `npm run lint`           | ESLint and Prettier                                                          |
+| `npm run typecheck`      | `tsc --noEmit`                                                               |
+| `npm test`               | Vitest: the `unit` and `sim` suites, both headless                           |
+| `npm run test:e2e`       | Playwright against the dev server                                            |
+| `npm run validate-packs` | Schema-, reference- and playability-check `packs/`, `variants/` and `shelf/` |
+| `npm run sprite-sheet`   | Render a pack's art to `docs/media/classic-sprite-sheet.png`                 |
+| `npm run capture`        | Render a replay to a GIF or MP4 through the real game (see [§4.3](#43-lab))  |
+| `npm run record`         | Record a live run's inputs to a replay log (see [§4.3](#43-lab))             |
 
 CI runs lint, typecheck, both test suites, pack validation, the build and the
 Playwright smoke test on every push and pull request.
@@ -293,7 +300,7 @@ stage-sequence editor and the naming, delete, export and import cards it opens, 
 game's own options card, playing, paused,
 the exit confirmation, the between-stage challenge card, game over, results and
 high-score entry. The cabinet boots into the selector when there is more than one game to
-choose — the shipped games and the player's variations — and into attract when there is not; **Esc** from attract climbs back to the selector, whose last row opens the settings, or opens the settings directly when there is no selector, and **up** or **down** from attract opens that game's own options ([§6](#a-games-own-options)). Behind the cards the demo is the _real_
+choose — the shipped games, the shelf's and the player's variations — and into attract when there is not; **Esc** from attract climbs back to the selector, whose last row opens the settings, or opens the settings directly when there is no selector, and **up** or **down** from attract opens that game's own options ([§6](#a-games-own-options)). Behind the cards the demo is the _real_
 simulation, flown in turn by the game's own autoplay personas (§7) — or, for a game
 that declares none, replaying a hand-written input log; start begins a game; three fighters
 lost ends it into the game-over banner, the hit-ratio results card, and then
@@ -798,9 +805,10 @@ Two details the clip shows that matter more than they look:
   already sits, so every segment is relative to the flyer's pose. `/lab` starts
   such a path at its slot marker, which is why a dive previews there at all.
 
-`/lab` is dev-only, three ways at once: Vite's only build input is `index.html`,
-nothing on that graph imports the lab, and the URL is wired up by a plugin
-declaring `apply: 'serve'`. `tests/unit/lab-dev-only.test.ts` checks all three.
+`/lab` is dev-only, three ways at once: Vite's build inputs are `index.html` and
+`shelf.html` and nothing else, nothing on either graph imports the lab, and the URL
+is wired up by a plugin declaring `apply: 'serve'`.
+`tests/unit/lab-dev-only.test.ts` checks all three.
 
 #### Rendering a replay to a clip
 
@@ -1325,18 +1333,21 @@ ids as well; with both implemented it pins the reserved list empty and asserts
 the opposite for each. Each of the first group validates, passes the gate, and
 does nothing —
 so a pack that improvised around a missing capability would be indistinguishable
-from one that worked until somebody played it. The same file holds every pack and
-every variant to `docs/DESIGN.md` section 2: a scan for the original's name and for
-the arcade's own enemy-type words as ids, which is what makes "original by rule"
-something a prompt cannot argue with.
+from one that worked until somebody played it. The same file holds every pack,
+every variant and every shelf entry to `docs/DESIGN.md` section 2: a scan for the
+original's name and for the arcade's own enemy-type words as ids, which is what
+makes "original by rule" something neither a prompt nor a submission can argue
+with.
 
 ### 4.7 The playability pass
 
 `docs/DESIGN.md` section 8 step 2 asks the validator for four checks the schema
 cannot make: paths stay on screen, the stage is clearable, no unavoidable bullet
-walls, and it finishes inside a time limit. They are the fifth pass of
+walls, and it finishes inside a time limit. They are the last pass of
 `npm run validate-packs`, in `scripts/playability.ts`, and they generalise what
-`tests/sim/forged-pack.test.ts` proved over one pack by hand.
+`tests/sim/forged-pack.test.ts` proved over one pack by hand. They fly every entry
+on the shelf as well as every shipped game — the pass the shelf's gate rests on
+([§6](#the-shelf-other-players-variations)).
 
 **The unit is a stage document as a variant plays it.** A stage runs under a
 variant's rules, layered content and rank, so every document a variant's sequence
@@ -1408,10 +1419,11 @@ more on the same pattern — 75 flights across five variants — and timed in on
 process on a busier machine took 6.0 s and 8.5 s over two rounds, against Spore
 Storm's 6.9 s and 7.0 s and Deep Sea's 6.3 s and 6.7 s. Convoy added one flight
 rather than eleven — one stage document and no challenge scripts — for 76 across
-six variants. The shipped tree is
+six variants. The shipped packs and games are
 flown twice per CI run — by its own step and by the test that wraps it, under a
 180-second timeout — so a game of this size costs CI about twelve to fifteen
-seconds.
+seconds. The shelf is flown once, by the step: the test hands the script an empty
+shelf, because what is on it changes with every accepted submission.
 `tests/unit/playability.test.ts` pins its thresholds from both edges, and
 `tests/sim/validate-packs-playability.test.ts` runs the script over the shipped
 tree, which passes, and over `tests/fixtures/unplayable/` layered on Classic,
@@ -1475,10 +1487,15 @@ describing as deliberately absent something that shipped two merges ago.
   — whether a persona can finish what loads and builds — is left to the gate,
   because it costs seconds per list where the card needs milliseconds
   ([§6](#the-pack-manager-and-the-stage-sequence-editor)).
-- **A variation travels between machines by hand.** It is exported and imported
-  as text ([§6](#carrying-a-variation-to-another-machine)), and the player moves
-  that text however they move text. There is no shared store, no link that carries
-  a game, and no list of other players' games: the page has no server to keep one.
+- **Other players' games reach this build only through a pull request.** A
+  variation travels between two players' machines as text, by hand
+  ([§6](#carrying-a-variation-to-another-machine)), and onto the shelf as a file
+  somebody submits and the captain merges
+  ([§6](#the-shelf-other-players-variations)). There is no upload, no account, no
+  shared store and no link that carries a game that is not already in the build:
+  the page has no server to keep one, and a shelf entry is curated rather than
+  posted. Only variations are taken; a whole game — a pack of its own — is not
+  accepted from outside the project.
 - **An overlay pack cannot reference the base pack's documents**
   ([§4.5](#45-variants-the-games-this-build-offers)). It can replace a
   self-contained document and nothing more, because the loader's reference pass
@@ -1536,7 +1553,10 @@ this document follows:
   any of them: it _composes_ packs, so it cannot live inside one, and
   `npm run validate-packs` treats every directory under `packs/` as a pack. It is
   a sibling of `packs/` for that reason
-  ([§4.5](#45-variants-the-games-this-build-offers)).
+  ([§4.5](#45-variants-the-games-this-build-offers)). `shelf/` is an eighth beside
+  it, for variant documents other players made: a directory of their own is what
+  lets a submission be one file in one place, held to rules a reference game is not
+  ([§6](#the-shelf-other-players-variations)).
 
 None of the three is a change of plan; the plan remains the source of truth for
 scope and milestones.
@@ -1599,7 +1619,7 @@ has to read as "use the default".
 ### One high-score table per game
 
 A score is comparable only with scores from the same game, so each game on the list
-— a shipped one or a player's variation — keeps its own table, keyed by its id.
+— a shipped one, a shelf entry or a player's variation — keeps its own table, keyed by its id.
 `HighScoreBook` in `src/ui/highscores.ts` holds them all in one stored document
 under the same key the single table used, and hands each game an ordinary
 `HighScoreBoard`, so ordering, insertion and the tie rule are one implementation.
@@ -1782,7 +1802,7 @@ asserts by identity and `tests/e2e/variations.spec.ts` reads off the canvas.
 `src/content/variants.ts` copies the shipped game's document — presets and
 personas included — and gives the copy its own `id`, `name` and `derivedFrom`, the
 pack list and stage order the player chose, and nothing else: the shipped game's
-`description`, selector `order` and `demonstration` mark are claims about it and are
+`description`, selector `order`, `demonstration` mark and `author` are claims about it and are
 not copied. A delta stored against its base would be smaller and would follow the
 base's later changes, but it would be a second kind of game with its own rules for
 loading it, and it could not be handed to anyone. As a whole document, a
@@ -1822,8 +1842,8 @@ on a name — `STAR SWARM 2` for a new game — with the cursor on `END`, so **E
 keeps it, and cancelling a new game's name goes back to the card it was made on
 with the draft intact. An empty name is refused, and so is another game's:
 two `STAR SWARM` rows would leave the reference indistinguishable from a copy. The
-selector lists variations after the shipped games, each marked `+` and explained
-by a `+ YOURS` legend, in a window of eight rows that scrolls. Deleting chooses
+selector lists variations after the shipped games and the shelf, each marked `+`
+and explained by a `+ YOURS` legend, in a window of eight rows that scrolls. Deleting chooses
 the game the variation was made from.
 
 **A settings document from the build before is migrated once.** Version 1 of the
@@ -1879,7 +1899,8 @@ object — and hands it to the composer: the loader's two passes with the
 duplicate-id rule held against the shipped games, then the structural half of the
 playability pass. A document naming a pack this build does not install is refused
 there with `PACK <id>` and `IS NOT INSTALLED HERE`; one carrying a shipped game's
-id with `A SHIPPED GAME HAS ITS ID`; one with a field no variant document has as
+id with `A SHIPPED GAME HAS ITS ID` — and so is a file from `shelf/`, whose game is
+already on the list under that id; one with a field no variant document has as
 the schema refuses it. The verdict is on the card before **Enter**, and **Enter**
 on a refused one does nothing. Unlike a stored variation, which is kept and set
 aside when it stops loading, an import that does not load is never written.
@@ -1897,6 +1918,103 @@ state machine and holds every refusal above, and `tests/e2e/exchange.spec.ts` do
 it in a browser through the real box: make a variation, export it and read it back
 off the real clipboard, clear `localStorage`, paste it with `CTRL+V`, keep it, and
 play it; and be refused one naming a pack this build does not install.
+
+### The shelf: other players' variations
+
+**A shelf entry is a variant document, other players', published with the build.**
+It is the text an `EXPORT` card writes, saved as `shelf/<id>.json` with its `id`
+made the file's name and an `author` added — nothing else is written by hand, and
+there is no other store, upload or account. `src/ui/shelf.ts` loads the directory
+with the loader every variant goes through (`resolveVariant`, under the group
+`shelf`, so a failure names `shelf/<id>.json`), then holds each entry to the rules a
+reference game is not asked, because nobody outside the project writes one of those:
+
+| Rule                                                                                         | Why                                                                                           |
+| -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| its `id` is no reference game's, and not `<id>-<number>`                                     | its high-score table is keyed by it, and that is the shape the game gives a player's own game |
+| it names its `author`, in up to 21 characters the pixel font draws                           | the game list credits it, `BY` and the name, on a line twenty-four cells across               |
+| its `name` is one the naming card could spell, and no other game's                           | the rule the naming card already holds a player to                                            |
+| its `derivedFrom` names a game this build offers — a reference, or another entry still on it | what it changes is measured against that game                                                 |
+| it changes something from that game                                                          | a copy of a reference is not a variation of it                                                |
+
+**What an entry changes is derived, never written.** `shelfChanges` compares the
+entry with the game it names — packs, stage order, starting ships, audio theme,
+difficulty presets and autoplay personas, each as it plays rather than as it is
+written, so stating the rules' own count changes nothing — and the shelf page and
+the gate's report say what it found, in a sentence each. An entry cannot describe
+itself as something it is not.
+
+![The shelf page beside the game: an entry, who made it, what it changes, and PLAY](media/shelf-page.png)
+
+**The shelf is a page, and a group on the game list.** `shelf.html` is the build's
+second page (`vite.config.ts` names exactly two), filled by `src/ui/shelf-page.ts`
+from the same readers and loaders `src/main.ts` runs, every string set as text
+rather than markup because it is somebody else's. Each entry's **Play** is a link
+to the game with that entry chosen, `./?game=<id>`: `src/main.ts` writes the choice
+into the settings before the flow boots, as choosing it on the list would, and then
+takes it out of the address, so a refresh after choosing another game does not
+choose this one again. A link naming no game on offer chooses nothing. On the game
+list an entry is listed after every reference game and before the player's own,
+marked `=` and explained by a `= SHELF` legend — `* DEMO  = SHELF  + YOURS` when
+all three kinds are on it — with `BY` and its maker under it when the cursor is on
+it.
+
+![The game list opened from a shelf entry's Play: DUSK PATROL marked =, its maker under the list](media/shelf-game-list.png)
+
+**An entry plays as its document says, and nothing it says reaches a reference
+game.** It is one of the games the flow is handed, read-only like a reference: an
+edit to one on a card makes a new variation of the player's own, derived from the
+entry and without its `author`, and the entry is left as published. It has a
+high-score table of its own. An import of its text is refused, its id being taken.
+`tests/unit/shelf.test.ts` holds the rules, the changes and all of this through the
+state machine, and `tests/e2e/shelf.spec.ts` follows a page's **Play** into the game
+and plays the entry.
+
+**One entry never takes anything else down.** The reference games are loaded as
+they always were — errors or games, never both, because a malformed shipped game is
+a build that must not boot. The shelf is loaded after them, entry by entry, and an
+entry that does not load in the browser is left off the list and said in the
+console; `window.starSwarm.shelfRefused` is what a test reads to see it is empty.
+
+**The gate is the one every game passes.** `npm run validate-packs` judges the
+shelf as its fifth pass, after the variants it is judged against, and flies every
+entry in its sixth — the playability pass ([§4.7](#47-the-playability-pass)), in
+the same call as the reference games so that an entry declaring no personas borrows
+them. CI runs it before the test suites, because the unit suite imports the bundled
+content and a shelf file that is not even JSON would otherwise fail there first,
+under a name a submitter is not sent to. So a submission that does not load, names
+something this build does not have, or does not play is refused on its own pull
+request, with the file, the field and the reason. `tests/sim/shelf-gate.test.ts`
+runs the real script over a tree made for it: a variation of Convoy that plays
+passes and is flown, one whose strongest persona was swapped for a beginner loads,
+builds and fails `ordered`, and one naming a pack nobody installed is refused
+before anything flies.
+
+**A submission from outside the project is one variation and nothing else.**
+`scripts/shelf-submission.ts` is a step of the same CI job, on pull requests: one
+whose author GitHub calls anything but `OWNER`, `MEMBER` or `COLLABORATOR`, and
+which touches `shelf/`, may add or change entries there and nothing more — not a
+pack, not the code, not the directory's README, and it may not take an entry off.
+So a whole game offered with a shelf entry is refused before anybody reads it.
+[`CONTRIBUTING.md`](../CONTRIBUTING.md) is the way in, written for someone who has
+never seen the project, and [`shelf/README.md`](../shelf/README.md) is the rules an
+entry is held to.
+
+Three limits, measured or stated rather than hoped about:
+
+- **The gate guards against mistakes, not malice.** A pull request's checks run the
+  workflow it carries, so one that rewrites `.github/workflows/ci.yml` can leave the
+  scope step out — and shows that file in its diff.
+- **A first-time contributor's checks wait for a click.** The repository asks for
+  approval before running workflows for first-time contributors, so the first
+  submission from anyone runs its gate only once a maintainer presses GitHub's
+  **Approve and run**. That is a setting of the repository, not of this tree.
+- **Every entry is flown in full.** An entry made from Classic plays Classic's
+  twenty-one stage documents, and the gate flies all of them again however little
+  the entry changes: the one entry the shelf shipped with took the gate from 76
+  flights to 97, and one run of it on a busy laptop from 97 seconds to 119. Nothing
+  the gate measures is shared between a reference and its variations, so a long
+  shelf is a slower gate, entry by entry.
 
 ### A game's own options
 
@@ -2213,14 +2331,14 @@ two pilots on one seed and requires every frame to agree.
 
 ## Where to read next
 
-| You want                             | Read                                                                  |
-| ------------------------------------ | --------------------------------------------------------------------- |
-| Why the project exists, and the spec | [`docs/DESIGN.md`](DESIGN.md) — intent, never state                   |
-| What is next, and in what order      | [`docs/ROADMAP.md`](ROADMAP.md)                                       |
-| Directions nobody has committed to   | [`docs/IDEAS.md`](IDEAS.md)                                           |
-| Why an arcade number is what it is   | [`docs/reference/arcade-reference.md`](reference/arcade-reference.md) |
-| What a pack may contain              | `src/content/schema.ts` — the schemas are the documentation           |
-| A directory's own rules              | The `README.md` in each of `src/*/`, `packs/` and `packs/classic/`    |
-| How the clips were captured          | [`docs/media/README.md`](media/README.md)                             |
-| The sharp edges, and the doc rules   | [`AGENTS.md`](../AGENTS.md)                                           |
-| What a persona may say               | `src/content/personas.ts` — the schema is the documentation           |
+| You want                             | Read                                                                         |
+| ------------------------------------ | ---------------------------------------------------------------------------- |
+| Why the project exists, and the spec | [`docs/DESIGN.md`](DESIGN.md) — intent, never state                          |
+| What is next, and in what order      | [`docs/ROADMAP.md`](ROADMAP.md)                                              |
+| Directions nobody has committed to   | [`docs/IDEAS.md`](IDEAS.md)                                                  |
+| Why an arcade number is what it is   | [`docs/reference/arcade-reference.md`](reference/arcade-reference.md)        |
+| What a pack may contain              | `src/content/schema.ts` — the schemas are the documentation                  |
+| A directory's own rules              | The `README.md` in each of `src/*/`, `packs/`, `packs/classic/` and `shelf/` |
+| How the clips were captured          | [`docs/media/README.md`](media/README.md)                                    |
+| The sharp edges, and the doc rules   | [`AGENTS.md`](../AGENTS.md)                                                  |
+| What a persona may say               | `src/content/personas.ts` — the schema is the documentation                  |

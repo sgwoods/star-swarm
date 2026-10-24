@@ -4,17 +4,19 @@ import type { Persona } from '../../src/content/personas.js';
 
 import type { DifficultyPreset } from '../../src/content/variants.js';
 import { LOGICAL_HEIGHT } from '../../src/render/canvas.js';
-import { GLYPH_CHARS } from '../../src/render/text.js';
+import { GLYPH_CHARS, hasGlyph } from '../../src/render/text.js';
 import {
   cardHeight,
   createSettingsMenu,
   createVariantMenu,
   fitText,
+  legendOf,
   MENU_TEXT,
   type MenuGame,
   type MenuVariant,
   SELECT_CARD_TOP,
   SELECT_WINDOW,
+  type SelectMarks,
   selectRows,
   selectRowText,
   SETTINGS_CARD_TOP,
@@ -754,12 +756,12 @@ describe('the settings card says how to work it, whatever the browser allows', (
 });
 
 describe('the selector says how to work it too', () => {
-  const ALL_MARKS = [
-    { demonstrations: false, variations: false },
-    { demonstrations: true, variations: false },
-    { demonstrations: false, variations: true },
-    { demonstrations: true, variations: true },
-  ];
+  const ALL_MARKS: readonly SelectMarks[] = [false, true].flatMap((shelf) => [
+    { demonstrations: false, variations: false, shelf },
+    { demonstrations: true, variations: false, shelf },
+    { demonstrations: false, variations: true, shelf },
+    { demonstrations: true, variations: true, shelf },
+  ]);
   const help = (marks: (typeof ALL_MARKS)[number]): string[] =>
     variantSelectNotes('A GAME', marks)
       .filter((line) => line.tone === 'help')
@@ -792,7 +794,27 @@ describe('the selector says how to work it too', () => {
       variantSelectNotes('', marks).find((line) => line.tone === 'legend')?.text;
     expect(legend({ demonstrations: true, variations: false })).toBe(MENU_TEXT.selectLegend);
     expect(legend({ demonstrations: false, variations: true })).toBe(MENU_TEXT.selectYours);
-    expect(legend({ demonstrations: true, variations: true })).toBe(MENU_TEXT.selectBoth);
+    expect(legend({ demonstrations: true, variations: true })).toBe('* DEMONSTRATION  + YOURS');
+    // The shelf is listed between the shipped games and the player's, and its
+    // mark is explained in the same place; all three fit by shortening one word.
+    expect(legend({ demonstrations: false, variations: false, shelf: true })).toBe('= SHELF');
+    expect(legend({ demonstrations: true, variations: false, shelf: true })).toBe(
+      '* DEMONSTRATION  = SHELF',
+    );
+    expect(legend({ demonstrations: false, variations: true, shelf: true })).toBe(
+      '= SHELF  + YOURS',
+    );
+    expect(legend({ demonstrations: true, variations: true, shelf: true })).toBe(
+      '* DEMO  = SHELF  + YOURS',
+    );
+  });
+
+  it('fits every legend on the card, in characters the font has', () => {
+    for (const marks of ALL_MARKS) {
+      const text = legendOf(marks) ?? '';
+      expect(text.length).toBeLessThanOrEqual(24);
+      expect([...text].every(hasGlyph)).toBe(true);
+    }
   });
 
   it('counts the lines from the lines, so the plate cannot be too short', () => {
@@ -811,6 +833,12 @@ describe('the selector lists the player’s games beside the shipped ones', () =
 
   it('marks a variation on its own row, as a demonstration is', () => {
     expect(games.map(selectRowText)).toEqual(['CLASSIC', 'REMIX *', 'REEFS +']);
+  });
+
+  it('marks a shelf entry on its own row too, so no one takes it for a shipped game', () => {
+    expect(selectRowText(variantOf('dusk-patrol', { name: 'DUSK PATROL', shelf: true }))).toBe(
+      'DUSK PATROL =',
+    );
   });
 
   it('asks for a note only for the game under the cursor', () => {

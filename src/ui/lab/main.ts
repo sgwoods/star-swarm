@@ -15,8 +15,9 @@
  * holds no content of its own and no rule of its own, so it cannot show something
  * the game would not do.
  *
- * **Dev build only.** `vite build` is given `index.html` as its only entry, so
- * nothing in this directory reaches a production bundle, and `vite.config.ts`
+ * **Dev build only.** `vite build` is given `index.html` and `shelf.html` as its
+ * only entries, neither of which reaches this directory, so nothing in it reaches
+ * a production bundle, and `vite.config.ts`
  * maps the `/lab` URL onto `lab.html` from a plugin that declares
  * `apply: 'serve'`. The game never imports this file, so it costs the game path
  * nothing either.

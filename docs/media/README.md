@@ -245,6 +245,12 @@ replay by a command, described at the end.
   stepped to frame 360, with waves 1 and 2 still flying in and their rows lit; and
   `dusk-stage-start` playing from the DUSK theme's audition, the playhead on its
   plan.
+- `shelf-page.png` and `shelf-game-list.png` — the shelf, with the one entry it
+  shipped with: `shelf.html` as the dev server serves it, a page screenshot at
+  960x720 in a browser with its site data cleared, and then the game that page's
+  **Play** opened, at the same size — the game list with `DUSK PATROL =` under the
+  cursor, `BY STAR SWARM CREW` under the list and the `= SHELF` legend. Neither is
+  reduced in colour; the page is text and the list is the game's own palette.
 - `classic-music.mp4` — the Classic jingles, for listening rather than watching:
   `game-start`, `stage-start`, `captured`, `rescue`, `challenge-results` and
   `challenge-perfect` in turn, each under a title card naming the cue that plays

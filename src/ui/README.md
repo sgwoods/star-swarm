@@ -6,6 +6,9 @@
 `variations.ts` (the naming and delete cards for the player's own games),
 `exchange.ts` (the export and import cards that carry one between machines as
 text) and `text-port.ts` (the text box on the page those two cards use),
+`shelf.ts` (the shelf: other players' variations, the rules an entry is held to
+and what each one changes) and `shelf-page.ts` (the page `shelf.html` lists them
+on),
 `options.ts` (a game's own options card, opened from its attract screen),
 `compose.ts` (the judge behind them: what a player's document composes to, and
 whether it may be kept),

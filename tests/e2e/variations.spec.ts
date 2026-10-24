@@ -50,10 +50,23 @@ async function toRow(page: Page, row: string): Promise<void> {
 /** Step the GAME row until the named game is chosen. */
 async function choose(page: Page, id: string): Promise<void> {
   await toRow(page, 'game');
-  for (let i = 0; i < 10 && (await page.evaluate(() => window.starSwarm?.game)) !== id; i += 1) {
+  for (let i = 0; i < 40 && (await page.evaluate(() => window.starSwarm?.game)) !== id; i += 1) {
     await tap(page, 'ArrowRight');
   }
   expect(await page.evaluate(() => window.starSwarm?.game)).toBe(id);
+}
+
+/**
+ * Every game on the list as `id=name`, less the shelf's: the shelf is curated and
+ * grows with every accepted submission, and nothing here is about it — the
+ * reference games and the player's own are (`tests/e2e/shelf.spec.ts` is the
+ * shelf's).
+ */
+async function gamesOffTheShelf(page: Page): Promise<readonly string[]> {
+  return page.evaluate(() => {
+    const shelf = new Set(window.starSwarm?.shelf ?? []);
+    return (window.starSwarm?.games ?? []).filter((game) => !shelf.has(game.split('=')[0] ?? ''));
+  });
 }
 
 /** On the pack card, switch one pack on or off. */
@@ -187,7 +200,7 @@ test('two variations are kept at once, found after a reload, and one is deleted'
   await page.reload();
   await page.waitForFunction(() => (window.starSwarm?.step ?? 0) > 0);
   // Both on the list, the shipped games first; the last one made is chosen.
-  expect(await page.evaluate(() => window.starSwarm?.games)).toEqual([
+  expect(await gamesOffTheShelf(page)).toEqual([
     'classic=STAR SWARM',
     'convoy=CONVOY',
     'spore-storm=SPORE STORM',
@@ -214,7 +227,7 @@ test('two variations are kept at once, found after a reload, and one is deleted'
   await tap(page, 'Enter');
   await phase(page, 'settings');
 
-  expect(await page.evaluate(() => window.starSwarm?.games)).toEqual([
+  expect(await gamesOffTheShelf(page)).toEqual([
     'classic=STAR SWARM',
     'convoy=CONVOY',
     'spore-storm=SPORE STORM',
@@ -228,7 +241,7 @@ test('two variations are kept at once, found after a reload, and one is deleted'
   // And it stays deleted.
   await page.reload();
   await page.waitForFunction(() => (window.starSwarm?.step ?? 0) > 0);
-  expect(await page.evaluate(() => window.starSwarm?.games)).toHaveLength(7);
+  expect(await gamesOffTheShelf(page)).toHaveLength(7);
 });
 
 test('a variation that cannot work is refused, on the card, with the reason', async ({ page }) => {
