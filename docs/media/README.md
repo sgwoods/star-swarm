@@ -312,7 +312,7 @@ record page, checks each run that ends replays in Node, writes it under
 was made that way. The clips above were made before the command existed, from live play,
 and stay the record of how each was made.
 
-**Note for anyone running the dev server in two checkouts at once.** Vite's
-default port is shared, and `playwright.config.ts` reuses an existing server
+**Note for anyone running the dev server in two checkouts at once.** The dev
+server's default port is shared, and `playwright.config.ts` reuses an existing server
 outside CI — so a second worktree silently tests the first one's build. Set
 `STAR_SWARM_PORT` to give it its own.

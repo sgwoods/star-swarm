@@ -77,7 +77,8 @@ graph imports this directory — so none of this reaches a production bundle or 
 path. `vite.config.ts` maps the `/lab` URL onto `lab.html` from a plugin
 declaring `apply: 'serve'`. `tests/unit/lab-dev-only.test.ts` checks all of it.
 
-Run it with `npm run dev` and open <http://localhost:5173/lab>.
+Run it with `npm run dev` and open <http://127.0.0.1:8795/lab> — or whichever port
+of 8790-8799 its startup line names.
 
 ![the path previewer](../../../docs/media/path-lab.gif)
 

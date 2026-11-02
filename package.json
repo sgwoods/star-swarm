@@ -7,9 +7,9 @@
     "node": "^22.13.0 || >=24.0.0"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "tsx scripts/dev-server.ts",
     "build": "npm run typecheck && vite build",
-    "preview": "vite preview",
+    "preview": "tsx scripts/dev-server.ts --preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",

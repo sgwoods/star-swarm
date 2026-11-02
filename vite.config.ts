@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 
 import { buildIdentity, buildIdentityJson } from './scripts/build-identity.js';
+import { HOST, STAR_SWARM, stampPage, whoamiMiddleware } from './scripts/localhost.js';
 import { BUILD_IDENTITY_FILE } from './src/ui/build-info.js';
 
 /**
@@ -80,6 +81,52 @@ function labRoute(): Plugin {
 }
 
 /**
+ * Make every server and every page of this project say which project it is —
+ * the localhost agreement's half that lives in Vite (`scripts/localhost.ts`).
+ *
+ * Every server Vite runs here answers `GET /whoami` with the project, the port
+ * it is really on, its pid and the short commit: the dev server, `npm run
+ * preview`, the record and capture commands' servers and Playwright's. That
+ * answer is what lets `npm run dev` prove an older copy is its own before
+ * stopping it, and what `--status` reads.
+ *
+ * Every page the dev server sends — the game, the shelf, `/lab`, the capture and
+ * record pages — is stamped on its way out: the port in the tab title, a
+ * favicon, and a small label with the name, port and commit.
+ *
+ * `apply: 'serve'` is what keeps all of it out of the published game, exactly as
+ * it does for `/lab`: the plugin does not exist during `vite build`, so a built
+ * page is the document in the repository, titled `Star Swarm` and nothing else.
+ * `tests/unit/lab-dev-only.test.ts` builds the bundle to check. A preview serves
+ * that built bundle, so it answers `/whoami` but stamps nothing.
+ */
+function localIdentity(): Plugin {
+  let version = '';
+  const whoami = whoamiMiddleware(STAR_SWARM, () => version);
+  return {
+    name: 'star-swarm:local-identity',
+    apply: 'serve',
+    config() {
+      version = buildIdentity({ mode: 'dev' }).commit;
+    },
+    configureServer(server) {
+      server.middlewares.use(whoami);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(whoami);
+    },
+    transformIndexHtml(html, context) {
+      const address = context.server?.httpServer?.address();
+      const port =
+        typeof address === 'object' && address !== null
+          ? address.port
+          : context.server?.config.server.port;
+      return port === undefined ? html : stampPage(html, STAR_SWARM, { port, version });
+    },
+  };
+}
+
+/**
  * The pages a build publishes, and nothing else: the game, and the shelf of other
  * players' variations beside it (`shelf.html`, `src/ui/shelf-page.ts`). `lab.html`
  * and `capture.html` are root documents too, and are left out on purpose — Vite
@@ -95,9 +142,14 @@ export default defineConfig({
   // Relative base so a built bundle also works when served from a subpath
   // (e.g. GitHub Pages), which section 12 lists as a later candidate.
   base: './',
-  plugins: [buildIdentityRoute(), labRoute()],
-  server: { port: 5173, strictPort: true },
+  plugins: [buildIdentityRoute(), labRoute(), localIdentity()],
+  // The localhost agreement (README, "Local ports"): 127.0.0.1 only, and the
+  // block's default port. `strictPort` is the half that matters — without it
+  // Vite walks upwards from a busy port, and out of the block.
+  // `scripts/dev-server.ts` chooses another port inside the block instead.
+  server: { host: HOST, port: STAR_SWARM.preferred, strictPort: true },
+  preview: { host: HOST, port: STAR_SWARM.preferred, strictPort: true },
   build: { target: 'es2022', sourcemap: true, rolldownOptions: { input: PAGES } },
 });
 
-export { buildIdentityRoute, labRoute, PAGES };
+export { buildIdentityRoute, labRoute, localIdentity, PAGES };
