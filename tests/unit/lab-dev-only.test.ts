@@ -4,7 +4,8 @@ import { join, relative, resolve } from 'node:path';
 import type { Rolldown } from 'vite';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import config, { labRoute, PAGES } from '../../vite.config.js';
+import { IDENTITY_LABEL_ID, WHOAMI_PATH } from '../../scripts/localhost.js';
+import config, { labRoute, localIdentity, PAGES } from '../../vite.config.js';
 
 /**
  * `/lab` is a **dev-build route** (`docs/DESIGN.md` section 8 step 3, and the
@@ -95,10 +96,18 @@ describe('the lab never reaches the production bundle', () => {
   it('serves the route from a plugin that only exists while developing', () => {
     expect(labRoute().apply).toBe('serve');
   });
+
+  // The localhost agreement's page stamp — the port in the tab title, the
+  // favicon, the label — and `/whoami` come from one plugin, kept out of the
+  // build the same way. The last block below builds the bundle to show it.
+  it('stamps pages and answers /whoami from a plugin that only exists while serving', () => {
+    expect(localIdentity().apply).toBe('serve');
+  });
 });
 
 describe('the bundle, built', () => {
   const chunks: Rolldown.OutputChunk[] = [];
+  const sources = new Map<string, string>();
   let files: string[] = [];
 
   beforeAll(async () => {
@@ -111,6 +120,10 @@ describe('the bundle, built', () => {
       for (const item of output.output) {
         files.push(item.fileName);
         if (item.type === 'chunk') chunks.push(item);
+        sources.set(
+          item.fileName,
+          item.type === 'chunk' ? item.code : Buffer.from(item.source).toString('utf8'),
+        );
       }
     }
     files = files.sort();
@@ -136,6 +149,36 @@ describe('the bundle, built', () => {
     expect(shipped.filter(devOnly)).toEqual([]);
     // The check is only as good as its list: the game's own modules are there.
     expect(shipped).toContain('src/main.ts');
+  });
+
+  it('publishes the pages as written: no port in the title, no label, no favicon', () => {
+    // The dev server stamps every page it sends with the project, port and commit
+    // (`vite.config.ts`, `localIdentity`). A published page is the document in
+    // the repository: `Star Swarm` is the whole title.
+    for (const page of ['index.html', 'shelf.html']) {
+      const built = sources.get(page) ?? '';
+      const written = readFileSync(join(REPO_ROOT, page), 'utf8');
+      expect(/<title>[^<]*<\/title>/.exec(built)?.[0]).toBe(
+        /<title>[^<]*<\/title>/.exec(written)?.[0],
+      );
+      expect(built).not.toMatch(IDENTITY_LABEL_ID);
+      expect(built).not.toMatch(/rel="icon"/);
+      expect(built).not.toMatch(/\b879\d\b/);
+    }
+    expect(sources.get('index.html')).toMatch('<title>Star Swarm</title>');
+  });
+
+  it('carries nothing of the localhost agreement in any file it ships', () => {
+    const carrying = [...sources]
+      .filter(([, text]) => text.includes(WHOAMI_PATH) || text.includes(IDENTITY_LABEL_ID))
+      .map(([file]) => file);
+    expect(carrying).toEqual([]);
+    expect(
+      chunks
+        .flatMap((chunk) => chunk.moduleIds)
+        .map((id) => relative(REPO_ROOT, id))
+        .filter((id) => id.startsWith('scripts/localhost') || id.startsWith('scripts/dev-server')),
+    ).toEqual([]);
   });
 
   it('ships the replay player the attract demo uses, and not the recorder beside it', () => {

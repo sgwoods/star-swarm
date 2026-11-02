@@ -31,6 +31,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
+import { RETIRE_TIMING, STAR_SWARM } from '../../../scripts/localhost.js';
 import { COUPLING_KINDS } from '../../../src/content/couplings.js';
 import { personaSchema } from '../../../src/content/personas.js';
 import type {
@@ -726,6 +727,17 @@ export function counters(root = REPO_ROOT): ReadonlyMap<string, () => number> {
         return Number(match[1]);
       },
     ],
+
+    /*
+     * The localhost agreement: this project's block, its default port, and how
+     * long an older copy asked to stop is given before it is killed. Read off
+     * the one value `scripts/dev-server.ts` runs on, so the README's table and
+     * its account of the kill path cannot drift from what the command does.
+     */
+    ['localhost.first', () => STAR_SWARM.first],
+    ['localhost.last', () => STAR_SWARM.last],
+    ['localhost.default', () => STAR_SWARM.preferred],
+    ['localhost.graceSeconds', () => RETIRE_TIMING.graceMs / 1000],
 
     /* The layers, and the modules in them. */
     [

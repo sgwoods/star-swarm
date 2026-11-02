@@ -34,14 +34,16 @@
 
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { createServer as createNetServer } from 'node:net';
 import { basename, dirname, extname, join, resolve } from 'node:path';
+
+import type { InlineConfig, ViteDevServer } from 'vite';
 
 import { STEP_HZ } from '../src/engine/loop.js';
 import { parseReplay, type Replay } from '../src/engine/replay.js';
 import { LOGICAL_HEIGHT, LOGICAL_WIDTH } from '../src/render/canvas.js';
 import type { CaptureRequest, CaptureSession } from '../src/ui/lab/capture.js';
 import { LOG_PACKS } from '../src/ui/lab/recording.js';
+import { helperPorts, HOST, listenInBlock, STAR_SWARM } from './localhost.js';
 import { classicRules, GOLDENS, goldenPath } from './record-replay.js';
 
 const REPO_ROOT = resolve(import.meta.dirname, '..');
@@ -376,18 +378,29 @@ export function logRequest(replay: Replay, stage: number | undefined): CaptureRe
 /* Rendering                                                                    */
 /* -------------------------------------------------------------------------- */
 
-/** A port nothing is listening on, so a second checkout's dev server is never the one used. */
-export function freePort(): Promise<number> {
-  return new Promise((resolvePort, reject) => {
-    const server = createNetServer();
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => {
-      const address = server.address();
-      server.close(() => {
-        if (address === null || typeof address === 'string') reject(new Error('no port'));
-        else resolvePort(address.port);
-      });
+/**
+ * A dev server of this command's own, on a free port of the project's block
+ * (README, "Local ports") rather than whichever port the OS hands out — so a
+ * second checkout's dev server is never the one used, and nothing binds outside
+ * the block. The default port is tried last, so it stays the dev server's.
+ * `npm run record` starts its server here too.
+ */
+export async function helperServer(
+  config: InlineConfig,
+): Promise<{ readonly server: ViteDevServer; readonly port: number }> {
+  const { createServer } = await import('vite');
+  return listenInBlock(STAR_SWARM, helperPorts(STAR_SWARM), async (port) => {
+    const server = await createServer({
+      ...config,
+      server: { ...config.server, host: HOST, port, strictPort: true },
     });
+    try {
+      await server.listen();
+    } catch (error) {
+      await server.close();
+      throw error;
+    }
+    return server;
   });
 }
 
@@ -399,8 +412,9 @@ interface Rendered {
 /**
  * Render every emitted step to `dir/NNNNN.png` through the page.
  *
- * Its own dev server on a free port, so a second checkout's server on the shared
- * one is never what gets filmed (the trap `playwright.config.ts` describes).
+ * Its own dev server ({@link helperServer}), so a second checkout's server on
+ * the shared port is never what gets filmed (the trap `playwright.config.ts`
+ * describes).
  */
 async function renderFrames(
   request: CaptureRequest,
@@ -408,16 +422,13 @@ async function renderFrames(
   lastStep: number,
   dir: string,
 ): Promise<Rendered> {
-  const { createServer } = await import('vite');
   const { chromium } = await import('@playwright/test');
 
-  const port = await freePort();
-  const server = await createServer({
+  const { server, port } = await helperServer({
     root: REPO_ROOT,
     logLevel: 'error',
-    server: { host: '127.0.0.1', port, strictPort: true, hmr: false },
+    server: { hmr: false },
   });
-  await server.listen();
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage({

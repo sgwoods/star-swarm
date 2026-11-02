@@ -89,7 +89,7 @@ You need Node — see the versions below — and nothing else.
 
 ```sh
 npm install
-npm run dev            # http://localhost:5173
+npm run dev            # star-swarm running at http://127.0.0.1:8795/
 ```
 
 Then press **Enter** (or **1**) to start a game, **←/→** or **A/D** to move, and
@@ -120,27 +120,96 @@ end on Node 25.9.0, where the whole check suite below passes.
 
 ### The commands
 
-| Command                  | What it does                                                                 |
-| ------------------------ | ---------------------------------------------------------------------------- |
-| `npm run dev`            | Vite dev server, with the `/lab` route (see [§4.3](#43-lab))                 |
-| `npm run build`          | Typecheck, then build to `dist/`                                             |
-| `npm run preview`        | Serve the built bundle                                                       |
-| `npm run lint`           | ESLint and Prettier                                                          |
-| `npm run typecheck`      | `tsc --noEmit`                                                               |
-| `npm test`               | Vitest: the `unit` and `sim` suites, both headless                           |
-| `npm run test:e2e`       | Playwright against the dev server                                            |
-| `npm run validate-packs` | Schema-, reference- and playability-check `packs/`, `variants/` and `shelf/` |
-| `npm run sprite-sheet`   | Render a pack's art to `docs/media/classic-sprite-sheet.png`                 |
-| `npm run capture`        | Render a replay to a GIF or MP4 through the real game (see [§4.3](#43-lab))  |
-| `npm run record`         | Record a live run's inputs to a replay log (see [§4.3](#43-lab))             |
+| Command                  | What it does                                                                                                |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `npm run dev`            | Vite dev server, with the `/lab` route (see [§4.3](#43-lab)); `-- --status` reports every project's servers |
+| `npm run build`          | Typecheck, then build to `dist/`                                                                            |
+| `npm run preview`        | Serve the built bundle on a free port of the block                                                          |
+| `npm run lint`           | ESLint and Prettier                                                                                         |
+| `npm run typecheck`      | `tsc --noEmit`                                                                                              |
+| `npm test`               | Vitest: the `unit` and `sim` suites, both headless                                                          |
+| `npm run test:e2e`       | Playwright against the dev server                                                                           |
+| `npm run validate-packs` | Schema-, reference- and playability-check `packs/`, `variants/` and `shelf/`                                |
+| `npm run sprite-sheet`   | Render a pack's art to `docs/media/classic-sprite-sheet.png`                                                |
+| `npm run capture`        | Render a replay to a GIF or MP4 through the real game (see [§4.3](#43-lab))                                 |
+| `npm run record`         | Record a live run's inputs to a replay log (see [§4.3](#43-lab))                                            |
 
 CI runs lint, typecheck, both test suites, pack validation, the build and the
 Playwright smoke test on every push and pull request.
 
-> **Two dev servers at once.** Vite's port is shared between checkouts and
+> **Two dev servers at once.** The dev server's port is shared between
+> checkouts, and so is its record: `npm run dev` in a second checkout stops the
+> first checkout's dev server and takes its port, because
+> `~/.config/star-swarm/server.json` belongs to the user, not to a checkout.
 > `playwright.config.ts` reuses an existing server outside CI, so a second
 > worktree's Playwright run will silently test the first one's build. Set
-> `STAR_SWARM_PORT` to give a checkout its own.
+> `STAR_SWARM_PORT` — a port of 8790-8799, which the config insists on — to give
+> a checkout its own.
+
+### Local ports: one block, one copy
+
+The captain's projects share a Mac by an agreement the README states in full
+([Local ports](../README.md#local-ports)): a block of ports each, `127.0.0.1`
+only, one copy of each project at a time, a shared registry, and `GET /whoami`
+on every server. This project's block is 8790-8799 and its name is `star-swarm`.
+
+Three files hold it. `scripts/localhost.ts` is the agreement — the one
+`STAR_SWARM` value naming the project, its block, its default and its
+repository, and every operation on them: choosing a port, the registry,
+`server.json`, `/whoami`, replacing an older copy and `--status`.
+`scripts/dev-server.ts` is the command `npm run dev`, `npm run dev -- --status`
+and `npm run preview` run. And `localIdentity` in `vite.config.ts` is the half
+every Vite server here runs, whoever started it: it mounts `/whoami`, and stamps
+each page the dev server sends with the port in its title, a favicon and the
+label. Vite binds; nothing here reimplements a server. The config sets
+`127.0.0.1`, port 8795 and `strictPort`, and the command hands Vite one port of
+the block at a time with `strictPort` on — without it Vite walks upwards from a
+busy port and out of the block.
+
+| Server           | Started by         | Port                                          | Stops an older copy | Pages stamped |
+| ---------------- | ------------------ | --------------------------------------------- | ------------------- | ------------- |
+| The dev server   | `npm run dev`      | 8795, else the next free port of the block    | yes                 | yes           |
+| The preview      | `npm run preview`  | the first free port, the default last         | no                  | no — `dist/`  |
+| The record page  | `npm run record`   | the first free port, the default last         | no                  | yes           |
+| The capture page | `npm run capture`  | the first free port, the default last         | no                  | yes           |
+| Playwright's     | `npm run test:e2e` | `STAR_SWARM_PORT`, or 8795; that port or none | no                  | yes           |
+
+Every one of them answers `/whoami`. Only `npm run dev` replaces anything, and
+Playwright runs plain `vite` rather than `npm run dev` for exactly that reason. A
+port counts as busy if anything answers on `127.0.0.1` or `::1`, not only if it
+cannot be bound: macOS lets a process bind `127.0.0.1` beside another's wildcard
+socket on the same port. A full block starts nothing, and the message names each
+port's holder as `lsof` and `/whoami` see it.
+
+**The kill path is `retireOlderCopy`, and it signals a process only when four
+things agree:** `server.json` names it, it is still running, the recorded port is
+inside the block, and `/whoami` on that port answers `star-swarm` _and that pid_.
+Anything else — a pid that has exited, a pid since reused by an unrelated
+process, a port outside the block, a server answering as another project, a
+server not answering at all, another `star-swarm` server on the recorded port —
+leaves everything as it was, and the new copy simply takes another port. A copy
+that does pass is sent `SIGTERM`, sent `SIGKILL` only if it is still running 3
+seconds later, and its port is waited for before it is taken. A copy shutting
+down removes `server.json` before it releases its port, and only while the file
+still names it, so it can never delete its replacement's record.
+
+<!-- check:count localhost.graceSeconds 3 -->
+
+The startup line, `star-swarm running at http://127.0.0.1:<port>/`, replaces
+Vite's own banner; Vite's keys still work — `r` restarts, `q` quits — and a
+restart keeps the port.
+
+**The page stamp is development-only, and the build is what proves it.** The
+stamp is a `transformIndexHtml` hook in a plugin declaring `apply: 'serve'`, so it
+does not exist while `vite build` runs: the published `index.html` is the
+document in the repository, titled `Star Swarm` with no port, no label and no
+favicon. `tests/unit/lab-dev-only.test.ts` runs the real build and checks exactly
+that, and that no shipped file carries `/whoami`, the label or a module of the
+agreement. `tests/unit/localhost.test.ts` holds the three rules the agreement
+asked to be tested — never a port outside the block, never another project's
+server, always its own older copy — with real sockets and real processes,
+including two runs of the real `npm run dev`, each with a throwaway `HOME` so
+the machine's `~/.config` is never read or written.
 
 ### Which build am I playing?
 

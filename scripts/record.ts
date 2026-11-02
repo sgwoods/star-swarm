@@ -6,14 +6,15 @@
  *
  * A run is a seed and an input log, so keeping one is keeping a few kilobytes,
  * and `npm run capture` turns it into a clip afterwards at any speed. This
- * command starts a dev server of its own on a free port, opens `record.html` in
- * the browser, and waits. The page plays the game from the keyboard with
- * `recordInput` between the two (`src/ui/lab/record.ts`); each time a run ends it
- * is posted here, **played again in Node** through the real simulation to the
- * fingerprint the page sealed it with, and only then written to
- * `.scratch/record/`, with the `npm run capture` line that renders it. A run that
- * does not replay is refused, on the page and here, rather than written — a log
- * the capture command could not render back is worth nothing.
+ * command starts a dev server of its own on a free port of the project's block
+ * (README, "Local ports"), opens `record.html` in the browser, and waits. The
+ * page plays the game from the keyboard with `recordInput` between the two
+ * (`src/ui/lab/record.ts`); each time a run ends it is posted here, **played
+ * again in Node** through the real simulation to the fingerprint the page sealed
+ * it with, and only then written to `.scratch/record/`, with the
+ * `npm run capture` line that renders it. A run that does not replay is refused,
+ * on the page and here, rather than written — a log the capture command could
+ * not render back is worth nothing.
  *
  * Nothing records unless this command is run and somebody presses start on the
  * page it serves. The route that keeps a run exists only on this command's
@@ -35,7 +36,7 @@ import {
 } from '../src/engine/replay.js';
 import { createWorld, fingerprintWorld, stepWorld } from '../src/sim/world.js';
 import { RECORD_SINK, type RecordedRun, type RecordReceipt } from '../src/ui/lab/recording.js';
-import { freePort, logRequest } from './capture.js';
+import { helperServer, logRequest } from './capture.js';
 import { classicStages } from './record-replay.js';
 
 const REPO_ROOT = resolve(import.meta.dirname, '..');
@@ -300,18 +301,15 @@ async function main(): Promise<void> {
     return result;
   };
 
-  const { createServer } = await import('vite');
-  const port = await freePort();
   const page = recordPagePath(options.stage);
-  const server = await createServer({
+  const { server, port } = await helperServer({
     root: REPO_ROOT,
     logLevel: 'error',
     plugins: [recordRoute(keep)],
     // No hot reload: an edit to a source file would reload the page and throw
     // away the run being played.
-    server: { host: '127.0.0.1', port, strictPort: true, hmr: false, open: options.open && page },
+    server: { hmr: false, open: options.open && page },
   });
-  await server.listen();
 
   console.log(`record   http://127.0.0.1:${String(port)}${page}`);
   console.log('         ENTER starts a run, P holds it, X ends it; Ctrl-C stops this command');

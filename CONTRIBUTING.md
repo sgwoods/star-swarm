@@ -166,7 +166,7 @@ npm run validate-packs
 which runs the same checks as the pull request: it ends `OK` when your variation
 would pass, and lists what to fix when it would not. It flies every stage, so it
 takes a minute or two. `npm run dev` then serves the game at
-<http://localhost:5173> with your variation on its game list.
+<http://127.0.0.1:8795/> with your variation on its game list.
 
 [`shelf/README.md`](shelf/README.md) has the rules an entry is held to, and
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) how the game treats one.
