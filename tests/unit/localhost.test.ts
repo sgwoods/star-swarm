@@ -197,6 +197,10 @@ describe('the server never stops another project’s server', () => {
       FAST,
     );
     expect(result.outcome).not.toBe('replaced');
+    // A signal sent and not waited on reaches the stand-in, and its output
+    // reaches this process, a moment after the call returns. Without this pause
+    // "never asked to stop" would be checked before a stray SIGTERM could show.
+    await settle();
     return result.outcome === 'replaced' ? '' : result.reason;
   }
 
@@ -530,6 +534,11 @@ describe('the identity stamp', () => {
 });
 
 /* -------------------------------------------------------------------------- */
+
+/** Long enough for a signal to land and the stand-in's answer to come back. */
+function settle(): Promise<void> {
+  return new Promise((resolveSettle) => setTimeout(resolveSettle, 400));
+}
 
 /** A port of the block nothing is listening on right now. */
 async function quietPort(): Promise<number> {
